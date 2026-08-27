@@ -12,6 +12,8 @@ import { createGraphFolder } from "mag/graph-nodes/create-graph-folder/graph-nod
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
 import { deriveVision } from "mag/graph-nodes/derive-vision/graph-node"
 import { design } from "mag/graph-nodes/design/graph-node"
+import { plan } from "mag/graph-nodes/plan/graph-node"
+import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { detectConflicts } from "mag/graph-nodes/detect-conflicts/graph-node"
 import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
 import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
@@ -74,6 +76,8 @@ export const registry: Registry = [
   { kind: "command", node: promptTersenessEvaluator },
   { kind: "command", node: assembleBrainstormPrompt },
   { kind: "command", node: envisionNotation },
+  { kind: "command", node: plan },
+  { kind: "command", node: reviewPlan },
   { kind: "command", node: designGraph },
   { kind: "command", node: build },
   { kind: "command", node: verification },
@@ -117,8 +121,9 @@ export const registry: Registry = [
 ]
 
 /**
- * `format-branch-name`, `resolve-notations`, `envision-visions` and `brainstorm` are deliberately
- * absent. Their `labels`/`verdicts`/`notations`/`visionPaths` fields are arrays, and
+ * `format-branch-name`, `resolve-notations`, `envision-visions`, `brainstorm` and
+ * `design-under-review` are deliberately absent. Their `labels`/`verdicts`/`notations`/`visionPaths`
+ * fields are arrays, and
  * `schema-flags.ts` derives flags for `string`/`number`/`boolean` only — registering any of them
  * would fail the whole CLI build with `UNSUPPORTED_INPUT_SCHEMA`, not just its own subcommand,
  * because `build-cli.ts` folds the registry with `Result.all`. Shaping the field as a comma-joined

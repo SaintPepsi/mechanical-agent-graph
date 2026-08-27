@@ -1,36 +1,19 @@
 import { describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { Effect, Layer, Result, Schema } from "effect"
-import { BrainstormCommitFailed, BrainstormCopyFailed, BrainstormGitFailed, DesignMissing } from "mag/graph-nodes/brainstorm/errors"
+import { BrainstormCommitFailed, BrainstormCopyFailed, BrainstormGitFailed, BrainstormResumeEmpty, DesignMissing } from "mag/graph-nodes/brainstorm/errors"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { inputExamples, successExamples } from "mag/graph-nodes/brainstorm/examples"
-import { type ClaudeAgentService, claudeAgentLayer, type ClaudePrint, type ClaudeReply } from "mag/runtime/claude/service"
+import { type ClaudeAgentService, claudeAgentLayer, type ClaudeReply } from "mag/runtime/claude/service"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
 import { DESIGN_DESTINATION } from "mag/skills/design/write-and-confirm"
-import { removeDir, testRunInfo, withForeignRepo } from "mag/test/node-fixture"
+import { scriptedShell, stubAgent as recordAgent, withForeignRepo, withRecordRepo } from "mag/test/node-fixture"
 
 const INPUT = inputExamples[0]!
-
-/** In-order scripted shell, `discover/graph-node.test.ts`'s idiom. */
-const scriptedShell = (replies: readonly ShellResult[]) => {
-  const calls: string[][] = []
-  const cwds: Array<string | undefined> = []
-  const service: ShellService = {
-    run: (argv, options) => {
-      calls.push([...argv])
-      cwds.push(options?.cwd)
-      const reply = replies[calls.length - 1]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-  return { calls, cwds, service }
-}
 
 const ok = (): ShellResult => ({ exitCode: 0, stdout: "", stderr: "" })
 const HEAD_SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
@@ -39,26 +22,9 @@ const readsHeadOnly = () => scriptedShell([{ exitCode: 0, stdout: `${HEAD_SHA}\n
 /** `git add` ok, `git diff --cached --quiet` exit 1 (staged), `git commit` ok, `git rev-parse HEAD` ok. */
 const commitsCleanly = () => scriptedShell([ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), { exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" }])
 
-/** Records the request and answers with a canned reply; `write` fires inside `prompt`, standing in
- * for the real session's own write (`envision-mermaid/graph-node.test.ts`'s idiom). */
-const stubAgent = (reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) => {
-  const requests: Array<ClaudePrint<unknown>> = []
-  const service: ClaudeAgentService = {
-    prompt: <A>(request: ClaudePrint<A>) => {
-      requests.push(request as ClaudePrint<unknown>)
-      write?.()
-      return Effect.succeed({
-        verdict: { designPath: "ignored — the node uses its own computed path" } as A,
-        result: {},
-        sessions: ["stub-session"],
-        costUsd: 0.42,
-        attempts: 1,
-        ...reply
-      } as ClaudeReply<A>)
-    }
-  }
-  return { requests, service }
-}
+/** The verdict echoes a path the node never trusts — the success carries the path the node computed. */
+const stubAgent = (reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) =>
+  recordAgent({ designPath: "ignored — the node uses its own computed path" }, reply, write)
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService, run: RunInfoService) =>
   Effect.runPromise(
@@ -70,20 +36,7 @@ const runWith = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentSer
     )
   )
 
-/** A disposable repo checkout plus a disposable run root (`design/graph-node.test.ts`'s `withDirs`
- *  shape), every success path now copies into `runRoot` for real (`records.ts`'s `record`). */
-const withRepo = async <T>(fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>): Promise<T> => {
-  const base = mkdtempSync(join(tmpdir(), "brainstorm-"))
-  const repoRoot = join(base, "repo")
-  const runRoot = join(base, "run")
-  mkdirSync(repoRoot, { recursive: true })
-  mkdirSync(runRoot, { recursive: true })
-  try {
-    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
-  } finally {
-    await removeDir(base)
-  }
-}
+const withRepo = <T>(fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>) => withRecordRepo("brainstorm", fn)
 
 const designIn = (repoRoot: string): string => join(repoRoot, "docs", "graph", INPUT.ticket, "design.md")
 
@@ -216,7 +169,7 @@ describe("brainstorm", () => {
       const result = await runWith(brainstorm.run(INPUT), agent.service, shell, run)
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
-      expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42 })
+      expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42, sessionRef: "stub-session", changed: true })
       expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nSomething.\n")
       expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
     }))
@@ -230,7 +183,7 @@ describe("brainstorm", () => {
       const result = await runWith(brainstorm.run(INPUT), agent.service, shell, { ...run, records: "committed" })
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
-      expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42 })
+      expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42, sessionRef: "stub-session", changed: true })
       expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nSomething.\n")
       expect(calls[0]).toStrictEqual(["git", "add", "--", path])
       expect(calls[2]).toStrictEqual([
@@ -313,6 +266,76 @@ describe("brainstorm", () => {
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(BrainstormGitFailed)
+    }))
+
+  test("a send-back pass resumes the session, drops the ticket framing and the compiled skill, and names the findings file", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      const sendBack = inputExamples[2]!
+      const agent = stubAgent({}, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
+      const result = await runWith(brainstorm.run(sendBack), agent.service, readsHeadOnly().service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      const request = agent.requests[0]!
+      expect(request.resume).toBe("a1b2c3")
+      expect(request.prompt).toContain(sendBack.findingsPath!)
+      expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
+      expect(request.prompt).not.toContain(sendBack.body)
+      expect(request.prompt).not.toContain(sendBack.prompt)
+      expect(request.prompt).not.toContain("Read each vision below")
+    }))
+
+  test("a send-back pass with an unchanged design and a dispute succeeds, files dispute-N.md, and carries both paths; no record is re-copied", () =>
+    withRepo(async (repoRoot, runRoot, run) => {
+      writeDesign(repoRoot)
+      const sendBack = inputExamples[2]!
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "AC.02 is proved by task 3 already" } })
+      const { calls, service: shell } = readsHeadOnly()
+      const result = await runWith(brainstorm.run(sendBack), agent.service, shell, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success).toMatchObject({ findingsPath: sendBack.findingsPath, disputePath: `${runRoot}/dispute-1.md`, sessionRef: "stub-session" })
+      expect(readFileSync(`${runRoot}/dispute-1.md`, "utf8")).toBe(`Disputes ${sendBack.findingsPath}\n\nAC.02 is proved by task 3 already`)
+      expect(existsSync(`${runRoot}/design.md`)).toBe(false)
+      expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
+    }))
+
+  test("a send-back pass with an unchanged design and no dispute is DesignMissing, as any silent pass", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      writeDesign(repoRoot)
+      const result = await runWith(brainstorm.run(inputExamples[2]!), stubAgent().service, scriptedShell([]).service, run)
+      expect(Result.isFailure(result) && result.failure instanceof DesignMissing).toBe(true)
+    }))
+
+  test("a send-back pass that changes the design and disputes too records the design and files the dispute", () =>
+    withRepo(async (repoRoot, runRoot, run) => {
+      writeDesign(repoRoot)
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "finding 2 is wrong" } }, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
+      const result = await runWith(brainstorm.run(inputExamples[2]!), agent.service, readsHeadOnly().service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.disputePath).toBe(`${runRoot}/dispute-1.md`)
+      expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nrevised\n")
+    }))
+
+  test("a first pass ignores a dispute in the reply: no findings to answer, so no dispute file", () =>
+    withRepo(async (repoRoot, runRoot, run) => {
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "nothing to dispute" } }, () => writeDesign(repoRoot))
+      const result = await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.disputePath).toBeUndefined()
+      expect(existsSync(`${runRoot}/dispute-1.md`)).toBe(false)
+    }))
+
+  test("resume without findingsPath is BrainstormResumeEmpty, before any dispatch", () =>
+    withRepo(async (_repoRoot, _runRoot, run) => {
+      const agent = stubAgent()
+      const result = await runWith(brainstorm.run({ ...INPUT, resume: "a1b2c3" }), agent.service, scriptedShell([]).service, run)
+      expect(Result.isFailure(result) && result.failure instanceof BrainstormResumeEmpty).toBe(true)
+      expect(agent.requests).toHaveLength(0)
     }))
 
   test("under the default run-root policy, a failed rev-parse fails BrainstormGitFailed, the copy itself untouched", () =>

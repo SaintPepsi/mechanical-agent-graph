@@ -19,6 +19,15 @@ export const designAddendum = (designPath: string): string =>
     "repository proves it wrong, and say so in your summary when you do."
   ].join("\n")
 
+/** The first pass's addendum when a reviewed plan exists: the plan is the task list, the design the record of why. Both travel as paths. */
+export const planAddendum = (planPath: string, designPath: string): string =>
+  [
+    `A design session thought this ticket through and a plan session cut it into tasks, both reviewed. Work`,
+    `through the plan at ${planPath} one task at a time, committing each; the design at ${designPath}`,
+    "records why, read it when a task's reason is unclear. Depart from the plan only where the",
+    "repository proves it wrong, and say so in your summary when you do."
+  ].join("\n")
+
 /**
  * A repair pass's own addendum: the loop resumes the session that produced a red head and
  * hands it the report `verification` already wrote, rather than re-typing the suite's tail into a

@@ -25,10 +25,12 @@ const INPUT = { ticket: "GH-288", title: "Envision and build the design graph", 
  * `graph-node.ts`). Cheaper than threading a fourth channel through the stub, and it doubles as a
  * structural check: a route can only be told apart by text its own node actually composed.
  */
-const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" => {
+const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" | "plan" | "review-plan" => {
   if (prompt.includes("Draw the ideal shape")) return "envision"
   if (prompt.includes("Recon this repository")) return "discover"
   if (prompt.includes("Read each vision below")) return "brainstorm"
+  if (prompt.includes("Read the design below and the discover note")) return "plan"
+  if (prompt.includes("Review the design at")) return "review-plan"
   throw new Error(`stub agent: unrecognised route in prompt: ${prompt.slice(0, 120)}`)
 }
 
@@ -69,6 +71,21 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
         writeFileSync(destination, "# Discover\n\nNothing relevant found.\n")
         return Effect.succeed(
           { verdict: { discoverPath: destination } as A, result: {}, sessions: ["session-discover"], costUsd: 0.2, attempts: 1 } as ClaudeReply<A>
+        )
+      }
+
+      if (route === "plan") {
+        const destination = destinationOf(request.prompt, "Write the plan to")
+        mkdirSync(dirname(destination), { recursive: true })
+        writeFileSync(destination, "# Plan\n\n### Task 1\n")
+        return Effect.succeed(
+          { verdict: { planPath: destination } as A, result: {}, sessions: ["session-plan"], costUsd: 0.25, attempts: 1 } as ClaudeReply<A>
+        )
+      }
+
+      if (route === "review-plan") {
+        return Effect.succeed(
+          { verdict: { blocking: [] } as A, result: {}, sessions: ["session-review-plan"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
         )
       }
 
@@ -160,6 +177,10 @@ describe("design-graph", () => {
 
       expect(success.designPath).toBe(join(repoRoot, "docs", "graph", INPUT.ticket, "design.md"))
       expect(readFileSync(success.designPath, "utf8")).toContain("## Vision Reconciliation")
+      expect(success.planPath).toBe(join(repoRoot, "docs", "graph", INPUT.ticket, "plan.md"))
+      expect(readFileSync(success.planPath, "utf8")).toContain("### Task 1")
+      expect(success.sessions).toContain("session-plan")
+      expect(success.sessions).toContain("session-review-plan")
       expect(success.headSha).toBe("abc123def4567890abc123def4567890abcdef1")
 
       expect(success.sessions.length).toBeGreaterThan(0)
@@ -171,7 +192,7 @@ describe("design-graph", () => {
       // appears, only the host's children and the composed subgraph). Only a graph composed BENEATH
       // another graph's scope gets its own row, the same test's `fixture-subgraph` entry.
       const names = journalRows(root, repoRoot, INPUT.ticket).map((row) => row.node)
-      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "assemble-brainstorm-prompt", "brainstorm"]) {
+      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "assemble-brainstorm-prompt", "design-under-review", "brainstorm", "plan", "review-plan"]) {
         expect(names).toContain(name)
       }
       // envision-visions fans out one envision-notation row per matched notation.
@@ -328,7 +349,7 @@ describe("design-graph", () => {
         )
       )
 
-      for (const path of [...success.visionPaths, success.discoverPath, success.designPath]) {
+      for (const path of [...success.visionPaths, success.discoverPath, success.designPath, success.planPath]) {
         expect(path.startsWith(recordsRoot)).toBe(true)
         expect(path.startsWith(workRoot)).toBe(false)
       }
@@ -336,8 +357,11 @@ describe("design-graph", () => {
       const headShaCalls = calls.filter((call) => call.argv[1] === "rev-parse" && call.argv[2] === "HEAD")
       expect(headShaCalls.length).toBeGreaterThan(0)
       for (const call of headShaCalls) expect(call.cwd).toBe(workRoot)
-      // Nothing commits under the default policy — the rev-parse reads above are every call this
-      // graph makes, so no record write ever reaches a git call to check the cwd of.
-      expect(calls.length).toBe(headShaCalls.length)
+      // Nothing commits under the default policy — the rev-parse reads above plus `review-plan`'s
+      // one `ls-files` read are every call this graph makes, so no record write ever reaches a git
+      // call to check the cwd of.
+      const lsFilesCalls = calls.filter((call) => call.argv[1] === "ls-files")
+      expect(lsFilesCalls).toHaveLength(1)
+      expect(calls.length).toBe(headShaCalls.length + lsFilesCalls.length)
     }))
 })

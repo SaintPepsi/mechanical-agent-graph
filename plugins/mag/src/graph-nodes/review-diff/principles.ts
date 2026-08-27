@@ -1,14 +1,7 @@
-/**
- * The two exact-name pathspecs git is asked for: the root file and any
- * file nested at any depth, anchored at the repo root by the `:/` magic. Deliberately not
- * `'*PRINCIPLES.md'` — that also matches `MY_PRINCIPLES.md`, and a reviewer told that someone's
- * meeting notes are binding criteria produces findings nobody asked for. The direction names one
- * filename.
- */
-export const PRINCIPLES_PATHSPEC = [":/PRINCIPLES.md", ":/*/PRINCIPLES.md"] as const
+import { nulPaths, PRINCIPLES_PATHSPEC } from "mag/runtime/rulings"
 
-/** `-z` output: NUL-terminated, never quoted, so the split is the whole parse. */
-export const nulPaths = (stdout: string): readonly string[] => stdout.split("\0").filter((path) => path !== "")
+/** The pathspec and the `-z` reader live in `runtime/rulings.ts` now, shared with `review-plan`; re-exported so this node's own callers keep one import. */
+export { nulPaths, PRINCIPLES_PATHSPEC }
 
 /**
  * A principles file governs a changed path when its own directory is that path's directory or an

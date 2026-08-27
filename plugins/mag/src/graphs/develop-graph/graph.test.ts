@@ -119,6 +119,11 @@ const runAgent = (root: string) => {
         const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
         return reply<A>({ designPath: path }, "session-brainstorm", 0.2)
       }
+      if (prompt.includes("Read the design below and the discover note")) {
+        const path = writeAt(destinationOf(prompt, "Write the plan to"), "# Plan\n\n### Task 1\n")
+        return reply<A>({ planPath: path }, "session-plan", 0.25)
+      }
+      if (prompt.includes("Review the design at")) return reply<A>({ blocking: [] }, "session-review-plan", 0.1)
       if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0, note: "already terse" }, "session-terseness", 0.02)
       // No blocking findings, so the review loop settles on its first pass: `build-under-review`'s
       // own test owns the send-back path, this one owns the spine.
@@ -235,7 +240,7 @@ describe("develop-graph", () => {
       // and the publish tail runs as the sketch's boxes — never the fused `publish` composite.
       for (const name of [
         "prepare", "require-acs", "checkout", "write-body", "publish-tail",
-        "resolve-notations", "envision-visions", "discover", "brainstorm", "build-under-review", "push-branch", "create-pr"
+        "resolve-notations", "envision-visions", "discover", "design-under-review", "brainstorm", "plan", "review-plan", "build-under-review", "push-branch", "create-pr"
       ]) {
         expect(names).toContain(name)
       }

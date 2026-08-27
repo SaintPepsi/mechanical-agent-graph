@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { Exit, Runtime } from "effect"
 import * as buildUnderReviewErrors from "mag/graph-nodes/build-under-review/errors"
+import * as designUnderReviewErrors from "mag/graph-nodes/design-under-review/errors"
+import { PlanBlocked, PlanDisputeRejected } from "mag/graph-nodes/review-plan/errors"
 import { VerificationFailed } from "mag/graph-nodes/verification/errors"
 
 /**
@@ -68,6 +70,15 @@ describe("run-outcome section — summaryPath is not a develop-graph failure fie
   test("SKILL.md's path-field bullet lists the review verdicts' two path fields, and not summaryPath", () => {
     expect(SKILL).toContain("`findingsPath`, `disputePath`)")
     expect(SKILL).toContain("never reaches this line")
+  })
+
+  test("SKILL.md's path-field bullet names review-plan's two tags beside review-diff's, and both carry findingsPath", () => {
+    expect(SKILL).toContain("`PLAN_BLOCKED`")
+    expect(SKILL).toContain("`PLAN_DISPUTE_REJECTED`")
+    const blocked = new PlanBlocked({ findingsPath: "/run/review-plan-1.md", headSha: "abc", sessions: [], costUsd: null })
+    const rejected = new PlanDisputeRejected({ findingsPath: "/run/review-plan-2.md", disputePath: "/run/dispute-1.md", headSha: "abc", sessions: [], costUsd: null })
+    expect("findingsPath" in blocked && "findingsPath" in rejected && "disputePath" in rejected).toBe(true)
+    expect("PlanBlocked" in designUnderReviewErrors && "PlanDisputeRejected" in designUnderReviewErrors).toBe(true)
   })
 })
 

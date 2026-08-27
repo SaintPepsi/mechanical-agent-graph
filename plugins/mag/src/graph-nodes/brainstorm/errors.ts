@@ -41,6 +41,9 @@ export class BrainstormCommitFailed extends Data.TaggedError("BRAINSTORM_COMMIT_
   readonly sessions: readonly string[]
 }> {}
 
+/** `resume` was given with no `findingsPath`: a resumed pass carries only the send-back, so there is nothing to say to the session. `build/errors.ts`'s `BuildResumeEmpty`. */
+export class BrainstormResumeEmpty extends Data.TaggedError("BRAINSTORM_RESUME_EMPTY")<{}> {}
+
 /**
  * The mechanical copy of `design.md` into the run root failed — the run dir couldn't be made, or
  * the copy couldn't be written, after a real session already produced it. `design/errors.ts`'s

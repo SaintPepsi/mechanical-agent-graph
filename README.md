@@ -19,7 +19,9 @@ pruned.
 prepare                     fetch the ticket, refuse it without acceptance criteria, verify the
                             base branch
 checkout                    a detached worktree per run, setup command run inside it
-design-graph                envision ∥ discover → brainstorm: a design record before any code
+design-graph                envision ∥ discover → design-under-review (brainstorm → plan →
+                            review-plan, findings sent back into the design): a reviewed design
+                            and plan before any code
 build-under-review          build → verification → simplify → review-diff, findings sent back into
                             the same session until the diff is clean or the cap is spent
 prompt-terseness-evaluator  rewrite any verbose prompt text the build added, re-verify if it

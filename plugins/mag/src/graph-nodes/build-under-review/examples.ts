@@ -8,6 +8,7 @@ export const inputExamples = [
     base: "main",
     cap: 2,
     designPath: "docs/graph/GH-98/design.md",
+    planPath: "docs/graph/GH-98/plan.md",
     agent: "effect-expert",
     buildModel: "sonnet",
     simplifyModel: "opus",

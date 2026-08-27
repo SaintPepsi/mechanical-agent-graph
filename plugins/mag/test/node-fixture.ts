@@ -2,11 +2,13 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Effect, FileSystem, type Option, Schema } from "effect"
+import type { ClaudeAgentService, ClaudePrint, ClaudeReply } from "mag/runtime/claude/service"
 import { execute, make } from "mag/runtime/graph-node.definition"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { journalLayer } from "mag/runtime/journal/service"
 import { platform } from "mag/runtime/platform"
 import type { RunInfoService } from "mag/runtime/run-info"
+import type { ShellResult, ShellService } from "mag/runtime/shell"
 
 /** One node's on-disk shape for a fixture: a name plus verbatim file contents. */
 export interface NodeSpec {
@@ -209,6 +211,78 @@ export const withForeignRepo = async <T>(
     await removeDir(workRoot)
     await removeDir(recordsRoot)
   }
+}
+
+/**
+ * A disposable repo checkout plus a disposable run root, for a record-writing node's own test
+ * (`brainstorm`, `plan`): every success path copies into `runRoot` for real (`records.ts`'s
+ * `record`), so both have to be real directories. `prefix` names the temp tree after the node.
+ */
+export const withRecordRepo = async <T>(
+  prefix: string,
+  fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>
+): Promise<T> => {
+  const base = mkdtempSync(join(tmpdir(), `${prefix}-`))
+  const repoRoot = join(base, "repo")
+  const runRoot = join(base, "run")
+  mkdirSync(repoRoot, { recursive: true })
+  mkdirSync(runRoot, { recursive: true })
+  try {
+    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
+  } finally {
+    await removeDir(base)
+  }
+}
+
+/** A real, disposable run root alone, for a node whose only write is an artifact into it (`review-plan`). */
+export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string, run: RunInfoService) => Promise<T>): Promise<T> => {
+  const runRoot = mkdtempSync(join(tmpdir(), `${prefix}-run-`))
+  try {
+    return await fn(runRoot, testRunInfo({ runRoot }))
+  } finally {
+    await removeDir(runRoot)
+  }
+}
+
+/** In-order scripted shell: reply N answers call N, and a call past the script throws, naming the argv. */
+export const scriptedShell = (replies: readonly ShellResult[]) => {
+  const calls: string[][] = []
+  const cwds: Array<string | undefined> = []
+  const service: ShellService = {
+    run: (argv, options) => {
+      calls.push([...argv])
+      cwds.push(options?.cwd)
+      const reply = replies[calls.length - 1]
+      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
+      return Effect.succeed(reply)
+    }
+  }
+  return { calls, cwds, service }
+}
+
+/**
+ * Records every request and answers with one canned reply; `write` fires inside `prompt`, standing
+ * in for the real session's own write of the record the node then verifies. `verdict` is whatever
+ * the node's own schema expects — never trusted by a record-writing node, which uses its own
+ * computed path.
+ */
+export const stubAgent = (verdict: unknown, reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) => {
+  const requests: Array<ClaudePrint<unknown>> = []
+  const service: ClaudeAgentService = {
+    prompt: <A>(request: ClaudePrint<A>) => {
+      requests.push(request as ClaudePrint<unknown>)
+      write?.()
+      return Effect.succeed({
+        verdict: verdict as A,
+        result: {},
+        sessions: ["stub-session"],
+        costUsd: 0.42,
+        attempts: 1,
+        ...reply
+      } as ClaudeReply<A>)
+    }
+  }
+  return { requests, service }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { assembleBrainstormPrompt } from "mag/graph-nodes/assemble-brainstorm-prompt/graph-node"
-import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
+import { designUnderReview } from "mag/graph-nodes/design-under-review/graph-node"
 import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
 import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
@@ -14,6 +14,10 @@ import { graph } from "mag/runtime/graph"
 // `schema-flags.ts` still derive a CLI flag for it (that graph's own comment on the same line).
 const RECORDS_POLICIES = ["run-root", "committed"] as const
 type RecordsPolicy = (typeof RECORDS_POLICIES)[number]
+// Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning: one design round after
+// the first, then the findings escalate — a design still blocked after a full round is a ticket problem.
+const PLAN_CAP = 1
+
 const isRecordsPolicyCheck = Schema.makeFilter<string>(
   (value) => ((RECORDS_POLICIES as readonly string[]).includes(value) ? undefined : `expected ${RECORDS_POLICIES.join(" or ")}`),
   { expected: RECORDS_POLICIES.join(" or ") }
@@ -27,8 +31,8 @@ const probeVerdicts = (text: string) =>
   Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({})], { concurrency: "unbounded" })
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
- * assignment — spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
- * cannot drift from each other. */
+ * assignment — spelled once so `envisionVisions`, `discover` and `designUnderReview`'s three calls
+ * below cannot drift from each other. */
 const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly body: string }) => ({
   ticket: input.ticket,
   title: input.title,
@@ -40,11 +44,12 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 })
 
 /**
- * The spine is **Envision ∥ Discover → Brainstorm**. The three probes run first and gate what
- * `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side by side,
- * and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even though nothing
- * upstream feeds it: it has no dependency on the probes or the visions, so waiting for them first
- * would only cost wall-clock for no reason. `brainstorm` is the only node that reads both halves.
+ * The spine is **Envision ∥ Discover → Design under review**. The three probes run first and gate
+ * what `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side by
+ * side, and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even though
+ * nothing upstream feeds it: it has no dependency on the probes or the visions, so waiting for them
+ * first would only cost wall-clock for no reason. `designUnderReview` is the only node that reads
+ * both halves: brainstorm → plan → review-plan, findings sent back into the design until clean.
  */
 const pipeline = (input: {
   readonly ticket: string
@@ -66,16 +71,18 @@ const pipeline = (input: {
       { concurrency: "unbounded" }
     )
 
-    const designed = yield* brainstorm.run({
+    const designed = yield* designUnderReview.run({
       ...ticketFields(input),
       prompt: assembled.prompt,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
+      cap: PLAN_CAP,
       ...agentFields(input)
     })
 
     return {
       designPath: designed.designPath,
+      planPath: designed.planPath,
       headSha: designed.headSha,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
@@ -87,7 +94,7 @@ const pipeline = (input: {
 
 /**
  * design-graph: one GraphNode for the design lane, in the slot `develop-graph`'s host graph
- * composes it. Its folder holds the two visions (`graphs/design-graph/{vision,rail-sketch}.md`)
+ * composes it. Its success carries the reviewed plan beside the design: a build reads the plan. Its folder holds the two visions (`graphs/design-graph/{vision,rail-sketch}.md`)
  * beside the code they shaped. `design` alone is not available: the registry is one flat namespace,
  * and the standalone `design` node (`graph-nodes/design`) already holds that name.
  *
@@ -101,7 +108,7 @@ const pipeline = (input: {
  */
 export const designGraph = graph({
   name: "design-graph",
-  description: "Envision every matched stack's notation, discover what exists, and brainstorm them into a design.",
+  description: "Envision every matched stack's notation, discover what exists, brainstorm them into a design, plan it, and review both before any build.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -116,6 +123,7 @@ export const designGraph = graph({
   }),
   success: Schema.Struct({
     designPath: Schema.String,
+    planPath: Schema.String,
     headSha: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,

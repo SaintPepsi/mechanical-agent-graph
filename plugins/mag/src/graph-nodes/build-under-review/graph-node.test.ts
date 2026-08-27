@@ -442,6 +442,19 @@ describe("build-under-review", () => {
     }
   })
 
+  test("with a plan, the first build works through the plan and reads the design for reasons; without one, the design alone", async () => {
+    const planned = loopAgent()
+    await runNode({ ...INPUT, designPath: "docs/graph/GH-98/design.md", planPath: "docs/graph/GH-98/plan.md" }, planned.service, loopShell().service)
+    expect(planned.requests[0]!.prompt).toContain("Work\nthrough the plan at docs/graph/GH-98/plan.md")
+    expect(planned.requests[0]!.prompt).toContain("the design at docs/graph/GH-98/design.md")
+    expect(planned.requests[0]!.prompt).not.toContain("Read the design at")
+
+    const designed = loopAgent()
+    await runNode({ ...INPUT, designPath: "docs/graph/GH-98/design.md" }, designed.service, loopShell().service)
+    expect(designed.requests[0]!.prompt).toContain("Read the design at docs/graph/GH-98/design.md")
+    expect(designed.requests[0]!.prompt).not.toContain("plan.md")
+  })
+
   test("a send-back: findings feed the next build, every review pass is a fresh session gated on its own build's headSha, spend folds every pass", async () => {
     const agent = loopAgent([["the fix misses the second NUL"]])
     const { service } = loopShell()
