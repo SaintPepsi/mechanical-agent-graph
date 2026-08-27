@@ -140,13 +140,10 @@ const bendableFinalise = (graph: string, ticket: string, description: string) =>
 })
 
 /** The same for the fixtures that exist only to throw at `.finalise`: they never reach a run, so
- *  there is no success to project and only name, ticket and prose differ. */
+ *  the shared shape holds with nothing to project. */
 const doomedFinalise = (graph: string, ticket: string, description: string) => ({
-  description,
-  input: Schema.Struct({ flag: Schema.Boolean }),
+  ...bendableFinalise(graph, ticket, description),
   success: Schema.Struct({}),
-  scope: () => ({ ticket, graph, worktree: false }),
-  seed: (input: { readonly flag: boolean }) => input,
   out: () => ({})
 })
 
@@ -379,9 +376,6 @@ describe("Graph.construct — Blueprint.applied stays required", () => {
   })
 })
 
-// A `.when` without a name or a declared read list does not compile, and neither does a condition
-// that reaches past its own declared reads — `Pick<Ctx, Reads[number]>` narrows what the condition
-// may read to exactly the list, so the field list cannot drift from what the test does.
 describe("Graph.construct — .when requires a name and a declared read list", () => {
   test("compile time: a decision missing name/reads, or a condition reading past its declared reads, fails to typecheck", () => {
     const attempt = Graph.construct<{ flag: boolean; other: string }>("fixture-when-shape")

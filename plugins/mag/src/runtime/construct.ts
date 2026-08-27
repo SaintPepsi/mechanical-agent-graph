@@ -196,10 +196,8 @@ const occurrences = (steps: readonly Step[], kind: Modifier["kind"]): readonly O
     }
   })
 
-/** A keepless stage's produced field names, read off its node's success schema with no execution —
- *  the only place `SchemaAST` enters this module. A field's producer must be knowable without
- *  running anything, so a success that isn't a plain object schema refuses rather than leaves the
- *  producer index silently incomplete. */
+/** A keepless stage's produced field names, read off its node's success schema with no execution:
+ *  the only place `SchemaAST` enters this module. */
 const successFields = (graphName: string, site: string, node: AnyNode): readonly string[] => {
   const ast = node.success.ast
   if (!SchemaAST.isObjects(ast)) {
@@ -208,8 +206,7 @@ const successFields = (graphName: string, site: string, node: AnyNode): readonly
   return ast.propertySignatures.map((signature) => String(signature.name))
 }
 
-/** A decision's name is what a borrow/modify lifecycle keyed by name would target; claimed twice it
- *  targets nothing, so it refuses at `.finalise` rather than being drawn twice. */
+/** Enforces `DuplicateDecisionName`, in step order. */
 const checkDecisionNames = (graphName: string, steps: readonly Step[]): void => {
   const claimedBy = new Map<string, string[]>()
   steps.forEach((step, index) => {
@@ -221,10 +218,9 @@ const checkDecisionNames = (graphName: string, steps: readonly Step[]): void => 
   }
 }
 
-/** Beside `tallyApplications`: every keepless stage's success must be a readable object schema.
- *  Walks `occurrences(steps, "replaceNode")` — "every node slot any step runs", whose `describe` is
- *  already the site string an error here reports. A `when` stage always carries a keep (required by
- *  its own signature), so only a bare `node` or a `fork`'s two sides can be keepless. */
+/** Enforces `OpaqueStageSuccess`, over `tallyApplications`'s own enumeration — "every node slot any
+ *  step runs", whose `describe` is already the site string an error here reports. A `when` stage's
+ *  keep is required by its own signature, so only a bare `node` or a fork side can be keepless. */
 const checkProducedFields = (graphName: string, steps: readonly Step[]): void => {
   for (const { describe, index, node } of occurrences(steps, "replaceNode")) {
     const step = steps[index]
@@ -425,13 +421,12 @@ const projectNode = (
  *  Total: `Step` is closed and switched exhaustively, so an unhandled kind is a typecheck failure,
  *  not a runtime one. Exported for its own unit tests, the same reason `applyModifiers` is exported.
  *
- *  `producers` is a fresh `Map<field, elementId>` per call, threaded through this same forward walk:
- *  a `when` step's declared `reads` become one `data` edge per field, `from` the map's entry or —
- *  absent one — `containerId` itself, since a read no stage in this construct produced is a seed
- *  field by the arithmetic of `Ctx` (it grows only by what a stage contributes). A fresh map per
- *  call is what keeps a borrowed construct's own reads resolving within its own group, at every
- *  nesting depth, with no special case. Nearest-preceding-producer-wins falls out of the map being
- *  overwritten in step order: each producing arm records after pushing its own edges. */
+ *  A `when`'s declared `reads` draw one `data` edge each, `from` the `producers` entry or — absent
+ *  one — `containerId` itself, since a read no stage in this construct produced is a seed field by
+ *  the arithmetic of `Ctx` (it grows only by what a stage contributes). The map is fresh per call,
+ *  so a borrowed construct's reads resolve within its own group at every nesting depth with no
+ *  special case, and each arm records itself after pushing its own edges, which is what makes the
+ *  nearest preceding producer win. */
 export const projectSteps = (
   containerId: string,
   steps: readonly Step[]
@@ -662,10 +657,7 @@ const makeConstruct = <Seed extends object, Ctx extends object, E, R>(
   borrow: (node, wire) => makeBorrowed(name, [...steps, nodeStep(node, wire)]),
   borrowKeep: (node, wire, keep) => makeBorrowed(name, [...steps, nodeStep(node, wire, keep)]),
   when: (decision, node, wire, keep) =>
-    makeConstruct(name, [
-      ...steps,
-      { kind: "when", name: decision.name, reads: decision.reads, condition: decision.condition, node, wire, keep }
-    ]),
+    makeConstruct(name, [...steps, { kind: "when", ...decision, node, wire, keep }]),
   via: (stageName, f, keep) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f, keep }]),
   finalise: (options) => {
     // Tallied on the unresolved steps: resolveBorrows zeroes `modifiers`, so this is the only
