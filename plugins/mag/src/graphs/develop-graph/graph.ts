@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Schema } from "effect"
 import { branch } from "mag/graph-nodes/branch/graph-node"
 import { buildUnderReview } from "mag/graph-nodes/build-under-review/graph-node"
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
@@ -95,7 +95,7 @@ const prepare = Graph.construct<{ ticket: string; base: string; remote: string; 
     resolveBase, (s) => ({ base: s.base, remote: s.remote }),
     fetchTicket, (s) => ({ ticket: s.ticket, maintainer: s.maintainer })
   )
-  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, body: s.body }), () => ({}))
+  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, body: s.body }), {})
   .join(formatBranchNameNode, (s) => ({ ticket: s.ticket, title: s.title, labels: [] }))
   .finalise({
     description: "Resolve the base and fetch the ticket in parallel, then compute the branch name.",
@@ -131,9 +131,9 @@ const checkout = Graph.construct<{
   worktreeSetup: string
 }>("checkout")
   .when(
-    (s) => s.worktree,
+    { name: "run wants a worktree", reads: ["worktree"], condition: (s) => s.worktree },
     worktreeAdd, (s) => ({ base: s.base, setup: s.worktreeSetup }),
-    (tree) => ({ path: tree.path })
+    { path: (tree) => tree.path }
   )
   .then(branch, (s) => ({ branch: s.branch, base: s.base }))
   .finalise({
@@ -161,9 +161,13 @@ const checkout = Graph.construct<{
 const writeBody = Graph.construct<{ ticket: string; base: string; model: string }>("write-body")
   .thenKeep(
     writePrBody, (s) => ({ base: s.base, model: s.model }),
-    (written) => ({ description: written.description, sessions: written.sessions, costUsd: written.costUsd })
+    {
+      description: (written) => written.description,
+      sessions: (written) => written.sessions,
+      costUsd: (written) => written.costUsd
+    }
   )
-  .via("compose-pr-body", (s) => prBody({ description: s.description }).pipe(Effect.map((body) => ({ body }))))
+  .via("compose-pr-body", (s) => prBody({ description: s.description }), { body: (body) => body })
   .finalise({
     description: "Write the PR description from the merge-base diff, then compose the tracker-closing body.",
     input: Schema.Struct({ ticket: Schema.String, base: Schema.String, model: Schema.String }),
@@ -207,9 +211,9 @@ const publishTail = Graph.construct<{
     body: s.body
   }))
   .when(
-    (s) => s.path !== undefined,
+    { name: "a worktree to retire", reads: ["path"], condition: (s) => s.path !== undefined },
     worktreeRemove, (s) => ({ path: s.path as string }),
-    () => ({})
+    {}
   )
   .finalise({
     description: "Write the body and push in parallel, open the PR, then retire the worktree on success.",
@@ -262,7 +266,11 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
   .borrowKeep(
     designGraph,
     (s) => ({ ticket: s.ticket, title: s.title, body: s.body, agent: s.agent, model: MODEL_DESIGN }),
-    (designed) => ({ designPath: designed.designPath, designSessions: designed.sessions, designCost: designed.costUsd })
+    {
+      designPath: (designed) => designed.designPath,
+      designSessions: (designed) => designed.sessions,
+      designCost: (designed) => designed.costUsd
+    }
   )
   .borrowKeep(
     buildUnderReview,
@@ -280,28 +288,32 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       simplifyModel: MODEL_SIMPLIFY,
       reviewModel: MODEL_REVIEW
     }),
-    (built) => ({
-      summaryPath: built.summaryPath,
-      commits: built.commits,
-      reviewPasses: built.reviewPasses,
-      builtHeadSha: built.headSha,
-      buildSessions: built.sessions,
-      buildCost: built.costUsd
-    })
+    {
+      summaryPath: (built) => built.summaryPath,
+      commits: (built) => built.commits,
+      reviewPasses: (built) => built.reviewPasses,
+      builtHeadSha: (built) => built.headSha,
+      buildSessions: (built) => built.sessions,
+      buildCost: (built) => built.costUsd
+    }
   )
   .thenKeep(
     promptTersenessEvaluator,
     (s) => ({ ticket: s.ticket, base: s.base, headSha: s.builtHeadSha, agent: s.agent, model: MODEL_DESIGN }),
-    (tersened) => ({
-      tersenedHeadSha: tersened.headSha,
-      terseSessions: tersened.sessions,
-      terseCost: tersened.costUsd
-    })
+    {
+      tersenedHeadSha: (tersened) => tersened.headSha,
+      terseSessions: (tersened) => tersened.sessions,
+      terseCost: (tersened) => tersened.costUsd
+    }
   )
   .when(
-    (s) => s.tersenedHeadSha !== s.builtHeadSha,
+    {
+      name: "terseness changed HEAD",
+      reads: ["tersenedHeadSha", "builtHeadSha"],
+      condition: (s) => s.tersenedHeadSha !== s.builtHeadSha
+    },
     verification, (s) => ({ command: s.verification, headSha: s.tersenedHeadSha as string }),
-    () => ({})
+    {}
   )
   .borrowKeep(
     publishTail,
@@ -316,7 +328,11 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       slug: s.slug,
       model: MODEL_BUILD
     }),
-    (published) => ({ prUrl: published.url, publishSessions: published.sessions, publishCost: published.costUsd })
+    {
+      prUrl: (published) => published.url,
+      publishSessions: (published) => published.sessions,
+      publishCost: (published) => published.costUsd
+    }
   )
   .finalise({
     description:

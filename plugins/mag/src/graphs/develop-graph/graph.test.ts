@@ -465,15 +465,41 @@ describe("develop-graph", () => {
       expect(branchEdgesFromFork).toContainEqual({ kind: "branch", from: forkId, to: leftId, label: "left" })
       expect(branchEdgesFromFork).toContainEqual({ kind: "branch", from: forkId, to: rightId, label: "right" })
 
-      const decisionId = "develop-graph/1:group:checkout/0:decision:worktree-add"
-      const guardedId = "develop-graph/1:group:checkout/0:node:worktree-add"
+      const checkoutId = "develop-graph/1:group:checkout"
+      const decisionId = `${checkoutId}/0:decision:worktree-add`
+      const guardedId = `${checkoutId}/0:node:worktree-add`
       expect(byId.get(decisionId)).toEqual({
         kind: "decision",
         id: decisionId,
-        label: "worktree-add",
-        parent: "develop-graph/1:group:checkout"
+        label: "run wants a worktree",
+        parent: checkoutId
       })
       expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
+      // "worktree" is checkout's own seed field: no stage inside checkout produces it, so its
+      // producer is the enclosing group, checkout's own element.
+      expect(shape.edges).toContainEqual({ kind: "data", from: checkoutId, to: decisionId, field: "worktree" })
+    })
+
+    test("develop-graph's terseness decision draws a data edge from each declared read's own producer", () => {
+      const decisionId = "develop-graph/5:decision:verification"
+      expect(byId.get(decisionId)).toEqual({
+        kind: "decision",
+        id: decisionId,
+        label: "terseness changed HEAD",
+        parent: "develop-graph"
+      })
+      expect(shape.edges).toContainEqual({
+        kind: "data",
+        from: "develop-graph/4:node:prompt-terseness-evaluator",
+        to: decisionId,
+        field: "tersenedHeadSha"
+      })
+      expect(shape.edges).toContainEqual({
+        kind: "data",
+        from: "develop-graph/3:node:build-under-review",
+        to: decisionId,
+        field: "builtHeadSha"
+      })
     })
 
     test("write-body's group is parented to publish-tail's group id, three levels deep from the root", () => {

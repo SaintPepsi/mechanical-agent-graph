@@ -7,11 +7,13 @@ import type { PlatformError } from "effect/PlatformError"
 import {
   applyModifiers,
   type Blueprint,
+  DuplicateDecisionName,
   Graph,
   type Modifier,
   ModifierConflict,
   ModifierTargetAmbiguous,
   ModifierTargetMissing,
+  OpaqueStageSuccess,
   projectSteps,
   type Step,
   TooConvoluted
@@ -83,6 +85,15 @@ const notify = make({
   run: () => Effect.succeed({ notified: "loud" })
 })
 
+const opaqueSuccess = make({
+  name: "fixture-opaque-success",
+  description:
+    "A keepless node whose success is an array, not a struct: `A extends object` still lets it into `.then`, but its produced fields cannot be read off an array's AST.",
+  input: Schema.Struct({}),
+  success: Schema.Array(Schema.String),
+  run: () => Effect.succeed(["not", "a", "struct"])
+})
+
 const quietNotify = make({
   name: "fixture-quiet-notify",
   description: "Same contract as `notify`, quieter behavior — the `.replaceNode` replacement.",
@@ -130,9 +141,9 @@ const bendableFinalise = (graph: string, ticket: string, description: string) =>
 
 const bendableSub = Graph.construct<{ flag: boolean }>("fixture-bendable")
   .when(
-    (s) => s.flag,
+    { name: "flag set", reads: ["flag"], condition: (s) => s.flag },
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
   .then(notify, () => ({}))
   .finalise(bendableFinalise(
@@ -212,11 +223,11 @@ const sub = Graph.construct<{ ticket: string; flag: boolean; seedVal: string }>(
   )
   .join(joiner, (s) => ({ a: s.a, b: s.b }))
   .when(
-    (s) => s.flag,
+    { name: "flag set", reads: ["flag"], condition: (s) => s.flag },
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
-  .via("uppercase", (s) => Effect.succeed({ upper: s.joined.toUpperCase() }))
+  .via("uppercase", (s) => Effect.succeed(s.joined.toUpperCase()), { upper: (upper) => upper })
   .finalise({
     description: "Fork, join, a guarded node, a plain-Effect stage.",
     input: Schema.Struct({ ticket: Schema.String, flag: Schema.Boolean, seedVal: Schema.String }),
@@ -357,6 +368,24 @@ describe("Graph.construct — Blueprint.applied stays required", () => {
   })
 })
 
+// A `.when` without a name or a declared read list does not compile, and neither does a condition
+// that reaches past its own declared reads — `Pick<Ctx, Reads[number]>` narrows what the condition
+// may read to exactly the list, so the field list cannot drift from what the test does.
+describe("Graph.construct — .when requires a name and a declared read list", () => {
+  test("compile time: a decision missing name/reads, or a condition reading past its declared reads, fails to typecheck", () => {
+    const attempt = Graph.construct<{ flag: boolean; other: string }>("fixture-when-shape")
+
+    // @ts-expect-error — a decision without `name` does not compile
+    attempt.when({ reads: ["flag"], condition: (s) => s.flag }, guarded, () => ({}), {})
+    // @ts-expect-error — a decision without `reads` does not compile
+    attempt.when({ name: "flag set", condition: (s) => s.flag }, guarded, () => ({}), {})
+    // @ts-expect-error — `condition` is narrowed to `Pick<Ctx, Reads[number]>`; `other` isn't declared
+    attempt.when({ name: "flag set", reads: ["flag"], condition: (s) => s.other === "x" }, guarded, () => ({}), {})
+
+    expect(true).toBe(true)
+  })
+})
+
 describe("Graph.construct — borrow/modify lifecycle", () => {
   test("removeWhen strips the borrowed when condition — the guarded node runs unconditionally", async () => {
     const { success, rows } = await runNode(bentHost, { flag: false }, "GH-290-bent")
@@ -407,6 +436,44 @@ describe("Graph.construct — borrow/modify lifecycle", () => {
     // offered is what keeps this non-silent: naming the real candidates, not just failing.
     // removeWhen's candidates are guarded nodes only — bendableSub guards exactly `fixture-guarded`.
     expect(error.offered).toEqual(["fixture-guarded"])
+  })
+
+  test("disconfirming: two decisions claiming one name throw DuplicateDecisionName at Finalise, naming both when[i] sites", () => {
+    // Declared inside the test body, same reason as the modifier test above: `.finalise` runs at
+    // declaration time, so a top-level throw would take the whole suite down with it.
+    const error = thrown(DuplicateDecisionName, () =>
+      Graph.construct<{ flag: boolean }>("fixture-duplicate-decision-host")
+        .when({ name: "flag set", reads: ["flag"], condition: (s) => s.flag }, guarded, () => ({}), {})
+        .when({ name: "flag set", reads: ["flag"], condition: (s) => s.flag }, guarded, () => ({}), {})
+        .finalise({
+          description: "Two decisions naming themselves \"flag set\" — a name claimed twice targets nothing.",
+          input: Schema.Struct({ flag: Schema.Boolean }),
+          success: Schema.Struct({}),
+          scope: () => ({ ticket: "GH-332-duplicate", graph: "fixture-duplicate-decision-host", worktree: false }),
+          seed: (input: { readonly flag: boolean }) => input,
+          out: () => ({})
+        }))
+
+    expect(error.name).toBe("flag set")
+    expect(error.claimed).toEqual(["when[0]", "when[1]"])
+  })
+
+  test("disconfirming: a keepless stage whose success is not a readable object schema throws OpaqueStageSuccess at Finalise", () => {
+    const error = thrown(OpaqueStageSuccess, () =>
+      Graph.construct<{ flag: boolean }>("fixture-opaque-success-host")
+        .then(opaqueSuccess, () => ({}))
+        .finalise({
+          description: "A keepless node whose success is an array — its produced fields cannot be read.",
+          input: Schema.Struct({ flag: Schema.Boolean }),
+          success: Schema.Struct({}),
+          scope: () => ({ ticket: "GH-332-opaque", graph: "fixture-opaque-success-host", worktree: false }),
+          seed: (input: { readonly flag: boolean }) => input,
+          out: () => ({})
+        }))
+
+    expect(error.site).toBe("node[0]")
+    expect(error.node).toBe("fixture-opaque-success")
+    expect(error.type).toBe("Arrays")
   })
 
   test("compile time: replaceNode rejects a replacement outside the target's contract", () => {
@@ -506,7 +573,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("a target that matches nothing throws ModifierTargetMissing, naming the real candidates", () => {
     const steps: readonly Step[] = [
-      { kind: "when", condition: () => true, node: guarded, wire: () => ({}), keep: (a) => a }
+      { kind: "when", name: "fixture-when", reads: [], condition: () => true, node: guarded, wire: () => ({}), keep: {} }
     ]
     const modifiers: readonly Modifier[] = [{ kind: "removeWhen", target: notify }]
 
@@ -538,8 +605,10 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("removeWhen rewrites a when step into an unconditional node step, keeping its wire and keep", () => {
     const wire = () => ({})
-    const keep = (a: { readonly ran: boolean }) => ({ guardedRan: a.ran })
-    const steps: readonly Step[] = [{ kind: "when", condition: () => false, node: guarded, wire, keep }]
+    const keep = { guardedRan: (a: { readonly ran: boolean }) => a.ran }
+    const steps: readonly Step[] = [
+      { kind: "when", name: "fixture-when", reads: ["flag"], condition: () => false, node: guarded, wire, keep }
+    ]
 
     const result = applyModifiers(blueprintOf(steps), [{ kind: "removeWhen", target: guarded }])
 
@@ -598,12 +667,16 @@ describe("Graph.shapeOf / projectSteps", () => {
     const joinId = `${containerId}/1:node:fixture-join`
     expect(byId.get(joinId)).toEqual({ kind: "node", id: joinId, label: "fixture-join", parent: containerId })
 
-    // The `.when` is one decision element with a branch edge to the node it guards.
+    // The `.when` is one decision element, labelled with its declared name, with a branch edge to
+    // the node it guards and a data edge from its declared read's producer.
     const decisionId = `${containerId}/2:decision:fixture-guarded`
     const guardedId = `${containerId}/2:node:fixture-guarded`
-    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "fixture-guarded", parent: containerId })
+    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "flag set", parent: containerId })
     expect(byId.get(guardedId)).toEqual({ kind: "node", id: guardedId, label: "fixture-guarded", parent: containerId })
     expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
+    // "flag" is a seed field: no stage in this construct produces it, so its producer is the
+    // enclosing group.
+    expect(shape.edges).toContainEqual({ kind: "data", from: containerId, to: decisionId, field: "flag" })
 
     // A `.via` stage is a stage too, labelled with its own declared name.
     const viaId = `${containerId}/3:node:uppercase`
@@ -644,15 +717,19 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(runs).toBe(0)
   })
 
-  test("a bent borrow projects its bent stages: the unbent group keeps the decision, the bent one shows a plain node", () => {
+  test("a bent borrow projects its bent stages: the unbent group keeps the decision, the bent one shows a plain node with no data edges", () => {
     const bentShape = Graph.shapeOf(bentHost)
     const plainShape = Graph.shapeOf(plainHost)
     expect(bentShape).toBeDefined()
     expect(plainShape).toBeDefined()
     if (bentShape === undefined || plainShape === undefined) return
 
-    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "fixture-guarded")).toBe(true)
+    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "flag set")).toBe(true)
+    expect(plainShape.edges.some((edge) => edge.kind === "data")).toBe(true)
+    // removeWhen drops the decision entirely: no decision element, and no data edge left behind for
+    // the stage it used to guard — the keep survives the rewrite, but nothing reads it as a decision.
     expect(bentShape.elements.some((element) => element.kind === "decision")).toBe(false)
+    expect(bentShape.edges.some((edge) => edge.kind === "data")).toBe(false)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-guarded")).toBe(true)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-quiet-notify")).toBe(true)
     expect(bentShape.elements.some((element) => element.label === "fixture-notify")).toBe(false)
@@ -681,6 +758,35 @@ describe("Graph.shapeOf / projectSteps", () => {
       { kind: "node", id: "fixture-root/0:node:fixture-notify", label: "fixture-notify", parent: "fixture-root" }
     ])
     expect(edges).toEqual([])
+  })
+
+  test("a decision's data edges draw from the nearest preceding producer, and a field no stage produced draws from the container", () => {
+    const wire = () => ({})
+    const steps: readonly Step[] = [
+      { kind: "node", node: left, wire, keep: { x: (a: { readonly a: string }) => a.a }, modifiers: [] },
+      { kind: "node", node: right, wire, keep: { x: (b: { readonly b: string }) => b.b }, modifiers: [] },
+      { kind: "when", name: "x and y", reads: ["x", "y"], condition: () => true, node: guarded, wire, keep: {} }
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    const decisionId = "fixture-root/2:decision:fixture-guarded"
+    // "x" is written by both node[0] and node[1]: the decision draws from node[1], the nearer
+    // producer — node[0] is the disconfirming twin, never this edge's `from`.
+    expect(edges).toContainEqual({ kind: "data", from: "fixture-root/1:node:fixture-right", to: decisionId, field: "x" })
+    expect(edges).not.toContainEqual({ kind: "data", from: "fixture-root/0:node:fixture-left", to: decisionId, field: "x" })
+    // "y" is produced nowhere in this list: its producer is the container itself, the seed case.
+    expect(edges).toContainEqual({ kind: "data", from: "fixture-root", to: decisionId, field: "y" })
+  })
+
+  test("disconfirming: a keepless stage whose success is not an object schema throws OpaqueStageSuccess", () => {
+    const steps: readonly Step[] = [{ kind: "node", node: opaqueSuccess, wire: () => ({}), modifiers: [] }]
+
+    const error = thrown(OpaqueStageSuccess, () => projectSteps("fixture-root", steps))
+
+    expect(error.site).toBe("node[0]")
+    expect(error.node).toBe("fixture-opaque-success")
+    expect(error.type).toBe("Arrays")
   })
 })
 

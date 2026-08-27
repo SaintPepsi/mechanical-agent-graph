@@ -1,4 +1,4 @@
-import { Data, Effect, type Schema } from "effect"
+import { Data, Effect, type Schema, SchemaAST } from "effect"
 import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
@@ -26,14 +26,27 @@ import type { RunScope } from "mag/runtime/run-layers"
  */
 
 type Wire<Ctx, I> = (ctx: Ctx) => I
-type Keep<A, B extends object> = (a: A) => B
+/** A stage's produced field names are its keep's own keys: written once, readable with
+ *  `Object.keys` and no execution, and unable to drift from the type — the one token is
+ *  simultaneously the type-level field name and the runtime-readable one. */
+type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
+
+/** A decision as the author declares it. `reads` precedes `condition` so `Reads` is inferred from
+ *  the list before `condition`'s parameter is contextually typed from it. Exported so a compile-time
+ *  pin can hold it to a required name and read list, and so a future exit-decision declares its own
+ *  with the same type rather than restating it. */
+export type Decision<Ctx extends object, Reads extends ReadonlyArray<keyof Ctx & string>> = {
+  readonly name: string
+  readonly reads: Reads
+  readonly condition: (fields: Pick<Ctx, Reads[number]>) => boolean
+}
 
 /** The step list's existential types: the list is heterogeneous, so its element types cannot be
  *  named per-Construct. The public `Construct<Seed, Ctx, E, R>` generics stay exact; these are
  *  confined to `Step`, the fold, and the modifier machinery below. */
 type AnyNode = GraphNode<any, any, any, any>
 type AnyWire = (ctx: any) => any
-type AnyKeep = (a: any) => any
+type AnyKeep = Record<string, (a: any) => any>
 type AnyCondition = (ctx: any) => boolean
 type AnyVia = (ctx: any) => Effect.Effect<any, any, any>
 
@@ -64,12 +77,14 @@ export type Step =
   }
   | {
     readonly kind: "when"
+    readonly name: string
+    readonly reads: readonly string[]
     readonly condition: AnyCondition
     readonly node: AnyNode
     readonly wire: AnyWire
     readonly keep: AnyKeep
   }
-  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia }
+  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia; readonly keep: AnyKeep }
 
 /** The one `node` step builder: every stage that runs a single node, and the unconditional step
  *  `removeWhen` rewrites a `when` into. */
@@ -120,6 +135,31 @@ export class ModifierConflict extends Data.TaggedError("MODIFIER_CONFLICT")<{
   readonly modifiers: readonly Modifier["kind"][]
 }> {}
 
+/** A decision name is the handle the borrow/modify lifecycle will target; claimed twice, it targets
+ *  nothing. Thrown from `.finalise`, naming both claiming stages, exactly as `ModifierTargetAmbiguous`
+ *  names ambiguous matches. */
+export class DuplicateDecisionName extends Data.TaggedError("DUPLICATE_DECISION_NAME")<{
+  readonly graph: string
+  readonly name: string
+  readonly claimed: readonly string[]
+}> {}
+
+/** A keepless stage's produced fields are read off its node's success schema; unreadable there, the
+ *  producer index (`projectSteps`'s producer map) would be silently incomplete, so this refuses at
+ *  `.finalise` instead of drawing a wrong edge later. Its `message` states the fix: give the stage a
+ *  keep. */
+export class OpaqueStageSuccess extends Data.TaggedError("OPAQUE_STAGE_SUCCESS")<{
+  readonly graph: string
+  readonly site: string
+  readonly node: string
+  readonly type: string
+}> {
+  override get message(): string {
+    return `${this.graph} at ${this.site} (node "${this.node}") has a ${this.type} success, not an object ` +
+      `schema, so its produced fields cannot be read: give the stage a keep.`
+  }
+}
+
 /** FR-12 (`docs/requirements/graph-envisioning.md`): a bend that means exactly what it says,
  *  too many times, not a way a declared bend fails to mean one thing, so it is named outside the
  *  `Modifier*` family for that reason. */
@@ -158,6 +198,52 @@ const occurrences = (steps: readonly Step[], kind: Modifier["kind"]): readonly O
         return []
     }
   })
+
+/** A keepless stage's produced field names, read off its node's success schema with no execution —
+ *  the only place `SchemaAST` enters this module. A field's producer must be knowable without
+ *  running anything, so a success that isn't a plain object schema refuses rather than leaves the
+ *  producer index silently incomplete. */
+const successFields = (graphName: string, site: string, node: AnyNode): readonly string[] => {
+  const ast = node.success.ast
+  if (!SchemaAST.isObjects(ast)) {
+    throw new OpaqueStageSuccess({ graph: graphName, site, node: node.name, type: ast._tag })
+  }
+  return ast.propertySignatures.map((signature) => String(signature.name))
+}
+
+/** A duplicate decision name would target nothing for a future borrow/modify lifecycle keyed by
+ *  name — the ticket's own reason a decision is named — so it refuses at `.finalise` rather than
+ *  being drawn twice. */
+const checkDecisionNames = (graphName: string, steps: readonly Step[]): void => {
+  const claimedBy = new Map<string, string[]>()
+  steps.forEach((step, index) => {
+    if (step.kind !== "when") return
+    claimedBy.set(step.name, [...(claimedBy.get(step.name) ?? []), `when[${index}]`])
+  })
+  for (const [name, claimed] of claimedBy) {
+    if (claimed.length > 1) throw new DuplicateDecisionName({ graph: graphName, name, claimed })
+  }
+}
+
+/** Beside `tallyApplications`: every keepless stage's success must be a readable object schema. A
+ *  `when` or `via` stage always carries a keep (required by their own signatures), so only a bare
+ *  `node` or a `fork`'s two sides can be keepless here. */
+const checkProducedFields = (graphName: string, steps: readonly Step[]): void => {
+  steps.forEach((step, index) => {
+    switch (step.kind) {
+      case "node":
+        if (step.keep === undefined) successFields(graphName, `node[${index}]`, step.node)
+        return
+      case "fork":
+        successFields(graphName, `fork[${index}].left`, step.left)
+        successFields(graphName, `fork[${index}].right`, step.right)
+        return
+      case "when":
+      case "via":
+        return
+    }
+  })
+}
 
 /** Past this many applications at one borrowing site, `.finalise` refuses rather than build a
  *  graph bent past recognition (FR-12, `docs/requirements/graph-envisioning.md`). */
@@ -278,6 +364,12 @@ const resolveBorrows = (steps: readonly Step[]): readonly Step[] =>
     return { ...step, node: bent, modifiers: [] }
   })
 
+/** Applies a keyed keep by calling each of its projector functions against the one success value —
+ *  the runtime counterpart of `Keep<A, B>`'s type, which is why a keep's keys are also its produced
+ *  field names with no second declaration anywhere. */
+const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(keep).map(([field, project]) => [field, project(a)]))
+
 /** The single source of every stage's semantics, and the only place a `Step` is ever run: a bent
  *  step list executes by exactly the rules its unbent original did. */
 const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any, any, any> =>
@@ -287,7 +379,7 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
         return acc.pipe(
           Effect.flatMap((flowed) =>
             step.node.run(step.wire(flowed)).pipe(
-              Effect.map((a) => ({ ...flowed, ...(step.keep ? step.keep(a) : a) }))
+              Effect.map((a) => ({ ...flowed, ...(step.keep ? applyKeep(step.keep, a) : a) }))
             )
           )
         )
@@ -303,14 +395,14 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
         return acc.pipe(
           Effect.flatMap((flowed) =>
             step.condition(flowed)
-              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...step.keep(a) })))
+              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
               : // The skipped branch adds none of `keep`'s fields, matching `.when`'s `Partial<B>` result.
                 Effect.succeed(flowed)
           )
         )
       case "via":
         return acc.pipe(
-          Effect.flatMap((flowed) => step.f(flowed).pipe(Effect.map((b) => ({ ...flowed, ...b }))))
+          Effect.flatMap((flowed) => step.f(flowed).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) }))))
         )
     }
   }, Effect.succeed(seed))
@@ -345,14 +437,26 @@ const projectNode = (
  *  off. A borrowed construct recurses with the group's own id as the next `containerId`, which is
  *  what nests it and what mints every id already at the right path with no rewrite pass.
  *  Total: `Step` is closed and switched exhaustively, so an unhandled kind is a typecheck failure,
- *  not a runtime one. Exported for its own unit tests, the same reason `applyModifiers` is exported. */
+ *  not a runtime one. Exported for its own unit tests, the same reason `applyModifiers` is exported.
+ *
+ *  `producers` is a fresh `Map<field, elementId>` per call, threaded through this same forward walk:
+ *  a `when` step's declared `reads` become one `data` edge per field, `from` the map's entry or —
+ *  absent one — `containerId` itself, since a read no stage in this construct produced is a seed
+ *  field by the arithmetic of `Ctx` (it grows only by what a stage contributes). A fresh map per
+ *  call is what keeps a borrowed construct's own reads resolving within its own group, at every
+ *  nesting depth, with no special case. Nearest-preceding-producer-wins falls out of the map being
+ *  overwritten in step order: each producing arm records after pushing its own edges. */
 export const projectSteps = (
   containerId: string,
   steps: readonly Step[]
 ): { readonly elements: readonly ShapeElement[]; readonly edges: readonly ShapeEdge[] } => {
   const elements: ShapeElement[] = []
   const edges: ShapeEdge[] = []
+  const producers = new Map<string, string>()
   let previous: string | undefined
+
+  const produced = (keep: AnyKeep | undefined, node: AnyNode, site: string): readonly string[] =>
+    keep !== undefined ? Object.keys(keep) : successFields(containerId, site, node)
 
   steps.forEach((step, index) => {
     const at = `${containerId}/${index}`
@@ -364,11 +468,13 @@ export const projectSteps = (
         const projected = projectNode(containerId, primary, step.node)
         elements.push(...projected.elements)
         edges.push(...projected.edges)
+        for (const field of produced(step.keep, step.node, `node[${index}]`)) producers.set(field, primary)
         break
       }
       case "via":
         primary = `${at}:node:${step.name}`
         elements.push({ kind: "node", id: primary, label: step.name, parent: containerId })
+        for (const field of Object.keys(step.keep)) producers.set(field, primary)
         break
       case "fork": {
         primary = `${at}:fork`
@@ -383,16 +489,27 @@ export const projectSteps = (
           ...left.edges,
           ...right.edges
         )
+        for (const field of successFields(containerId, `fork[${index}].left`, step.left)) producers.set(field, leftId)
+        for (const field of successFields(containerId, `fork[${index}].right`, step.right)) producers.set(field, rightId)
         break
       }
       case "when": {
         primary = `${at}:decision:${step.node.name}`
         const guardedId = `${at}:node:${step.node.name}`
         elements.push(
-          { kind: "decision", id: primary, label: step.node.name, parent: containerId },
+          { kind: "decision", id: primary, label: step.name, parent: containerId },
           { kind: "node", id: guardedId, label: step.node.name, parent: containerId }
         )
-        edges.push({ kind: "branch", from: primary, to: guardedId, label: "true" })
+        edges.push(
+          { kind: "branch", from: primary, to: guardedId, label: "true" },
+          ...step.reads.map((field) => ({
+            kind: "data" as const,
+            from: producers.get(field) ?? containerId,
+            to: primary,
+            field
+          }))
+        )
+        for (const field of Object.keys(step.keep)) producers.set(field, guardedId)
         break
       }
     }
@@ -500,10 +617,12 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
   ) => Borrowed<Seed, Ctx & B, E | E2, R | R2>
-  /** The sketch's `.when`: the node runs only when the condition holds on the context; skipped, the
-   *  context flows on unchanged, so `keep`'s fields arrive `Partial` downstream. */
-  readonly when: <I, A, B extends object, E2, R2>(
-    condition: (ctx: Ctx) => boolean,
+  /** The sketch's `.when`: the node runs only when the decision's condition holds on the context;
+   *  skipped, the context flows on unchanged, so `keep`'s fields arrive `Partial` downstream. The
+   *  decision declares a name and the context fields it reads, so the shape can draw a data edge
+   *  from each field's producer into the decision (`Graph.shapeOf`). */
+  readonly when: <const Reads extends ReadonlyArray<keyof Ctx & string>, I, A, B extends object, E2, R2>(
+    decision: Decision<Ctx, Reads>,
     node: GraphNode<I, A, E2, R2>,
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
@@ -511,10 +630,12 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
   /** A total helper between nodes — the compose-pr-body case, ruled a `runtime/` helper rather than a
    *  node: a node needs a tagged error, and `prBody` has no failure mode to name. `name`
    *  is the stage's own declared handle: with no node behind it, a `.via` stage would otherwise have
-   *  none to draw in the shape. */
-  readonly via: <B extends object, E2, R2>(
+   *  none to draw in the shape. `keep` names what merges, exactly as `.thenKeep`'s does, so a `.via`
+   *  stage's produced fields are readable with no execution like every other stage's. */
+  readonly via: <A, B extends object, E2, R2>(
     name: string,
-    f: (ctx: Ctx) => Effect.Effect<B, E2, R2>
+    f: (ctx: Ctx) => Effect.Effect<A, E2, R2>,
+    keep: Keep<A, B>
   ) => Construct<Seed, Ctx & B, E | E2, R | R2>
   /** Close the construct into an ordinary `graph()`: schemas, scope, the success picked off the final
    *  context. `seed` turns the graph's input into the first context — resolve per-repo policy here.
@@ -530,8 +651,9 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
  *  and the modifiers at once. */
 interface Borrowed<Seed extends object, Ctx extends object, E, R> extends Construct<Seed, Ctx, E, R> {
   /** Strips the borrowed subgraph's `when` condition at this borrowing site: the finalised graph
-   *  runs the guarded node unconditionally. Targets the guarded node itself, because a `.when`
-   *  condition is an anonymous closure with no other handle. */
+   *  runs the guarded node unconditionally. Targets the guarded node itself rather than the
+   *  decision's own name: retargeting by name is the later borrow/modify lifecycle's work, not
+   *  this ticket's. */
   readonly removeWhen: <I, A, E2, R2>(target: GraphNode<I, A, E2, R2>) => Borrowed<Seed, Ctx, E, R>
   /** Swaps a node inside the borrowed subgraph for a replacement at this borrowing site. `NoInfer`
    *  pins every parameter to the target's, so the replacement must accept what the target accepted,
@@ -554,14 +676,22 @@ const makeConstruct = <Seed extends object, Ctx extends object, E, R>(
   join: (node, wire) => makeConstruct(name, [...steps, nodeStep(node, wire)]),
   borrow: (node, wire) => makeBorrowed(name, [...steps, nodeStep(node, wire)]),
   borrowKeep: (node, wire, keep) => makeBorrowed(name, [...steps, nodeStep(node, wire, keep)]),
-  when: (condition, node, wire, keep) =>
-    makeConstruct(name, [...steps, { kind: "when", condition, node, wire, keep }]),
-  via: (stageName, f) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f }]),
+  when: (decision, node, wire, keep) =>
+    makeConstruct(name, [
+      ...steps,
+      { kind: "when", name: decision.name, reads: decision.reads, condition: decision.condition, node, wire, keep }
+    ]),
+  via: (stageName, f, keep) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f, keep }]),
   finalise: (options) => {
     // Tallied on the unresolved steps: resolveBorrows zeroes `modifiers`, so this is the only
     // place the tally is readable.
     const applied = tallyApplications(name, steps)
-    return closeSteps(name, options, resolveBorrows(steps), applied)
+    const resolved = resolveBorrows(steps)
+    // Beside the tally: a decision's name and every keepless stage's produced fields must be
+    // knowable now, not discovered as a wrong drawing the first time someone calls `Graph.shapeOf`.
+    checkDecisionNames(name, resolved)
+    checkProducedFields(name, resolved)
+    return closeSteps(name, options, resolved, applied)
   }
 })
 
