@@ -1,0 +1,12 @@
+[
+ {"id":"extract-is-current","file":"src/sync.ts","describes":"the version comparison moves into a named predicate","edits":[
+   {"find":"const MAX_PAGES = 100","replace":"const MAX_PAGES = 100\n\nconst isCurrent = (existing: StoredUser | undefined, item: RemoteUser): boolean =>\n  existing !== undefined && existing.version >= item.version"},
+   {"find":"      if (existing !== undefined && existing.version >= item.version) {","replace":"      if (isCurrent(existing, item)) {"}]},
+ {"id":"hoist-put-payload","file":"src/sync.ts","describes":"the stored row is built into a local first","edits":[
+   {"find":"      await store.put({ id: item.id, version: item.version, name: item.name })","replace":"      const row = { id: item.id, version: item.version, name: item.name }\n      await store.put(row)"}]},
+ {"id":"rename-locals","file":"src/sync.ts","describes":"a counter local is renamed","edits":[
+   {"find":"  let pages = 0","replace":"  let pageCount = 0"},
+   {"find":"    pages += 1","replace":"    pageCount += 1"},
+   {"find":"    if (pages >= MAX_PAGES)","replace":"    if (pageCount >= MAX_PAGES)"},
+   {"find":"  return { pages, fetched, written, skipped }","replace":"  return { pages: pageCount, fetched, written, skipped }"}]}
+]

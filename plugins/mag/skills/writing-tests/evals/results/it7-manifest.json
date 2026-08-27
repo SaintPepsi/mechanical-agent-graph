@@ -1,0 +1,86 @@
+[
+  {
+    "case": "case-t",
+    "fixture": "limiter",
+    "module": "limiter",
+    "arm": "terse",
+    "source": "iteration-6/eval-10-limiter-repair/terse/run-1/outputs"
+  },
+  {
+    "case": "case-f",
+    "fixture": "limiter",
+    "module": "limiter",
+    "arm": "verbose",
+    "source": "iteration-6/eval-10-limiter-repair/verbose/run-1/outputs"
+  },
+  {
+    "case": "case-q",
+    "fixture": "limiter",
+    "module": "limiter",
+    "arm": "v3",
+    "source": "iteration-6/eval-10-limiter-repair/v3/run-1/outputs"
+  },
+  {
+    "case": "case-r",
+    "fixture": "limiter",
+    "module": "limiter",
+    "arm": "baseline",
+    "source": "iteration-3/eval-10-limiter-repair/without_skill/run-1/outputs"
+  },
+  {
+    "case": "case-j",
+    "fixture": "sync",
+    "module": "sync",
+    "arm": "terse",
+    "source": "iteration-6/eval-12-sync-repair/terse/run-1/outputs"
+  },
+  {
+    "case": "case-h",
+    "fixture": "sync",
+    "module": "sync",
+    "arm": "verbose",
+    "source": "iteration-6/eval-12-sync-repair/verbose/run-1/outputs"
+  },
+  {
+    "case": "case-x",
+    "fixture": "sync",
+    "module": "sync",
+    "arm": "v3",
+    "source": "iteration-6/eval-12-sync-repair/v3/run-1/outputs"
+  },
+  {
+    "case": "case-z",
+    "fixture": "sync",
+    "module": "sync",
+    "arm": "baseline",
+    "source": "iteration-3/eval-12-sync-repair/without_skill/run-1/outputs"
+  },
+  {
+    "case": "case-m",
+    "fixture": "normalize",
+    "module": "normalize",
+    "arm": "terse",
+    "source": "iteration-6/eval-17-normalize-greenfield/terse/run-1/outputs"
+  },
+  {
+    "case": "case-k",
+    "fixture": "normalize",
+    "module": "normalize",
+    "arm": "verbose",
+    "source": "iteration-6/eval-17-normalize-greenfield/verbose/run-1/outputs"
+  },
+  {
+    "case": "case-w",
+    "fixture": "normalize",
+    "module": "normalize",
+    "arm": "v3",
+    "source": "iteration-6/eval-17-normalize-greenfield/v3/run-1/outputs"
+  },
+  {
+    "case": "case-p",
+    "fixture": "normalize",
+    "module": "normalize",
+    "arm": "baseline",
+    "source": "iteration-3/eval-17-normalize-greenfield/without_skill/run-1/outputs"
+  }
+]
