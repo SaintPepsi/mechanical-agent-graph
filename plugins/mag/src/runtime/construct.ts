@@ -31,8 +31,8 @@ type Wire<Ctx, I> = (ctx: Ctx) => I
  *  cannot drift. */
 type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
 
-/** A decision as the author declares it. `reads` precedes `condition` so `Reads` is inferred from
- *  the list before `condition`'s parameter is contextually typed from it. */
+/** A decision as the author declares it: `condition` is narrowed to `Pick<Ctx, Reads[number]>`, so a
+ *  read the declared list omits cannot compile and the list cannot drift from the test. */
 export type Decision<Ctx extends object, Reads extends ReadonlyArray<keyof Ctx & string>> = {
   readonly name: string
   readonly reads: Reads
