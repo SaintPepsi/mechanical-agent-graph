@@ -26,15 +26,13 @@ import type { RunScope } from "mag/runtime/run-layers"
  */
 
 type Wire<Ctx, I> = (ctx: Ctx) => I
-/** A stage's produced field names are its keep's own keys: written once, readable with
- *  `Object.keys` and no execution, and unable to drift from the type — the one token is
- *  simultaneously the type-level field name and the runtime-readable one. */
+/** A stage's produced field names are its keep's own keys: one token that is simultaneously the
+ *  type-level field name and a name readable with `Object.keys` and no execution, so the two
+ *  cannot drift. */
 type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
 
 /** A decision as the author declares it. `reads` precedes `condition` so `Reads` is inferred from
- *  the list before `condition`'s parameter is contextually typed from it. Exported so a compile-time
- *  pin can hold it to a required name and read list, and so a future exit-decision declares its own
- *  with the same type rather than restating it. */
+ *  the list before `condition`'s parameter is contextually typed from it. */
 export type Decision<Ctx extends object, Reads extends ReadonlyArray<keyof Ctx & string>> = {
   readonly name: string
   readonly reads: Reads
@@ -146,8 +144,7 @@ export class DuplicateDecisionName extends Data.TaggedError("DUPLICATE_DECISION_
 
 /** A keepless stage's produced fields are read off its node's success schema; unreadable there, the
  *  producer index (`projectSteps`'s producer map) would be silently incomplete, so this refuses at
- *  `.finalise` instead of drawing a wrong edge later. Its `message` states the fix: give the stage a
- *  keep. */
+ *  `.finalise` instead of drawing a wrong edge later. */
 export class OpaqueStageSuccess extends Data.TaggedError("OPAQUE_STAGE_SUCCESS")<{
   readonly graph: string
   readonly site: string
@@ -211,9 +208,8 @@ const successFields = (graphName: string, site: string, node: AnyNode): readonly
   return ast.propertySignatures.map((signature) => String(signature.name))
 }
 
-/** A duplicate decision name would target nothing for a future borrow/modify lifecycle keyed by
- *  name — the ticket's own reason a decision is named — so it refuses at `.finalise` rather than
- *  being drawn twice. */
+/** A decision's name is what a borrow/modify lifecycle keyed by name would target; claimed twice it
+ *  targets nothing, so it refuses at `.finalise` rather than being drawn twice. */
 const checkDecisionNames = (graphName: string, steps: readonly Step[]): void => {
   const claimedBy = new Map<string, string[]>()
   steps.forEach((step, index) => {
@@ -225,24 +221,16 @@ const checkDecisionNames = (graphName: string, steps: readonly Step[]): void => 
   }
 }
 
-/** Beside `tallyApplications`: every keepless stage's success must be a readable object schema. A
- *  `when` or `via` stage always carries a keep (required by their own signatures), so only a bare
- *  `node` or a `fork`'s two sides can be keepless here. */
+/** Beside `tallyApplications`: every keepless stage's success must be a readable object schema.
+ *  Walks `occurrences(steps, "replaceNode")` — "every node slot any step runs", whose `describe` is
+ *  already the site string an error here reports. A `when` stage always carries a keep (required by
+ *  its own signature), so only a bare `node` or a `fork`'s two sides can be keepless. */
 const checkProducedFields = (graphName: string, steps: readonly Step[]): void => {
-  steps.forEach((step, index) => {
-    switch (step.kind) {
-      case "node":
-        if (step.keep === undefined) successFields(graphName, `node[${index}]`, step.node)
-        return
-      case "fork":
-        successFields(graphName, `fork[${index}].left`, step.left)
-        successFields(graphName, `fork[${index}].right`, step.right)
-        return
-      case "when":
-      case "via":
-        return
-    }
-  })
+  for (const { describe, index, node } of occurrences(steps, "replaceNode")) {
+    const step = steps[index]
+    if (step.kind === "when" || (step.kind === "node" && step.keep !== undefined)) continue
+    successFields(graphName, describe, node)
+  }
 }
 
 /** Past this many applications at one borrowing site, `.finalise` refuses rather than build a
@@ -364,9 +352,7 @@ const resolveBorrows = (steps: readonly Step[]): readonly Step[] =>
     return { ...step, node: bent, modifiers: [] }
   })
 
-/** Applies a keyed keep by calling each of its projector functions against the one success value —
- *  the runtime counterpart of `Keep<A, B>`'s type, which is why a keep's keys are also its produced
- *  field names with no second declaration anywhere. */
+/** The runtime counterpart of `Keep<A, B>`'s type. */
 const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
   Object.fromEntries(Object.entries(keep).map(([field, project]) => [field, project(a)]))
 
@@ -455,9 +441,6 @@ export const projectSteps = (
   const producers = new Map<string, string>()
   let previous: string | undefined
 
-  const produced = (keep: AnyKeep | undefined, node: AnyNode, site: string): readonly string[] =>
-    keep !== undefined ? Object.keys(keep) : successFields(containerId, site, node)
-
   steps.forEach((step, index) => {
     const at = `${containerId}/${index}`
     let primary: string
@@ -468,7 +451,10 @@ export const projectSteps = (
         const projected = projectNode(containerId, primary, step.node)
         elements.push(...projected.elements)
         edges.push(...projected.edges)
-        for (const field of produced(step.keep, step.node, `node[${index}]`)) producers.set(field, primary)
+        const produced = step.keep !== undefined
+          ? Object.keys(step.keep)
+          : successFields(containerId, `node[${index}]`, step.node)
+        for (const field of produced) producers.set(field, primary)
         break
       }
       case "via":
@@ -652,8 +638,7 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
 interface Borrowed<Seed extends object, Ctx extends object, E, R> extends Construct<Seed, Ctx, E, R> {
   /** Strips the borrowed subgraph's `when` condition at this borrowing site: the finalised graph
    *  runs the guarded node unconditionally. Targets the guarded node itself rather than the
-   *  decision's own name: retargeting by name is the later borrow/modify lifecycle's work, not
-   *  this ticket's. */
+   *  decision's own name: retargeting by name is the later borrow/modify lifecycle's work. */
   readonly removeWhen: <I, A, E2, R2>(target: GraphNode<I, A, E2, R2>) => Borrowed<Seed, Ctx, E, R>
   /** Swaps a node inside the borrowed subgraph for a replacement at this borrowing site. `NoInfer`
    *  pins every parameter to the target's, so the replacement must accept what the target accepted,

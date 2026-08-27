@@ -139,6 +139,17 @@ const bendableFinalise = (graph: string, ticket: string, description: string) =>
   })
 })
 
+/** The same for the fixtures that exist only to throw at `.finalise`: they never reach a run, so
+ *  there is no success to project and only name, ticket and prose differ. */
+const doomedFinalise = (graph: string, ticket: string, description: string) => ({
+  description,
+  input: Schema.Struct({ flag: Schema.Boolean }),
+  success: Schema.Struct({}),
+  scope: () => ({ ticket, graph, worktree: false }),
+  seed: (input: { readonly flag: boolean }) => input,
+  out: () => ({})
+})
+
 const bendableSub = Graph.construct<{ flag: boolean }>("fixture-bendable")
   .when(
     { name: "flag set", reads: ["flag"], condition: (s) => s.flag },
@@ -445,14 +456,11 @@ describe("Graph.construct — borrow/modify lifecycle", () => {
       Graph.construct<{ flag: boolean }>("fixture-duplicate-decision-host")
         .when({ name: "flag set", reads: ["flag"], condition: (s) => s.flag }, guarded, () => ({}), {})
         .when({ name: "flag set", reads: ["flag"], condition: (s) => s.flag }, guarded, () => ({}), {})
-        .finalise({
-          description: "Two decisions naming themselves \"flag set\" — a name claimed twice targets nothing.",
-          input: Schema.Struct({ flag: Schema.Boolean }),
-          success: Schema.Struct({}),
-          scope: () => ({ ticket: "GH-332-duplicate", graph: "fixture-duplicate-decision-host", worktree: false }),
-          seed: (input: { readonly flag: boolean }) => input,
-          out: () => ({})
-        }))
+        .finalise(doomedFinalise(
+          "fixture-duplicate-decision-host",
+          "GH-332-duplicate",
+          "Two decisions naming themselves \"flag set\" — a name claimed twice targets nothing."
+        )))
 
     expect(error.name).toBe("flag set")
     expect(error.claimed).toEqual(["when[0]", "when[1]"])
@@ -462,14 +470,11 @@ describe("Graph.construct — borrow/modify lifecycle", () => {
     const error = thrown(OpaqueStageSuccess, () =>
       Graph.construct<{ flag: boolean }>("fixture-opaque-success-host")
         .then(opaqueSuccess, () => ({}))
-        .finalise({
-          description: "A keepless node whose success is an array — its produced fields cannot be read.",
-          input: Schema.Struct({ flag: Schema.Boolean }),
-          success: Schema.Struct({}),
-          scope: () => ({ ticket: "GH-332-opaque", graph: "fixture-opaque-success-host", worktree: false }),
-          seed: (input: { readonly flag: boolean }) => input,
-          out: () => ({})
-        }))
+        .finalise(doomedFinalise(
+          "fixture-opaque-success-host",
+          "GH-332-opaque",
+          "A keepless node whose success is an array — its produced fields cannot be read."
+        )))
 
     expect(error.site).toBe("node[0]")
     expect(error.node).toBe("fixture-opaque-success")
