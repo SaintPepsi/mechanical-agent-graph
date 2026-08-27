@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { AcceptanceCriteriaMissing } from "mag/graph-nodes/require-acs/errors"
-import { recognizeAcceptanceCriteria } from "mag/graph-nodes/require-acs/recognizer"
+import { recognizeAcceptanceCriteria } from "mag/runtime/acceptance-criteria"
 import { make } from "mag/runtime/graph-node.definition"
 
 /**

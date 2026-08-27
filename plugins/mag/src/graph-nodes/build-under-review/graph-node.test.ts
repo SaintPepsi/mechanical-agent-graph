@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Effect, FileSystem, Option, Path, Result, Schema } from "effect"
+import { BuildTddInputsMissing } from "mag/graph-nodes/build-under-review/errors"
 import { inputExamples, successExamples } from "mag/graph-nodes/build-under-review/examples"
 import { buildUnderReview } from "mag/graph-nodes/build-under-review/graph-node"
 import {
@@ -1013,5 +1014,152 @@ describe("build-under-review — journal", () => {
     // its own gate before any session — build, simplify or review — was ever dispatched in run-2.
     expect(result.resumedRequests).toHaveLength(0)
     expect(result.secondRows.map((row) => [row["node"], row["event"]])).toStrictEqual(ONE_PASS_SEQUENCE)
+  })
+})
+
+/**
+ * The shell for a `tdd` first pass: `HEAD` advances only on a real `git commit`, and the two
+ * sessions that leave work uncommitted (write-red's tests, implement's fix) are the second and
+ * fourth `status --porcelain` probes, so their nodes' salvage commits are what move the sha. The
+ * whole-suite command is intercepted green; the per-path test command is answered from `colours`
+ * in order; a probe never runs because the stub breakers claim nothing.
+ */
+const tddShell = (colours: readonly number[]) => {
+  const calls: string[][] = []
+  const shas = ["aaa111", "bbb222", "ccc333", "ddd444"]
+  let index = 0
+  let asserted = 0
+  const service: ShellService = {
+    run: (argv) => {
+      calls.push([...argv])
+      const line = argv.join(" ")
+      if (line === "git rev-parse HEAD") return ok(`${shas[index]}\n`)
+      if (line === "git status --porcelain") {
+        const ordinal = calls.filter((call) => call.join(" ") === "git status --porcelain").length
+        return ok(ordinal === 2 || ordinal === 4 ? "?? work\n" : "")
+      }
+      if (line === "git add -A") return ok("")
+      if (line === "git diff --cached --quiet") return Effect.succeed({ exitCode: 1, stdout: "", stderr: "" })
+      if (argv[0] === "git" && argv[1] === "commit") {
+        index += 1
+        return ok("")
+      }
+      if (line.startsWith("git rev-list --count")) return ok("1\n")
+      if (line === "git diff --name-only main...HEAD") return ok("x.ts\nx.test.ts\n")
+      if (argv[0] === "git" && argv[1] === "diff" && argv[2] === "--name-only" && argv[4] === "HEAD") return ok("x.ts\nx.test.ts\n")
+      if (argv[0] === "git" && argv[1] === "diff" && argv[2] === "--name-only") return ok("x.ts\n")
+      if (line === `sh -c ${SUITE}`) return ok("42 pass\n")
+      if (argv[0] === "sh" && argv[3] === "sh") {
+        const colour = colours[asserted]
+        asserted += 1
+        if (colour === undefined) throw new Error(`tddShell: unscripted assert-red call ${asserted}`)
+        return Effect.succeed({ exitCode: colour, stdout: "", stderr: "" })
+      }
+      if (line === "git diff main...HEAD") return ok(DIFF)
+      if (line === "git diff --no-renames --name-only -z main...HEAD") return ok("")
+      if (line === "git ls-files -z --full-name -- :/PRINCIPLES.md :/*/PRINCIPLES.md") return ok("")
+      throw new Error(`tddShell: unexpected argv: ${line}`)
+    }
+  }
+  return { calls, service }
+}
+
+const isPlanPrompt = (request: ClaudePrint<unknown>) => request.prompt.startsWith("Plan the tests")
+const isImplementPrompt = (request: ClaudePrint<unknown>) => request.prompt.startsWith("Make the tests")
+
+/** Every TDD-lane dispatch answered, plus the loop's own three, keyed on each prompt's opening words. */
+const tddAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
+  const requests: Array<ClaudePrint<unknown>> = []
+  let reviews = 0
+  let builds = 0
+  const answer = <A>(verdict: unknown, session: string, costUsd: number) =>
+    Effect.succeed({ verdict: verdict as A, result: {}, sessions: [session], costUsd, attempts: 1 } as ClaudeReply<A>)
+  const service: ClaudeAgentService = {
+    prompt: <A>(request: ClaudePrint<A>) => {
+      requests.push(request as ClaudePrint<unknown>)
+      const r = request as ClaudePrint<unknown>
+      if (isPlanPrompt(r)) {
+        return answer<A>({ plan: [{ name: "kept", behaviour: "x", bugItCatches: "dropped", negativeSpace: [] }] }, "plan-1", 0.3)
+      }
+      if (r.prompt.startsWith("Write the tests")) return answer<A>({ testPaths: ["x.test.ts"], stubPaths: ["x.ts"] }, "red-1", 0.35)
+      if (isImplementPrompt(r)) return answer<A>({ summary: "done" }, "green-1", 0.5)
+      if (r.prompt.startsWith("Break the code")) return answer<A>({ claims: [] }, `break-${requests.length}`, 0.4)
+      if (isReviewPrompt(r)) {
+        reviews += 1
+        return answer<A>({ blocking: blockingByReview[reviews - 1] ?? [] }, `session-review-${reviews}`, 0.1)
+      }
+      if (isSimplifyPrompt(r)) return answer<A>({ note: "nothing to trim" }, "session-simplify", 0.05)
+      builds += 1
+      return answer<A>({ summary: `build ${builds}` }, `session-build-${builds}`, 0.5)
+    }
+  }
+  return { requests, service }
+}
+
+const TDD_INPUT = { ...inputExamples[2]!, command: SUITE }
+
+/** A real work root holding the one JS test the stub sessions declare, so `test-smells` has a file to read. */
+const withTddTree = async <T>(fn: (runInfo: ReturnType<typeof tempRunInfo>) => Promise<T>): Promise<T> => {
+  const workRoot = mkdtempSync(join(tmpdir(), "build-under-review-tdd-"))
+  writeFileSync(join(workRoot, "x.test.ts"), "import { expect, test } from \"bun:test\"\ntest(\"kept\", () => {\n  expect(1).toBe(1)\n})\n")
+  return fn(tempRunInfo({ workRoot }))
+}
+
+describe("build-under-review — tdd", () => {
+  test("tdd on: the first pass is tdd-build, its head reaches simplify and review with no second verification, and no build session is dispatched", () =>
+    withTddTree(async (runInfo) => {
+      const agent = tddAgent()
+      const shell = tddShell([1, 0])
+      const { result } = await runNode(TDD_INPUT, agent.service, shell.service, runInfo)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.headSha).toBe("ccc333")
+      expect(result.success.reviewPasses).toBe(1)
+      expect(result.success.sessions).toStrictEqual([
+        "plan-1", "red-1", "green-1", "break-4", "break-5", "break-6", "session-simplify", "session-review-1"
+      ])
+      expect(agent.requests.filter(isPlanPrompt)).toHaveLength(1)
+      // `build`'s fresh-dispatch framing never appears; review-diff's prompt opens with the ticket too, so the branch line is the tell.
+      expect(agent.requests.filter((request) => request.prompt.includes("You are on branch"))).toHaveLength(0)
+      // The suite ran inside tdd-build (its own verification plus verify-escapes's baseline) and
+      // never again in this loop's own `verified`.
+      expect(shell.calls.filter((call) => call.join(" ") === `sh -c ${SUITE}`)).toHaveLength(2)
+      // The planner was handed the ticket's criteria, read off the body mechanically.
+      expect(agent.requests.find(isPlanPrompt)!.prompt).toContain("- - a NUL byte in the body is written as `\\0`")
+    }))
+
+  test("a send-back after a tdd first pass is a build dispatch resuming the implementing session", () =>
+    withTddTree(async (runInfo) => {
+      const agent = tddAgent([["the fix misses the second NUL"]])
+      const { result } = await runNode(TDD_INPUT, agent.service, tddShell([1, 0]).service, runInfo)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.reviewPasses).toBe(2)
+      const sendBack = agent.requests.find((request) => request.prompt.includes("A reviewer examined this branch"))
+      expect(sendBack).toBeDefined()
+      expect(sendBack!.resume).toBe("green-1")
+      expect(sendBack!.prompt).toContain(join(runInfo.runRoot, "review-diff-1.md"))
+      // One plan only: the send-back does not re-enter the TDD lane.
+      expect(agent.requests.filter(isPlanPrompt)).toHaveLength(1)
+    }))
+
+  test("tdd without the recon note or the test command is BuildTddInputsMissing before any read or dispatch", async () => {
+    const agent = tddAgent()
+    const shell = tddShell([])
+    const { result } = await runNode({ ...TDD_INPUT, testCommand: undefined }, agent.service, shell.service)
+
+    expect(Result.isFailure(result)).toBe(true)
+    if (!Result.isFailure(result)) return
+    expect(result.failure).toStrictEqual(new BuildTddInputsMissing({ discoverPath: TDD_INPUT.discoverPath, testCommand: undefined }))
+    expect(agent.requests).toHaveLength(0)
+    expect(shell.calls).toHaveLength(0)
+  })
+
+  test("tdd absent: the loop as it was, no plan is ever dispatched", async () => {
+    const agent = loopAgent()
+    await runNode(INPUT, agent.service, loopShell().service)
+    expect(agent.requests.filter(isPlanPrompt)).toHaveLength(0)
   })
 })

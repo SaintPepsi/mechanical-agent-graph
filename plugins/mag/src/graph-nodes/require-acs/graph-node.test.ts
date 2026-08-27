@@ -3,7 +3,7 @@ import { Effect, Result, Schema } from "effect"
 import { AcceptanceCriteriaMissing } from "mag/graph-nodes/require-acs/errors"
 import { inputExamples, successExamples } from "mag/graph-nodes/require-acs/examples"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
-import { recognizeAcceptanceCriteria } from "mag/graph-nodes/require-acs/recognizer"
+import { recognizeAcceptanceCriteria } from "mag/runtime/acceptance-criteria"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 
 const failure = <A, E>(effect: Effect.Effect<A, E>): E => {

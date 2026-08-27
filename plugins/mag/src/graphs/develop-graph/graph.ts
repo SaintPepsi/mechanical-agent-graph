@@ -19,6 +19,8 @@ import { prBody } from "mag/runtime/pr-body"
 // This repository's own declared per-repo defaults.
 const BASE_BRANCH = "main"
 const VERIFICATION_COMMAND = "bun run typecheck && bun run test"
+// `assert-red`'s per-path form: the test path arrives as `$1`.
+const TEST_COMMAND = "bun test \"$1\""
 const WORKTREE_SETUP = "bun install --frozen-lockfile"
 const MAINTAINER = "SaintPepsi"
 const REMOTE = "origin"
@@ -52,6 +54,10 @@ const input = Schema.Struct({
   slug: Schema.optional(Schema.String),
   maintainer: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),
+  /** Build the first pass through `tdd-build` (`build-under-review`'s `tdd` switch). Absent is off. */
+  tdd: Schema.optional(Schema.Boolean),
+  /** The per-path test command the TDD lane classifies with, `$1` the test path; this repository's own when absent. */
+  testCommand: Schema.optional(Schema.String),
   /**
    * `"run-root"` or `"committed"` (`RunInfoService.records`'s own doc). A checked `Schema.String`,
    * not `Schema.Literal`: `schema-flags.ts` derives a CLI flag for string/number/boolean only, and a
@@ -78,6 +84,8 @@ export const resolvePolicy = (input: Input) => ({
   slug: input.slug ?? SLUG,
   maintainer: input.maintainer ?? MAINTAINER,
   agent: input.agent ?? EFFECT_AGENT,
+  tdd: input.tdd ?? false,
+  testCommand: input.testCommand ?? TEST_COMMAND,
   // The cast is honest: `input`'s check already refused anything but the two values at decode.
   records: (input.records ?? "run-root") as RecordsPolicy
 })
@@ -262,7 +270,12 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
   .borrowKeep(
     designGraph,
     (s) => ({ ticket: s.ticket, title: s.title, body: s.body, agent: s.agent, model: MODEL_DESIGN }),
-    (designed) => ({ designPath: designed.designPath, designSessions: designed.sessions, designCost: designed.costUsd })
+    (designed) => ({
+      designPath: designed.designPath,
+      discoverPath: designed.discoverPath,
+      designSessions: designed.sessions,
+      designCost: designed.costUsd
+    })
   )
   .borrowKeep(
     buildUnderReview,
@@ -278,7 +291,12 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       agent: s.agent,
       buildModel: MODEL_BUILD,
       simplifyModel: MODEL_SIMPLIFY,
-      reviewModel: MODEL_REVIEW
+      reviewModel: MODEL_REVIEW,
+      // The TDD lane, off unless launched with `--tdd`: the recon note and per-path command travel
+      // regardless, since they are facts of this run whichever first pass reads them.
+      tdd: s.tdd,
+      discoverPath: s.discoverPath,
+      testCommand: s.testCommand
     }),
     (built) => ({
       summaryPath: built.summaryPath,

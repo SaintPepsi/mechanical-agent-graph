@@ -141,7 +141,7 @@ describe("develop-graph", () => {
   })
 
   describe("resolvePolicy", () => {
-    test("every field absent resolves to this repository's own eleven declared defaults", () => {
+    test("every field absent resolves to this repository's own thirteen declared defaults", () => {
       expect(resolvePolicy({ ticket: TICKET })).toStrictEqual({
         base: "main",
         worktree: true,
@@ -153,11 +153,21 @@ describe("develop-graph", () => {
         slug: "SaintPepsi/mechanical-agent-graph",
         maintainer: "SaintPepsi",
         agent: "effect-expert",
+        tdd: false,
+        testCommand: "bun test \"$1\"",
         records: "run-root"
       })
     })
 
-    test("each field overrides independently, the other ten staying this repository's own default", () => {
+    // The TDD lane is opt-in: absent is the loop as it was, and `--tdd` alone turns it on.
+    test("tdd: true decodes distinct from absence, and testCommand overrides independently", () => {
+      expect(resolvePolicy({ ticket: TICKET }).tdd).toBe(false)
+      expect(resolvePolicy({ ticket: TICKET, tdd: true }).tdd).toBe(true)
+      expect(resolvePolicy({ ticket: TICKET, testCommand: "pytest \"$1\"" }).testCommand).toBe("pytest \"$1\"")
+      expect(resolvePolicy({ ticket: TICKET, testCommand: "pytest \"$1\"" }).tdd).toBe(false)
+    })
+
+    test("each field overrides independently, the other twelve staying this repository's own default", () => {
       expect(resolvePolicy({ ticket: TICKET, remote: "upstream" }).remote).toBe("upstream")
       expect(resolvePolicy({ ticket: TICKET, remote: "upstream" }).host).toBe("github.com")
       expect(resolvePolicy({ ticket: TICKET, maintainer: "OtherMaintainer" }).maintainer).toBe("OtherMaintainer")

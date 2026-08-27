@@ -1,16 +1,46 @@
 import { Effect, Option, Result, Schema } from "effect"
 import { designAddendum, verificationAddendum } from "mag/graph-nodes/build-under-review/addenda"
+import { BuildTddInputsMissing } from "mag/graph-nodes/build-under-review/errors"
 import { build } from "mag/graph-nodes/build/graph-node"
 import type { ReviewBlocked, ReviewDisputeRejected } from "mag/graph-nodes/review-diff/errors"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
+import { tddBuild } from "mag/graph-nodes/tdd-build/graph-node"
 import { verification } from "mag/graph-nodes/verification/graph-node"
+import { recognizeAcceptanceCriteria } from "mag/runtime/acceptance-criteria"
 import { make } from "mag/runtime/graph-node.definition"
 import { charge, NO_SPEND, type Spend } from "mag/runtime/spend"
 
 /** `REVIEW_BLOCKED` always routes back to `build`; `REVIEW_DISPUTE_REJECTED` joins it only on the committed edge, where the tree moved. */
 const sendsBack = (failure: { readonly _tag: string }): failure is ReviewBlocked | ReviewDisputeRejected =>
   failure._tag === "REVIEW_BLOCKED" || failure._tag === "REVIEW_DISPUTE_REJECTED"
+
+/**
+ * The TDD lane's policy: pipeline judgment, not a per-repository fact, so constants here rather
+ * than more input fields (`graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning). One escape
+ * round after the first, `red-green`'s own send-backs, three blind breakers of three claims each,
+ * and the model per step the lane was measured with.
+ */
+const TDD_ESCAPE_CAP = 1
+const TDD_RED_GREEN_CAP = 2
+const TDD_BREAKERS = 3
+const TDD_BUDGET = 3
+const TDD_MODELS = { planModel: "opus", writeModel: "sonnet", implementModel: "sonnet", breakModel: "sonnet", judgeModel: "haiku" }
+
+/** What the loop reads off a first pass, whichever node built it: `build`'s own success is one, `tdd-build`'s is mapped onto it. */
+interface BuiltPass {
+  readonly summaryPath: string
+  readonly commits: number
+  readonly headSha: string
+  readonly sessions: readonly string[]
+  readonly costUsd: number | null
+  readonly sessionRef: string
+  readonly findingsPath?: string | undefined
+  readonly disputePath?: string | undefined
+}
+
+/** Either first pass's own failure union, the loop's `BUILD_DISPUTED` check narrowing over both. */
+type FirstPassError = Effect.Error<ReturnType<typeof build.run>> | Effect.Error<ReturnType<typeof tddBuild.run>>
 
 /**
  * The backward edge as a composite GraphNode: build →
@@ -56,9 +86,16 @@ const sendsBack = (failure: { readonly _tag: string }): failure is ReviewBlocked
  * own session is never the resume target even when its head is what review gated on: `simplify` is
  * ticket-blind by design (`simplify`'s own `promptFor`), so it cannot answer ticket-shaped findings.
  *
- * This node mints no error of its own: its failure channel is the union its parts
- * already produce, and a cap-spent loop refails the reviewer's own blocking tag, findings still
- * aboard.
+ * Under `tdd` the first pass is `tdd-build` rather than `build`: the criteria are read off the
+ * ticket body, the plan is written red-first, and the review lane runs before this loop's own
+ * reviewer ever sees the diff. That pass's head is already verified inside `tdd-build`, so
+ * {@link verified} is not run over it again; every send-back and repair after it is a `build`
+ * dispatch resuming the implementing session `tdd-build` returned, exactly as after a `build`
+ * first pass. Off by default, so the loop as it was is the loop as it is.
+ *
+ * This node mints one error of its own, {@link BuildTddInputsMissing}, for a `tdd` pass asked for
+ * without the inputs it needs; every other tag is the union its parts already produce, and a
+ * cap-spent loop refails the reviewer's own blocking tag, findings still aboard.
  */
 export const buildUnderReview = make({
   name: "build-under-review",
@@ -88,7 +125,13 @@ export const buildUnderReview = make({
     /** `--model` for the simplify dispatch — the composite's third `--model` assignment, same convention. */
     simplifyModel: Schema.optional(Schema.String),
     /** `--model` for the review-diff dispatch — the composite's other half of the same convention. */
-    reviewModel: Schema.optional(Schema.String)
+    reviewModel: Schema.optional(Schema.String),
+    /** Build the first pass through `tdd-build` instead of `build`. Absent is off: the loop unchanged. */
+    tdd: Schema.optional(Schema.Boolean),
+    /** The recon note `tdd-build`'s planner reads. `run` requires it whenever `tdd` is on. */
+    discoverPath: Schema.optional(Schema.String),
+    /** `assert-red`'s per-path test command, `$1` the test path. `run` requires it whenever `tdd` is on. */
+    testCommand: Schema.optional(Schema.String)
   }),
   success: Schema.Struct({
     summaryPath: Schema.String,
@@ -109,6 +152,13 @@ export const buildUnderReview = make({
       const reviewModelField = input.reviewModel === undefined ? {} : { model: input.reviewModel }
       const firstAddendum =
         input.designPath === undefined ? {} : { addendum: designAddendum(input.designPath) }
+      // Checked before any read: a `tdd` pass with nothing to plan against or no way to assert red
+      // is a wiring bug, refused before a session is spent (`BuildResumeEmpty`'s position).
+      const tddInputs = input.tdd === true
+        ? input.discoverPath === undefined || input.testCommand === undefined
+          ? yield* Effect.fail(new BuildTddInputsMissing({ discoverPath: input.discoverPath, testCommand: input.testCommand }))
+          : { discoverPath: input.discoverPath, testCommand: input.testCommand }
+        : undefined
 
       let prior = Option.none<ReviewBlocked | ReviewDisputeRejected>()
       let spent: Spend = NO_SPEND
@@ -170,20 +220,48 @@ export const buildUnderReview = make({
         })
 
       for (let sendbacks = 0; ; sendbacks += 1) {
-        const built = yield* Effect.result(
-          build.run({
-            ticket: input.ticket,
-            title: input.title,
-            body: input.body,
-            branch: input.branch,
-            ...agentField,
-            ...buildModelField,
-            ...Option.match(prior, {
-              onNone: () => firstAddendum,
-              onSome: (blocked) => ({ findingsPath: blocked.findingsPath, resume: lastBuildSessionRef })
-            })
-          })
-        )
+        // Only the first pass goes through `tdd-build`; a send-back answers findings against a tree
+        // that already has its tests, which is `build`'s own resumed-session shape.
+        const viaTdd = Option.isNone(prior) && tddInputs !== undefined
+        // Annotated: the two arms' error unions differ, and a bare ternary leaves them as two
+        // Effect types rather than one over the joined union.
+        const pass: Effect.Effect<BuiltPass, FirstPassError> = viaTdd && tddInputs !== undefined
+            ? tddBuild.run({
+              acs: recognizeAcceptanceCriteria(input.body).criteria,
+              discoverPath: tddInputs.discoverPath,
+              base: input.base,
+              command: input.command,
+              testCommand: tddInputs.testCommand,
+              cap: TDD_ESCAPE_CAP,
+              redGreenCap: TDD_RED_GREEN_CAP,
+              breakers: TDD_BREAKERS,
+              budget: TDD_BUDGET,
+              ...agentField,
+              ...TDD_MODELS
+            }).pipe(
+              // Mapped onto the shape the loop reads off `build`; a tdd pass carries no dispute pair.
+              Effect.map((made): BuiltPass => ({
+                summaryPath: made.summaryPath,
+                commits: made.commits,
+                headSha: made.headSha,
+                sessions: made.sessions,
+                costUsd: made.costUsd,
+                sessionRef: made.sessionRef
+              }))
+            )
+            : build.run({
+              ticket: input.ticket,
+              title: input.title,
+              body: input.body,
+              branch: input.branch,
+              ...agentField,
+              ...buildModelField,
+              ...Option.match(prior, {
+                onNone: () => firstAddendum,
+                onSome: (blocked) => ({ findingsPath: blocked.findingsPath, resume: lastBuildSessionRef })
+              })
+            }).pipe(Effect.map((made): BuiltPass => made))
+        const built = yield* Effect.result(pass)
 
         if (Result.isFailure(built)) {
           const failure = built.failure
@@ -221,8 +299,11 @@ export const buildUnderReview = make({
         spent = charge(spent, built.success.sessions, built.success.costUsd)
         lastBuildSessionRef = built.success.sessionRef
 
-        // Repair a red build head in place rather than let it end the run.
-        const builtVerified = yield* verified(built.success.headSha, built.success.sessionRef)
+        // Repair a red build head in place rather than let it end the run. A `tdd-build` head was
+        // verified inside that node, on this exact sha, so it is not re-run here.
+        const builtVerified = viaTdd
+          ? { headSha: built.success.headSha, commits: 0 }
+          : yield* verified(built.success.headSha, built.success.sessionRef)
 
         // The subtraction pass, once per build pass, before the review that judges the
         // diff — so its own commit is always in what review sees. `reduced.headSha` is what

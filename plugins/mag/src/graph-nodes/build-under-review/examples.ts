@@ -22,6 +22,19 @@ export const inputExamples = [
     command: "bun run typecheck && bun run test",
     base: "main",
     cap: 2
+  },
+  {
+    // The TDD lane on: the first pass is `tdd-build`, which needs the recon note and a per-path test command.
+    ticket: "GH-98",
+    title: "Fix the NUL-byte crash",
+    body: "NUL bytes abort the run.\n\n## Acceptance Criteria\n\n- a NUL byte in the body is written as `\\0`",
+    branch: "feat/GH-98-fix-the-nul-byte-crash",
+    command: "bun run typecheck && bun run test",
+    base: "main",
+    cap: 2,
+    tdd: true,
+    discoverPath: "docs/graph/GH-98/discover.md",
+    testCommand: "bun test \"$1\""
   }
 ]
 

@@ -1,4 +1,9 @@
 /**
+ * Shared reader: `require-acs` counts what it finds to refuse a ticket, `build-under-review` hands
+ * the same lines to `tdd-build` as the criteria a plan is written against. Promoted from
+ * `require-acs`'s own directory once a second node needed it, since a sibling's private file is
+ * never imported and never copied.
+ *
  * Recognizes a criterion line by either of two rules: it's a list item, or it names `AC<n>`.
  * Markdown emphasis is stripped from a line before that `AC<n>` match, because this repo's house
  * ticket format often bolds the criterion label (`**AC.01 - …**`), and `**AC` would otherwise match
