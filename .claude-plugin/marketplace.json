@@ -1,0 +1,14 @@
+{
+  "name": "mag",
+  "owner": {
+    "name": "SaintPepsi"
+  },
+  "description": "mechanical-agent-graph: a ticket worked end to end as a graph of typed nodes, mechanical wherever a script can decide, a model only where judgement is needed.",
+  "plugins": [
+    {
+      "name": "mag",
+      "source": "./plugins/mag",
+      "description": "develop-graph: one ticket, acceptance criteria to a reviewed, verified, open PR, GraphNode-composed with a resumable journal, every run isolated in its own worktree"
+    }
+  ]
+}

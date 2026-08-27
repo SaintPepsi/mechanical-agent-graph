@@ -1,0 +1,26 @@
+node_modules/
+
+# Reference clones of other repositories, pulled for local reading; never committed
+.repos/
+
+# develop-ticket-graph eval workspaces (run logs, gradings, handoffs); local only
+docs/evals/
+
+# Claude Code agent worktrees (Agent tool isolation); local only
+.claude/worktrees/
+
+# graphs/envision/graph.test.ts writes real files under this real source-tree fixture, so a `bun run test`
+# killed before its own cleanup must not leave a stray that build's commitAgentLeftovers
+# (git add -A) later sweeps into an unrelated ticket's commit.
+plugins/mag/src/graphs/*-test-fixture/
+
+# Run records (design, discover, visions, review records) are written here by the graph; the
+# run root under ~/.claude/graph/ is the record of a run. Committed only where a repo's policy
+# declares `Run records: committed to the branch`.
+docs/graph/
+
+# Local planning notes; never committed
+docs/plans/
+
+# Per-machine Claude Code settings; never committed
+.claude/settings.local.json

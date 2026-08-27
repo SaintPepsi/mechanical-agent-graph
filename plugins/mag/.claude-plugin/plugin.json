@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "mag",
+  "version": "0.1.0",
+  "description": "An Effect-based deterministic pipeline that composes graphs of nodes, keeps a resumable journal, and isolates every run in its own worktree.",
+  "author": {
+    "name": "SaintPepsi"
+  }
+}

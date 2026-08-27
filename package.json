@@ -1,0 +1,20 @@
+{
+  "name": "mechanical-agent-graph",
+  "private": true,
+  "workspaces": ["plugins/mag", "plugins/mag/projects/graph-viewer"],
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "mag": "bun plugins/mag/src/cli.ts",
+    "usage-report": "bun plugins/mag/src/usage-report.ts",
+    "typecheck": "bun run --cwd plugins/mag typecheck && bun run --cwd plugins/mag/projects/graph-viewer check",
+    "test": "bun test --path-ignore-patterns 'plugins/mag/projects/**' && bun run --cwd plugins/mag/projects/graph-viewer test"
+  },
+  "dependencies": {
+    "effect": "beta",
+    "mag": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/bun": "^1.1.14"
+  }
+}

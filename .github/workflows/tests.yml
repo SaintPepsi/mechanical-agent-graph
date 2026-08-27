@@ -1,0 +1,38 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Superseded pushes stop consuming Actions minutes.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    # POSIX-only, deliberately (maintainer ruling): Windows is not a supported
+    # target, so there is no Windows leg to pay for.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Pinned, not `latest`: a green suite is only evidence if the toolchain is a fixed
+          # variable. Bump it on purpose, so a break is attributable to the bump.
+          bun-version: 1.3.14
+      # From the committed lockfile, so CI resolves the same versions a dev box does.
+      # `plugins/mag` needs real node_modules: `tsc` reads `@types/bun` off disk, and
+      # bun's auto-install only covers binaries it is asked to run, not type packages.
+      - run: bun install --frozen-lockfile
+      # The viewer's Playwright smoke test drives chromium; the browser is a per-machine install.
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run typecheck
+      # `bun run test`, not bare `bun test`: the root script also runs the viewer's vitest and
+      # Playwright suites (plugins/mag/projects/graph-viewer).
+      - run: bun run test

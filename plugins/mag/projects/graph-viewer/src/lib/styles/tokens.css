@@ -1,0 +1,88 @@
+/* Design tokens — the single source for the kit's look ("Arcade Terminal"): obsidian surfaces,
+   purple primary, amber alt-accent, Space Grotesk display over JetBrains Mono body, sharp
+   corners, border-based elevation (no soft shadows). The maintainer's own design tokens, vendored from
+   the design system they came from and licensed with this repository; see this project's README
+   for how to revendor.
+
+   Components consume tokens with NO hex fallbacks; importing this file is a hard prerequisite.
+   Apps re-skin by overriding token VALUES in app scope, never by forking components or
+   hardcoding hex. */
+:root {
+  /* Color roles — surfaces & text */
+  --mk-bg: #101415; /* page background */
+  --mk-surface: #1d2022; /* cards, panels, header bars */
+  --mk-surface-raised: #272a2c; /* nested blocks: tags, inputs, stat rows */
+  --mk-text: #e0e3e5;
+  --mk-muted: #a9b1b4; /* secondary text — neutral grey (Ian's call, replacing the original
+                          mockup's lavender #cfc2d6) */
+  --mk-border: #4d4354; /* default 1px container border */
+  --mk-border-bright: #988d9f; /* emphasized border / divider */
+
+  /* Color roles — accents. Accent carries actions and focus; accent-alt is the
+     amber category/highlight marker. on-* are the text colors on those fills. */
+  --mk-accent: #ddb7ff;
+  --mk-on-accent: #490080;
+  --mk-accent-dim: #5a357e; /* accent-toned border on hover/active containers */
+  --mk-accent-alt: #fabc4e;
+  --mk-on-accent-alt: #432c00;
+
+  /* Marker palette — functional colour coding for adjacent data points, per
+     the design spec ("Yellow and Green are used not just for status, but as
+     functional high-contrast markers").
+     Convention: 1 purple = interactive/primary datum, 2 amber = category/meta,
+     3 green = liveness (counts of people/things currently alive). */
+  --mk-marker-1: var(--mk-accent);
+  --mk-marker-2: var(--mk-accent-alt);
+  --mk-marker-3: #5ee08f;
+
+  /* Feedback family — bg + -fg pairs, shared Button<->StatusPill by design. */
+  --mk-success: #14432a;
+  --mk-success-fg: #5ee08f;
+  --mk-error: #690005;
+  --mk-error-fg: #ffb4ab;
+  --mk-warning: #432c00;
+  --mk-warning-fg: #fabc4e;
+  --mk-info: #421d65;
+  --mk-info-fg: #cea4f5;
+
+  /* Typography — display for headlines, mono for everything else. The webfont packages are
+     not vendored, so an unavailable family falls back to the system stack declared below. */
+  --mk-font-display: 'Space Grotesk Variable', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --mk-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --mk-font: 400 14px/1.5 var(--mk-font-mono); /* body default */
+  /* Scale grows with consumers (write-it-twice): hero/h1 size was dropped
+     unused, then re-added once the room-title row needed it. */
+  --mk-fs-h1: 32px;
+  --mk-fs-h2: 24px;
+  --mk-fs-body-lg: 18px;
+  --mk-fs-body: 14px;
+  --mk-fs-label: 12px;
+  --mk-tracking-tight: -0.02em; /* headlines */
+  --mk-tracking-label: 0.08em; /* uppercase labels/tags/buttons */
+
+  /* Spacing — 4px base grid. Steps, then layout semantics. */
+  --mk-space-1: 4px;
+  --mk-space-2: 8px;
+  --mk-space-3: 12px;
+  --mk-space-4: 16px;
+  --mk-space-5: 24px;
+  --mk-space-6: 32px;
+  --mk-space-7: 48px;
+  --mk-gutter: 16px; /* grid gaps */
+  --mk-page-margin: 24px; /* horizontal page padding (collapses to 16px small) */
+  --mk-container-max: 1200px;
+
+  /* Shape & elevation — tight corners (4px, on Ian's call); depth comes from
+     1px borders and hard 0-blur offset shadows, never soft blurs. */
+  --mk-radius: 4px;
+  --mk-shadow-hard: 4px 4px 0 #000;
+}
+
+/* The page margin's documented behavior lives IN the token: it steps down to
+   the gutter on small screens, so consumers just use var(--mk-page-margin)
+   and never hand-roll this media query. */
+@media (max-width: 600px) {
+  :root {
+    --mk-page-margin: var(--mk-gutter);
+  }
+}
