@@ -6,22 +6,7 @@ import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
 import { verification } from "mag/graph-nodes/verification/graph-node"
 import { make } from "mag/runtime/graph-node.definition"
-
-/**
- * The loop's whole spend, folded pass by pass because the journal cannot keep all of it: a blocked
- * review pass fails, an error row records its tag and no payload, and cost lives only in success
- * payloads. `null` poisons the total: one unpriced pass makes the whole figure unpriced, never
- * silently zero.
- */
-interface Spend {
-  readonly costUsd: number | null
-  readonly sessions: readonly string[]
-}
-
-const charge = (spend: Spend, sessions: readonly string[], costUsd: number | null): Spend => ({
-  costUsd: spend.costUsd === null || costUsd === null ? null : spend.costUsd + costUsd,
-  sessions: [...spend.sessions, ...sessions]
-})
+import { charge, NO_SPEND, type Spend } from "mag/runtime/spend"
 
 /** `REVIEW_BLOCKED` always routes back to `build`; `REVIEW_DISPUTE_REJECTED` joins it only on the committed edge, where the tree moved. */
 const sendsBack = (failure: { readonly _tag: string }): failure is ReviewBlocked | ReviewDisputeRejected =>
@@ -126,7 +111,7 @@ export const buildUnderReview = make({
         input.designPath === undefined ? {} : { addendum: designAddendum(input.designPath) }
 
       let prior = Option.none<ReviewBlocked | ReviewDisputeRejected>()
-      let spent: Spend = { costUsd: 0, sessions: [] }
+      let spent: Spend = NO_SPEND
       // One counter for the whole run, not one per head: a per-head budget multiplies
       // worst-case spend by the review passes, and the loop's cap is meant to be singular.
       let repairs = 0
