@@ -21,6 +21,8 @@ const BASE_BRANCH = "main"
 const VERIFICATION_COMMAND = "bun run typecheck && bun run test"
 // `assert-red`'s per-path form: the test path arrives as `$1`.
 const TEST_COMMAND = "bun test \"$1\""
+// `red-green`'s gate on a red commit: it must compile before anything is asserted about it.
+const TYPECHECK_COMMAND = "bun run typecheck"
 const WORKTREE_SETUP = "bun install --frozen-lockfile"
 const MAINTAINER = "SaintPepsi"
 const REMOTE = "origin"
@@ -58,6 +60,8 @@ const input = Schema.Struct({
   tdd: Schema.optional(Schema.Boolean),
   /** The per-path test command the TDD lane classifies with, `$1` the test path; this repository's own when absent. */
   testCommand: Schema.optional(Schema.String),
+  /** The typecheck the TDD lane gates a red commit with; this repository's own when absent. */
+  typecheckCommand: Schema.optional(Schema.String),
   /**
    * `"run-root"` or `"committed"` (`RunInfoService.records`'s own doc). A checked `Schema.String`,
    * not `Schema.Literal`: `schema-flags.ts` derives a CLI flag for string/number/boolean only, and a
@@ -86,6 +90,7 @@ export const resolvePolicy = (input: Input) => ({
   agent: input.agent ?? EFFECT_AGENT,
   tdd: input.tdd ?? false,
   testCommand: input.testCommand ?? TEST_COMMAND,
+  typecheckCommand: input.typecheckCommand ?? TYPECHECK_COMMAND,
   // The cast is honest: `input`'s check already refused anything but the two values at decode.
   records: (input.records ?? "run-root") as RecordsPolicy
 })
@@ -296,7 +301,8 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       // regardless, since they are facts of this run whichever first pass reads them.
       tdd: s.tdd,
       discoverPath: s.discoverPath,
-      testCommand: s.testCommand
+      testCommand: s.testCommand,
+      typecheckCommand: s.typecheckCommand
     }),
     (built) => ({
       summaryPath: built.summaryPath,

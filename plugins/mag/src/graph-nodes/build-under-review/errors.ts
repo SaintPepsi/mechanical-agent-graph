@@ -2,13 +2,14 @@ import { Data } from "effect"
 
 /**
  * A `tdd` first pass was asked for without the recon note the planner reads or the per-path test
- * command `assert-red` classifies with. The two fields stay independently optional on the input
+ * command `assert-red` classifies with, or the typecheck `red-green` gates the red commit with. The fields stay independently optional on the input
  * (a flat struct of primitives is what the CLI derives flags from, `review-diff`'s
  * `findingsPath`/`disputePath` reasoning), so `run` checks them together, first, before any read.
  */
 export class BuildTddInputsMissing extends Data.TaggedError("BUILD_TDD_INPUTS_MISSING")<{
   readonly discoverPath: string | undefined
   readonly testCommand: string | undefined
+  readonly typecheckCommand: string | undefined
 }> {}
 
 /**
@@ -64,8 +65,10 @@ export {
   AssertRedNoTests,
   BreakNoSources,
   DeadTestAtBirth,
+  RedGreenReportWriteFailed,
+  RedGreenRunRootMissing,
+  RedTestsDoNotCompile,
   DetectJsTestsNoPaths,
-  HarnessError,
   ImplementCommitFailed,
   ImplementDisputeWriteFailed,
   ImplementGitFailed,

@@ -1049,6 +1049,7 @@ const tddShell = (colours: readonly number[]) => {
       if (argv[0] === "git" && argv[1] === "diff" && argv[2] === "--name-only" && argv[4] === "HEAD") return ok("x.ts\nx.test.ts\n")
       if (argv[0] === "git" && argv[1] === "diff" && argv[2] === "--name-only") return ok("x.ts\n")
       if (line === `sh -c ${SUITE}`) return ok("42 pass\n")
+      if (line === "sh -c true") return ok("")
       if (argv[0] === "sh" && argv[3] === "sh") {
         const colour = colours[asserted]
         asserted += 1
@@ -1096,7 +1097,7 @@ const tddAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
   return { requests, service }
 }
 
-const TDD_INPUT = { ...inputExamples[2]!, command: SUITE }
+const TDD_INPUT = { ...inputExamples[2]!, command: SUITE, typecheckCommand: "true" }
 
 /** A real work root holding the one JS test the stub sessions declare, so `test-smells` has a file to read. */
 const withTddTree = async <T>(fn: (runInfo: ReturnType<typeof tempRunInfo>) => Promise<T>): Promise<T> => {
@@ -1152,7 +1153,7 @@ describe("build-under-review — tdd", () => {
 
     expect(Result.isFailure(result)).toBe(true)
     if (!Result.isFailure(result)) return
-    expect(result.failure).toStrictEqual(new BuildTddInputsMissing({ discoverPath: TDD_INPUT.discoverPath, testCommand: undefined }))
+    expect(result.failure).toStrictEqual(new BuildTddInputsMissing({ discoverPath: TDD_INPUT.discoverPath, testCommand: undefined, typecheckCommand: "true" }))
     expect(agent.requests).toHaveLength(0)
     expect(shell.calls).toHaveLength(0)
   })

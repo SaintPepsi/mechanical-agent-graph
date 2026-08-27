@@ -34,7 +34,8 @@ export const inputExamples = [
     cap: 2,
     tdd: true,
     discoverPath: "docs/graph/GH-98/discover.md",
-    testCommand: "bun test \"$1\""
+    testCommand: "bun test \"$1\"",
+    typecheckCommand: "bun run typecheck"
   }
 ]
 

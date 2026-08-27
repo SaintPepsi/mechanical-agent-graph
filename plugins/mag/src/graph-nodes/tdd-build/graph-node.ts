@@ -59,6 +59,8 @@ export const tddBuild = make({
     base: Schema.String,
     /** The whole suite, `verification`'s command. */
     command: Schema.String,
+    /** The repository's declared typecheck, `red-green`'s gate on the red commit. */
+    typecheckCommand: Schema.String,
     /** `assert-red`'s per-path command, `$1` the test path. */
     testCommand: Schema.String,
     /** Max escape rounds after the first: the plan runs at most `cap + 1` times. */
@@ -111,6 +113,7 @@ export const tddBuild = make({
         const built = yield* redGreen.run({
           plan: planned.plan,
           headSha: current,
+          typecheckCommand: input.typecheckCommand,
           testCommand: input.testCommand,
           cap: input.redGreenCap,
           ...agentField,

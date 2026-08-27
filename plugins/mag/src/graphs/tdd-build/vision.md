@@ -45,12 +45,13 @@ graph TD
     subgraph RedGreen["red-green"]
       subgraph RedLoop["red loop · cap send-backs"]
         WR["write-red · Model<br/>write tests red on their own assertion, commit, declare test paths"]
-        AR1["assert-red · Mechanical<br/>classify each test path red, green or broken"]
+        TC["typecheck-red · Mechanical<br/>the repo's declared typecheck over the red commit; exit code is the verdict"]
+        AR1["assert-red · Mechanical<br/>classify each test path red or green"]
       end
       subgraph GreenLoop["green loop · cap send-backs"]
         IMPL["implement · Model<br/>make tests pass, source only, commit — or dispute a test as wrong"]
         PU["paths-untouched · Mechanical<br/>fail if the range touched a declared test path"]
-        AR2["assert-red · Mechanical<br/>classify each test path red, green or broken"]
+        AR2["assert-red · Mechanical<br/>classify each test path red or green"]
       end
     end
 
@@ -68,19 +69,20 @@ graph TD
 
   DISC -- "discoverPath → discoverPath" --> TP
   TP -- "plan → plan" --> WR
-  WR -- "testPaths, redSha → testPaths, sha" --> AR1
+  WR -- "redSha → (gate: the red commit compiles)" --> TC
+  TC -- "exit 0: testPaths, redSha → testPaths, sha" --> AR1
   AR1 -. "verdict = green: green, redSha → rewrite addendum" .-> WR
-  AR1 -. "verdict = broken: broken, sha → rewrite addendum" .-> WR
+  TC -. "exit ≠ 0: reportPath, redSha → rewrite addendum" .-> WR
   AR1 -- "verdict = all-red: redSha, testPaths → headSha, testPaths" --> IMPL
-  AR1 -. "red-loop cap spent: green|broken, redSha → dies" .-> DEAD_REDLOOP[/"die: DeadTestAtBirth | HarnessError<br/>the red commit is kept, for a human to rewrite"/]
+  AR1 -. "red-loop cap spent: green, redSha → dies" .-> DEAD_REDLOOP[/"die: DeadTestAtBirth | RedTestsDoNotCompile<br/>the red commit is kept, for a human to rewrite"/]
 
   IMPL -- "headSha → toSha" --> PU
   IMPL -. "verdict = dispute: disputePath, headSha → escalates whole" .-> DEAD_DISPUTE[/"die: TestDisputed<br/>disagreement recorded on disk, headSha kept — a human settles it"/]
   PU -- "ok → (gate)" --> AR2
   PU -. "verdict = touched: paths → dies" .-> DEAD_TOUCHED[/"die: PathsTouched<br/>the offending commit range is kept, for a human"/]
-  AR2 -. "verdict = stillRed: red, broken, sha → addendum, sessionRef → resume" .-> IMPL
+  AR2 -. "verdict = stillRed: red, sha → addendum, sessionRef → resume" .-> IMPL
   AR2 -- "verdict = allGreen: headSha → headSha" --> VER
-  AR2 -. "green-loop cap spent: red|broken, sha → dies" .-> DEAD_GREENLOOP[/"die: StillRed<br/>the tree is kept mid-fix, for a human to finish"/]
+  AR2 -. "green-loop cap spent: red, sha → dies" .-> DEAD_GREENLOOP[/"die: StillRed<br/>the tree is kept mid-fix, for a human to finish"/]
 
   VER -- "headSha → headSha" --> DIFF
   VER -. "verdict = failed: reportPath → dies" .-> DEAD_TDDVERIFY[/"die: VerificationFailed<br/>reportPath kept — see gap note"/]

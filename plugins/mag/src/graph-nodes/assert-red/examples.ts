@@ -3,7 +3,6 @@ export const inputExamples = [
 ]
 
 export const successExamples = [
-  { red: ["src/limiter.test.ts", "src/sync.test.ts"], green: [], broken: [] },
-  { red: ["src/limiter.test.ts"], green: ["src/sync.test.ts"], broken: [] },
-  { red: [], green: [], broken: ["src/limiter.test.ts"] }
+  { red: ["src/limiter.test.ts", "src/sync.test.ts"], green: [] },
+  { red: ["src/limiter.test.ts"], green: ["src/sync.test.ts"] }
 ]

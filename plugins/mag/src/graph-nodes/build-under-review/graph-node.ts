@@ -131,7 +131,9 @@ export const buildUnderReview = make({
     /** The recon note `tdd-build`'s planner reads. `run` requires it whenever `tdd` is on. */
     discoverPath: Schema.optional(Schema.String),
     /** `assert-red`'s per-path test command, `$1` the test path. `run` requires it whenever `tdd` is on. */
-    testCommand: Schema.optional(Schema.String)
+    testCommand: Schema.optional(Schema.String),
+    /** The repository's declared typecheck, `red-green`'s gate on the red commit. `run` requires it whenever `tdd` is on. */
+    typecheckCommand: Schema.optional(Schema.String)
   }),
   success: Schema.Struct({
     summaryPath: Schema.String,
@@ -155,9 +157,15 @@ export const buildUnderReview = make({
       // Checked before any read: a `tdd` pass with nothing to plan against or no way to assert red
       // is a wiring bug, refused before a session is spent (`BuildResumeEmpty`'s position).
       const tddInputs = input.tdd === true
-        ? input.discoverPath === undefined || input.testCommand === undefined
-          ? yield* Effect.fail(new BuildTddInputsMissing({ discoverPath: input.discoverPath, testCommand: input.testCommand }))
-          : { discoverPath: input.discoverPath, testCommand: input.testCommand }
+        ? input.discoverPath === undefined || input.testCommand === undefined || input.typecheckCommand === undefined
+          ? yield* Effect.fail(
+            new BuildTddInputsMissing({
+              discoverPath: input.discoverPath,
+              testCommand: input.testCommand,
+              typecheckCommand: input.typecheckCommand
+            })
+          )
+          : { discoverPath: input.discoverPath, testCommand: input.testCommand, typecheckCommand: input.typecheckCommand }
         : undefined
 
       let prior = Option.none<ReviewBlocked | ReviewDisputeRejected>()
@@ -231,6 +239,7 @@ export const buildUnderReview = make({
               discoverPath: tddInputs.discoverPath,
               base: input.base,
               command: input.command,
+              typecheckCommand: tddInputs.typecheckCommand,
               testCommand: tddInputs.testCommand,
               cap: TDD_ESCAPE_CAP,
               redGreenCap: TDD_RED_GREEN_CAP,

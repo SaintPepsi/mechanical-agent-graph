@@ -13,7 +13,7 @@ import { testRunInfo } from "mag/test/node-fixture"
  * with the code its name asks for: the classification is then proven against a real `sh`, not a
  * scripted reply that would agree with whatever mapping the node happened to implement.
  */
-const COMMAND = "case \"$1\" in *red*) exit 1;; *broken*) exit 2;; *) exit 0;; esac"
+const COMMAND = "case \"$1\" in *one*) exit 1;; *two*) exit 2;; *) exit 0;; esac"
 
 /** Git is answered from a script; everything else reaches the real shell, so `$1` is really bound by `sh`. */
 const gitThenLive = (head: string) => {
@@ -43,32 +43,31 @@ describe("assert-red", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(assertRed.success)(example)
   })
 
-  test("exit 0 is green, exit 1 is red, any other exit is broken, each path judged on its own run", async () => {
+  test("exit 0 is green and every non-zero exit is red, each path judged on its own run", async () => {
     const { calls, service } = gitThenLive("aaa111")
     const result = await runWith(
-      { testPaths: ["a.red.test", "b.green.test", "c.broken.test", "d.red.test"], sha: "aaa111", command: COMMAND },
+      { testPaths: ["a.one.test", "b.zero.test", "c.two.test", "d.one.test"], sha: "aaa111", command: COMMAND },
       service
     )
 
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
     expect(result.success).toStrictEqual({
-      red: ["a.red.test", "d.red.test"],
-      green: ["b.green.test"],
-      broken: ["c.broken.test"]
+      red: ["a.one.test", "c.two.test", "d.one.test"],
+      green: ["b.zero.test"]
     })
     // One `sh -c <command> sh <path>` per path, so `$1` is that path and nothing else.
     expect(calls.slice(1)).toStrictEqual([
-      ["sh", "-c", COMMAND, "sh", "a.red.test"],
-      ["sh", "-c", COMMAND, "sh", "b.green.test"],
-      ["sh", "-c", COMMAND, "sh", "c.broken.test"],
-      ["sh", "-c", COMMAND, "sh", "d.red.test"]
+      ["sh", "-c", COMMAND, "sh", "a.one.test"],
+      ["sh", "-c", COMMAND, "sh", "b.zero.test"],
+      ["sh", "-c", COMMAND, "sh", "c.two.test"],
+      ["sh", "-c", COMMAND, "sh", "d.one.test"]
     ])
   })
 
   test("a tree that moved off the declared sha is AssertRedHeadMoved, and no test command runs", async () => {
     const { calls, service } = gitThenLive("bbb222")
-    const result = await runWith({ testPaths: ["a.red.test"], sha: "aaa111", command: COMMAND }, service)
+    const result = await runWith({ testPaths: ["a.one.test"], sha: "aaa111", command: COMMAND }, service)
 
     expect(Result.isFailure(result)).toBe(true)
     if (!Result.isFailure(result)) return

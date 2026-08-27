@@ -8,8 +8,17 @@ const PLAN = [
 ]
 
 export const inputExamples = [
-  { plan: PLAN, headSha: "aaa111", testCommand: "bun test \"$1\"", cap: 2 },
-  { plan: PLAN, headSha: "aaa111", testCommand: "bun test \"$1\"", cap: 1, agent: "effect-expert", writeModel: "sonnet", implementModel: "sonnet" }
+  { plan: PLAN, headSha: "aaa111", typecheckCommand: "bun run typecheck", testCommand: "bun test \"$1\"", cap: 2 },
+  {
+    plan: PLAN,
+    headSha: "aaa111",
+    typecheckCommand: "bun run typecheck",
+    testCommand: "bun test \"$1\"",
+    cap: 1,
+    agent: "effect-expert",
+    writeModel: "sonnet",
+    implementModel: "sonnet"
+  }
 ]
 
 export const successExamples = [

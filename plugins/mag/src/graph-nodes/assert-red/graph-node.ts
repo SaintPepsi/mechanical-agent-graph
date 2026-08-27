@@ -6,22 +6,13 @@ import { RunInfo, workdir } from "mag/runtime/run-info"
 import { Shell } from "mag/runtime/shell"
 
 /**
- * The classification an exit code maps to. The convention is the whole contract: `0` is green,
- * `1` is red (the runner ran the file and an assertion failed), anything else is broken (the file
- * never ran: a compile error, a missing import, a usage error). A runner that exits `1` for every
- * failure never yields `broken` here; `bun test` is one (probed: an assertion failure, a missing
- * import and a syntax error all exit 1), so on such a runner a broken test reads as red and is
- * caught one stage later, when it stays red after the implementation lands.
- */
-const classify = (exitCode: number): "green" | "red" | "broken" =>
-  exitCode === 0 ? "green" : exitCode === 1 ? "red" : "broken"
-
-/**
  * Runs each test path through the caller's command and sorts the paths by outcome, with no
- * judgment anywhere: an exit code is the verdict. The command is one shell line run as
+ * judgment anywhere: exit 0 is green, anything else is red. The command is one shell line run as
  * `sh -c <command> sh <path>`, so it reads the test path as `$1` (`bun test "$1"`); a command that
  * ignores `$1` runs its whole suite once per path, still correct, only coarser. Paths are run one
- * at a time so an outcome belongs to exactly one path.
+ * at a time so an outcome belongs to exactly one path. Whether a test file compiles is not this
+ * node's question: `write-red` owes a compiling test and its stubs, and the loop that dispatches
+ * it gates that mechanically before asking here.
  *
  * `sha` names the tree this verdict is about and is checked against `HEAD` before anything runs:
  * the journal keys a row on its input, so a `{ testPaths, command }`-only input would let a resumed
@@ -30,7 +21,7 @@ const classify = (exitCode: number): "green" | "red" | "broken" =>
  */
 export const assertRed = make({
   name: "assert-red",
-  description: "Run each test path at a sha and classify it red, green or broken by exit code.",
+  description: "Run each test path at a sha and classify it red or green by exit code.",
   input: Schema.Struct({
     testPaths: Schema.Array(Schema.String),
     sha: Schema.String,
@@ -39,8 +30,7 @@ export const assertRed = make({
   }),
   success: Schema.Struct({
     red: Schema.Array(Schema.String),
-    green: Schema.Array(Schema.String),
-    broken: Schema.Array(Schema.String)
+    green: Schema.Array(Schema.String)
   }),
   run: (input) =>
     Effect.gen(function* () {
@@ -54,14 +44,11 @@ export const assertRed = make({
       const shell = yield* Shell
       const red: string[] = []
       const green: string[] = []
-      const broken: string[] = []
       for (const path of input.testPaths) {
         const result = yield* shell.run(["sh", "-c", input.command, "sh", path], { cwd })
-        const bucket = classify(result.exitCode)
-        if (bucket === "green") green.push(path)
-        else if (bucket === "red") red.push(path)
-        else broken.push(path)
+        if (result.exitCode === 0) green.push(path)
+        else red.push(path)
       }
-      return { red, green, broken }
+      return { red, green }
     })
 })

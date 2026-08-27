@@ -23,7 +23,7 @@ const SUITE = "grep -q '^answer=' src.txt"
 const TEST = "src.test.ts"
 const SRC = "src.txt"
 
-const INPUT = { ...inputExamples[0]!, command: SUITE, testCommand: "exit 0", breakers: 1, budget: 2 }
+const INPUT = { ...inputExamples[0]!, command: SUITE, typecheckCommand: "true", testCommand: "exit 0", breakers: 1, budget: 2 }
 
 const PLAN = [{ name: "the answer is kept", behaviour: "answer stays 42", bugItCatches: "answer dropped", negativeSpace: [] }]
 const SURVIVOR = { path: SRC, find: "42", replace: "43", probeSource: "cat src.txt", rationale: "changes the answer" }
@@ -222,7 +222,7 @@ describe("tdd-build", () => {
   test("every model routes to its own dispatch", () =>
     withTree(async (workRoot, runRoot) => {
       const agent = tddAgent([[SURVIVOR]], "boundary")
-      await build({ ...inputExamples[1]!, command: SUITE, testCommand: "exit 0" }, tddShell(workRoot, [1, 0]).service, agent.service, workRoot, runRoot)
+      await build({ ...inputExamples[1]!, command: SUITE, typecheckCommand: "true", testCommand: "exit 0" }, tddShell(workRoot, [1, 0]).service, agent.service, workRoot, runRoot)
 
       expect(agent.requests.find(isPlan)!.model).toBe("opus")
       expect(agent.requests.find(isWrite)!.model).toBe("sonnet")

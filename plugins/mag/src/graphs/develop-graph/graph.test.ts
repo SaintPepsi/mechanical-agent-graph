@@ -141,7 +141,7 @@ describe("develop-graph", () => {
   })
 
   describe("resolvePolicy", () => {
-    test("every field absent resolves to this repository's own thirteen declared defaults", () => {
+    test("every field absent resolves to this repository's own fourteen declared defaults", () => {
       expect(resolvePolicy({ ticket: TICKET })).toStrictEqual({
         base: "main",
         worktree: true,
@@ -155,6 +155,7 @@ describe("develop-graph", () => {
         agent: "effect-expert",
         tdd: false,
         testCommand: "bun test \"$1\"",
+        typecheckCommand: "bun run typecheck",
         records: "run-root"
       })
     })
@@ -167,7 +168,7 @@ describe("develop-graph", () => {
       expect(resolvePolicy({ ticket: TICKET, testCommand: "pytest \"$1\"" }).tdd).toBe(false)
     })
 
-    test("each field overrides independently, the other twelve staying this repository's own default", () => {
+    test("each field overrides independently, the other thirteen staying this repository's own default", () => {
       expect(resolvePolicy({ ticket: TICKET, remote: "upstream" }).remote).toBe("upstream")
       expect(resolvePolicy({ ticket: TICKET, remote: "upstream" }).host).toBe("github.com")
       expect(resolvePolicy({ ticket: TICKET, maintainer: "OtherMaintainer" }).maintainer).toBe("OtherMaintainer")

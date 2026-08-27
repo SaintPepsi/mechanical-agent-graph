@@ -5,7 +5,7 @@
 //   | TicketNotAddressable | TicketNotMaintainerAuthored | EmptyTicket | TrackerFailed | TrackerUnreachable
 //   | MissingTicketId | WorktreeAddFailed | WorktreeSetupFailed | BranchCheckoutFailed | BranchCreateFailed
 //   | DiscoverNoteMissing
-//   | DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed | VerificationFailed
+//   | DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed | VerificationFailed
 //   | TddBuildEscapeUnresolved
 //   | ReviewDisputeRejected | ReviewBlocked
 //   | PrBodyRunRootMissing | PrBodyGitFailed | PrBodyDiffWriteFailed
@@ -49,21 +49,23 @@ const Discover = Graph.construct("discover")
     // outside: { title, body } → { discoverPath } !DiscoverNoteMissing
 
 const RedLoop = Graph.construct("red-loop")
-  .loop(WriteRed, AssertRed, {
+  .loop(WriteRed, TypecheckRed, AssertRed, {
     // WriteRed: { plan, addendum? (send-back only) } → { testPaths, redSha }
     //   writes one red test per behaviour on its own assertion, commits, declares which paths are tests
-    // AssertRed: { testPaths, redSha } → verdict, classifying each declared path red, green or broken
+    // TypecheckRed: { redSha, typecheckCommand } → (gate: the red commit compiles), mechanical, exit code is the verdict
+    //   exit ≠ 0: { reportPath, addendum } → feedback to WriteRed, which owed the tests and their typed stubs
+    // AssertRed: { testPaths, redSha } → verdict, classifying each declared path red or green
     //   allRed: { redSha, testPaths } → exits the loop as { headSha, testPaths }
-    //   green | broken: { addendum } → feedback to WriteRed against the same plan
+    //   green: { addendum } → feedback to WriteRed against the same plan
     feedback: AssertRed.addendum -> WriteRed.addendum,
     until: AssertRed.verdict === "allRed",
     cap: RED_LOOP_CAP,   // send-back cap, policy
   })
-  .onCap(die(DeadTestAtBirth | HarnessError))
-    // verdict still green (a dead test) or broken (a harness fault) when the cap is spent:
+  .onCap(die(DeadTestAtBirth | RedTestsDoNotCompile))
+    // verdict still green (a dead test), or the red commit still not typechecking, when the cap is spent:
     // the red commit is kept, for a human to rewrite
   .finalise()
-    // outside: { plan } → { testPaths, headSha } !DeadTestAtBirth | HarnessError
+    // outside: { plan } → { testPaths, headSha } !DeadTestAtBirth | RedTestsDoNotCompile
 
 const GreenLoop = Graph.construct("green-loop")
   .loop(Implement, PathsUntouched, AssertRed, {
@@ -72,7 +74,7 @@ const GreenLoop = Graph.construct("green-loop")
     //   (verdict = dispute: escalates past this loop entirely; disagreement recorded to disk, headSha kept, a human settles it)
     // PathsUntouched: { headSha } → (gate: the commit range touched none of the declared test paths) !PathsTouched
     //   (verdict = touched: the offending range is kept, for a human)
-    // AssertRed: { headSha, testPaths } → verdict, the same red/green/broken classification red-loop's own runs
+    // AssertRed: { headSha, testPaths } → verdict, the same red/green classification red-loop's own runs
     //   allGreen: { headSha } → exits the loop
     //   stillRed: { addendum, sessionRef } → feedback to Implement, resuming its own session against the addendum
     feedback: AssertRed.addendum -> Implement.addendum,
@@ -80,15 +82,15 @@ const GreenLoop = Graph.construct("green-loop")
     cap: GREEN_LOOP_CAP,   // send-back cap, policy
   })
   .onCap(die(StillRed))
-    // verdict still red or broken when the cap is spent: the tree is kept mid-fix, for a human to finish
+    // verdict still red when the cap is spent: the tree is kept mid-fix, for a human to finish
   .finalise()
     // outside: { headSha, testPaths } → { headSha } !TestDisputed | PathsTouched | StillRed
 
 const RedGreen = Graph.construct("red-green")
-  .borrow(RedLoop)     // { plan } → { testPaths, headSha } !DeadTestAtBirth | HarnessError
+  .borrow(RedLoop)     // { plan } → { testPaths, headSha } !DeadTestAtBirth | RedTestsDoNotCompile
   .borrow(GreenLoop)   // { headSha, testPaths } → { headSha } !TestDisputed | PathsTouched | StillRed
   .finalise()
-    // outside: { plan } → { headSha } !DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed
+    // outside: { plan } → { headSha } !DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed
 
 const DetectSmells = Graph.construct("detect-smells")
   .then(DetectJsTests)
@@ -128,7 +130,7 @@ const TddLane = Graph.construct("tdd-lane")
     // TestPlan: { discoverPath, spec } → { plan }, one red test per behaviour, each naming the bug it catches
     //   spec = the acs on the first round, the routed escape on every round after — see gaps, on how the acs
     //   actually reaches here
-    // RedGreen: { plan } → { headSha } !DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed
+    // RedGreen: { plan } → { headSha } !DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed
     // Verification: { headSha } → (gate: the repo's declared suite passes; command read from R) !VerificationFailed
     //   a red run here dies immediately, no repair resume — unlike outer-review's own verification below, see gaps
     // DiffSinceBase: { headSha, base } → { srcPaths, testPaths, command }, base..HEAD paths not declared as tests;
@@ -144,7 +146,7 @@ const TddLane = Graph.construct("tdd-lane")
     // maxSeverity still ≥ 2 when the cap is spent: headSha kept, the worst unresolved escape named
   .finalise()
     // outside: { discoverPath, spec, base } → { headSha, rated, plan, smells }
-    //   !DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed | VerificationFailed | TddBuildEscapeUnresolved
+    //   !DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed | VerificationFailed | TddBuildEscapeUnresolved
 
 const OuterReview = Graph.construct("outer-review")
   .loop(Simplify, Verification2, ReviewDiff, {
@@ -205,7 +207,7 @@ const TddBuild = Graph.construct("tdd-build")
     // { title, body } → { discoverPath } !DiscoverNoteMissing
   .borrow(TddLane)
     // { discoverPath, spec, base } → { headSha, rated, plan, smells }
-    //   !DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed | VerificationFailed | TddBuildEscapeUnresolved
+    //   !DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed | VerificationFailed | TddBuildEscapeUnresolved
     //   spec's acs source is the gap flagged on prepare's require-acs, above
   .then(WriteSummary)
     // { rated, plan, smells } → { summaryPath }, one section per round: plan, escapes, smells
@@ -225,7 +227,7 @@ const TddBuild = Graph.construct("tdd-build")
     //   | TicketNotAddressable | TicketNotMaintainerAuthored | EmptyTicket | TrackerFailed | TrackerUnreachable
     //   | MissingTicketId | WorktreeAddFailed | WorktreeSetupFailed | BranchCheckoutFailed | BranchCreateFailed
     //   | DiscoverNoteMissing
-    //   | DeadTestAtBirth | HarnessError | TestDisputed | PathsTouched | StillRed | VerificationFailed
+    //   | DeadTestAtBirth | RedTestsDoNotCompile | TestDisputed | PathsTouched | StillRed | VerificationFailed
     //   | TddBuildEscapeUnresolved | ReviewDisputeRejected | ReviewBlocked
     //   | PrBodyRunRootMissing | PrBodyGitFailed | PrBodyDiffWriteFailed
     //   | PushDirty | PushEmpty | PushRejected | CreatePrFailed | UnsupportedHost | WorktreeRemoveFailed
