@@ -26,11 +26,10 @@ const rulingsShell = (declared = "") => scriptedShell([{ exitCode: 0, stdout: de
 /** A bare string is a design finding, the common case; a plan finding names its target. */
 const reviewAgent = (
   blocking: readonly (string | { readonly target: "design" | "plan"; readonly finding: string })[],
-  notes: readonly string[] = [],
-  questions: readonly string[] = []
+  notes: readonly string[] = []
 ) =>
   stubAgent(
-    { blocking: blocking.map((entry) => (typeof entry === "string" ? { target: "design", finding: entry } : entry)), notes, questions },
+    { blocking: blocking.map((entry) => (typeof entry === "string" ? { target: "design", finding: entry } : entry)), notes },
     { sessions: ["review-session"], costUsd: 0.31 }
   )
 
@@ -80,7 +79,7 @@ describe("review-plan", () => {
       expect(prompt).toContain("Prior-art hunt:")
       expect(prompt).toContain("Principles audit:")
       expect(prompt).toContain("- notes: everything else")
-      expect(prompt).toContain("- questions: a context-free")
+      expect(prompt).toContain("No questions. Nobody answers one in this run.")
       expect(prompt).toContain("Tag each blocking finding with the artifact that must change")
       expect(prompt).not.toContain("fresh-eyes skim")
       expect(prompt).not.toContain("re-review")
@@ -132,16 +131,16 @@ describe("review-plan", () => {
         sessions: ["review-session"],
         costUsd: 0.31
       })
-      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.`)
     }))
 
-  test("notes and questions are recorded in the findings file and never gate: a pass with both alone still succeeds", () =>
+  test("notes are recorded in the findings file and never gate: a pass with notes alone still succeeds", () =>
     withRunRoot(async (runRoot, run) => {
-      const result = await runWith(reviewPlan.run(INPUT), rulingsShell().service, reviewAgent([], ["plan.md:12 naming drifts from the design"], ["is the cap of 3 intentional?"]).service, run)
+      const result = await runWith(reviewPlan.run(INPUT), rulingsShell().service, reviewAgent([], ["plan.md:12 naming drifts from the design"]).service, run)
 
       expect(Result.isSuccess(result)).toBe(true)
       expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(
-        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- plan.md:12 naming drifts from the design\n\nQuestions:\n- is the cap of 3 intentional?`
+        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- plan.md:12 naming drifts from the design`
       )
     }))
 
@@ -161,7 +160,7 @@ describe("review-plan", () => {
       expect(blocked).toMatchObject({ findingsPath: `${runRoot}/review-plan-1.md`, headSha: INPUT.headSha, sessions: ["review-session"], costUsd: 0.31 })
       // Each finding is rendered under its target, and the targets ride the failure in the same order.
       expect(blocked.targets).toStrictEqual(["plan", "design"])
-      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- plan: AC.02 has no task\n- design: Interpretation Rulings AC.04: no basis named\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
+      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- plan: AC.02 has no task\n- design: Interpretation Rulings AC.04: no basis named\n\nNotes:\nNone.`)
     }))
 
   test("an adjudicating pass names both files in the prompt, and a blocking verdict is PlanDisputeRejected carrying disputePath", () =>

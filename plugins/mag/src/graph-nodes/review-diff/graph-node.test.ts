@@ -83,13 +83,13 @@ const failingLsFilesShell = (result: ShellResult) => {
   return { calls, service }
 }
 
-const stubAgent = (blocking: readonly string[], notes: readonly string[] = [], questions: readonly string[] = []) => {
+const stubAgent = (blocking: readonly string[], notes: readonly string[] = []) => {
   const requests: Array<ClaudePrint<unknown>> = []
   const service: ClaudeAgentService = {
     prompt: <A>(request: ClaudePrint<A>) => {
       requests.push(request as ClaudePrint<unknown>)
       return Effect.succeed({
-        verdict: { blocking, notes, questions } as A,
+        verdict: { blocking, notes } as A,
         result: {},
         sessions: ["review-session"],
         costUsd: 0.31,
@@ -228,7 +228,7 @@ describe("review-diff", () => {
       expect(prompt).toContain("Duplicated logic across sibling files is a note")
       expect(prompt).toContain("- blocking: shipped as-is")
       expect(prompt).toContain("- notes: everything else")
-      expect(prompt).toContain("- questions: a context-free")
+      expect(prompt).toContain("No questions. Nobody answers one in this run.")
       expect(prompt).not.toContain("Prior-art hunt:")
       expect(prompt).not.toContain("Structure audit:")
       expect(prompt).not.toContain("re-review")
@@ -249,18 +249,18 @@ describe("review-diff", () => {
       expect(prompt).toContain(delta.addendum!)
     }))
 
-  test("notes and questions are recorded in the findings file and never gate", () =>
+  test("notes are recorded in the findings file and never gate", () =>
     withRunRoot(async (runRoot) => {
       const result = await runWith(
         reviewDiff.run(INPUT),
         gitStub().service,
-        stubAgent([], ["x.ts:3 the helper name shadows the module's"], ["is the 2000-line cap intentional?"]).service,
+        stubAgent([], ["x.ts:3 the helper name shadows the module's"]).service,
         testRunInfo({ runRoot })
       )
 
       expect(Result.isSuccess(result)).toBe(true)
       expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(
-        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- x.ts:3 the helper name shadows the module's\n\nQuestions:\n- is the 2000-line cap intentional?`
+        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- x.ts:3 the helper name shadows the module's`
       )
     }))
 
@@ -382,7 +382,7 @@ describe("review-diff", () => {
         sessions: ["review-session"],
         costUsd: 0.31
       })
-      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
+      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.`)
     }))
 
   test("blocking findings are the node's tagged error, findingsPath pointing at the rendered bullets, headSha naming the tree", () =>
@@ -403,7 +403,7 @@ describe("review-diff", () => {
       expect(blocked.sessions).toStrictEqual(["review-session"])
       expect(blocked.costUsd).toBe(0.31)
       expect(readFileSync(blocked.findingsPath, "utf8")).toBe(
-        `Reviewed at ${INPUT.headSha}\n\n- the fix misses the second NUL at line 105\n\nNotes:\nNone.\n\nQuestions:\nNone.`
+        `Reviewed at ${INPUT.headSha}\n\n- the fix misses the second NUL at line 105\n\nNotes:\nNone.`
       )
     }))
 
@@ -546,8 +546,8 @@ describe("review-diff", () => {
       if (!Result.isFailure(second)) return
       const blocked = second.failure as ReviewBlocked
       expect(blocked.findingsPath).toBe(`${runRoot}/review-diff-2.md`)
-      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${delta.headSha}\n\n- second pass finding\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
-      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- first pass finding\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
+      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${delta.headSha}\n\n- second pass finding\n\nNotes:\nNone.`)
+      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- first pass finding\n\nNotes:\nNone.`)
       // Each pass writes its own `diff-<N>.patch`, and the `.patch` files must not inflate
       // the `review-diff-` count — `writeArtifact`'s prefix filter is what makes that true.
       expect(existsSync(`${runRoot}/diff-1.patch`)).toBe(true)

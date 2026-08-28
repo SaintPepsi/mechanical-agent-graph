@@ -101,7 +101,7 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
 
       if (route === "review-plan") {
         return Effect.succeed(
-          { verdict: { blocking: [], notes: [], questions: [] } as A, result: {}, sessions: ["session-review-plan"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
+          { verdict: { blocking: [], notes: [] } as A, result: {}, sessions: ["session-review-plan"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
         )
       }
 

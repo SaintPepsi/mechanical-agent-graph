@@ -8,9 +8,10 @@ import { verdictSchema } from "mag/runtime/claude/verdict-schema"
  * altitudes. The `acs` target joins here when a review-acs node lands; until then the charter knows
  * two targets and no attachments slot.
  *
- * Three channels, one gate: `blocking` is the only list a node fails on. Notes and questions are
- * recorded in the findings file and never gate, so a reviewer has somewhere to put a style remark
- * or an "is this intentional?" that is not a send-back.
+ * Two channels, one gate: `blocking` is the only list a node fails on. Notes are recorded in the
+ * findings file and never gate, so a reviewer has somewhere to put a style remark that is not a
+ * send-back. There is no questions channel: an autonomous run has nobody to answer one, so a
+ * reviewer judges instead, and an unjudgeable "is X intentional" is a design that failed to rule.
  */
 export type ReviewTarget = "plan" | "diff"
 
@@ -22,8 +23,7 @@ export type FindingTarget = (typeof FINDING_TARGETS)[number]
 export const REVIEW_VERDICT = verdictSchema(
   Schema.Struct({
     blocking: Schema.Array(Schema.String),
-    notes: Schema.Array(Schema.String),
-    questions: Schema.Array(Schema.String)
+    notes: Schema.Array(Schema.String)
   })
 )
 
@@ -31,8 +31,7 @@ export const REVIEW_VERDICT = verdictSchema(
 export const PLAN_REVIEW_VERDICT = verdictSchema(
   Schema.Struct({
     blocking: Schema.Array(Schema.Struct({ target: Schema.Literals(FINDING_TARGETS), finding: Schema.String })),
-    notes: Schema.Array(Schema.String),
-    questions: Schema.Array(Schema.String)
+    notes: Schema.Array(Schema.String)
   })
 )
 
@@ -42,7 +41,6 @@ export const targetedFinding = (target: FindingTarget, finding: string): string 
 export interface ReviewVerdict {
   readonly blocking: readonly string[]
   readonly notes: readonly string[]
-  readonly questions: readonly string[]
 }
 
 /** What the pass is judging, and the one question it answers about it. */
@@ -72,14 +70,14 @@ const RULES = (target: ReviewTarget): readonly string[] => [
 
 const OUTPUT = (target: ReviewTarget): readonly string[] => [
   "",
-  "Output, three lists, each finding on one line (path:line, summary, why):",
+  "Output, two lists, each finding on one line (path:line, summary, why):",
   `- blocking: shipped as-is, an acceptance criterion is unmet or behaviour is wrong; cite the criterion or concrete evidence.${
     target === "plan"
       ? " For a plan: the approach cannot satisfy a criterion, a task as written would produce wrong behaviour, or a required task is missing. Tag each blocking finding with the artifact that must change: design when the design decided wrongly or left it undecided, plan when the design is right and the plan departs from it."
       : ""
   }`,
   "- notes: everything else: cosmetic, style, documented deferrals, optional improvements, anything the toolchain will catch.",
-  "- questions: a context-free \"is X intentional?\". Answer it from the record where the record settles it; a question never blocks on its own."
+  "No questions. Nobody answers one in this run. Where the record settles \"is X intentional\", it is settled; where it does not, judge it yourself: blocking if the omission breaks a criterion, a note otherwise, with the ruling you would have wanted stated."
 ]
 
 /** A first pass hunts the whole target; a re-review judges the delta against the prior findings and stops there. */
@@ -119,8 +117,5 @@ export const renderFindings = (headSha: string, verdict: ReviewVerdict): string 
     list(verdict.blocking, "No blocking findings."),
     "",
     "Notes:",
-    list(verdict.notes, "None."),
-    "",
-    "Questions:",
-    list(verdict.questions, "None.")
+    list(verdict.notes, "None.")
   ].join("\n")

@@ -153,7 +153,7 @@ const loopAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
       if (isReviewPrompt(request as ClaudePrint<unknown>)) {
         reviews += 1
         return Effect.succeed({
-          verdict: { blocking: blockingByReview[reviews - 1] ?? [], notes: [], questions: [] } as A,
+          verdict: { blocking: blockingByReview[reviews - 1] ?? [], notes: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -237,7 +237,7 @@ const disputeAgent = (secondReviewBlocks: boolean) => {
           ? ["the fix misses the second NUL"]
           : (secondReviewBlocks ? ["still not fixed"] : [])
         return Effect.succeed({
-          verdict: { blocking, notes: [], questions: [] } as A,
+          verdict: { blocking, notes: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -314,7 +314,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
           ? (secondReviewBlocks ? ["still not fixed"] : [])
           : (thirdReviewBlocks ? ["still not fixed"] : [])
         return Effect.succeed({
-          verdict: { blocking, notes: [], questions: [] } as A,
+          verdict: { blocking, notes: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -487,7 +487,7 @@ describe("build-under-review", () => {
     expect(buildRequests[0]!.prompt).not.toContain("recorded at")
     expect(buildRequests[1]!.prompt).toContain(join(runInfo.runRoot, "review-diff-1.md"))
     expect(readFileSync(join(runInfo.runRoot, "review-diff-1.md"), "utf8")).toBe(
-      "Reviewed at bbb222\n\n- the fix misses the second NUL\n\nNotes:\nNone.\n\nQuestions:\nNone."
+      "Reviewed at bbb222\n\n- the fix misses the second NUL\n\nNotes:\nNone."
     )
 
     // The send-back's next build pass resumes the session that produced the reviewed

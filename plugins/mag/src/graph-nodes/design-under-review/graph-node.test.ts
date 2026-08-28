@@ -54,7 +54,7 @@ const loopAgent = (reviews: readonly (readonly Finding[])[] = [], disputing: Rea
       requests.push(request as ClaudePrint<unknown>)
       if (isReviewPrompt(request as ClaudePrint<unknown>)) {
         reviewsRun += 1
-        return reply<A>({ blocking: (reviews[reviewsRun - 1] ?? []).map(targeted), notes: [], questions: [] }, `session-review-plan-${reviewsRun}`, 0.1)
+        return reply<A>({ blocking: (reviews[reviewsRun - 1] ?? []).map(targeted), notes: [] }, `session-review-plan-${reviewsRun}`, 0.1)
       }
       if (isPlanPrompt(request as ClaudePrint<unknown>)) {
         plans += 1
@@ -146,7 +146,7 @@ describe("design-under-review", () => {
         expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
         expect(request.prompt).toContain(INPUT.recycleMapPath)
       }
-      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.\n\nNotes:\nNone.\n\nQuestions:\nNone.")
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.\n\nNotes:\nNone.")
     }))
 
   test("a design finding resumes the brainstorm session, plan re-runs fresh over the changed design, a re-review reads both", () =>
@@ -169,7 +169,7 @@ describe("design-under-review", () => {
       expect(brainstorms[1]!.resume).toBe("session-brainstorm-1")
       expect(brainstorms[1]!.prompt).toContain(join(runRoot, "review-plan-1.md"))
       expect(brainstorms[1]!.prompt).not.toContain(INPUT.prompt)
-      expect(readFileSync(join(runRoot, "review-plan-1.md"), "utf8")).toBe("Reviewed at abc123\n\n- design: AC.02 has no task\n\nNotes:\nNone.\n\nQuestions:\nNone.")
+      expect(readFileSync(join(runRoot, "review-plan-1.md"), "utf8")).toBe("Reviewed at abc123\n\n- design: AC.02 has no task\n\nNotes:\nNone.")
 
       // The design changed, so the plan is a fresh session, not a resumed one.
       const plans = agent.requests.filter(isPlanPrompt)

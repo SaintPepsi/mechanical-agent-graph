@@ -147,11 +147,12 @@ maintainer rules otherwise.
   choice the ticket does not settle keeps existing behaviour and says so. A run that cannot decide
   has failed, not asked. Reason: the two trial runs' open questions were hedges already answered in
   the same document, each costing a design, plan and review pass.
-- **Three channels, one gate.** A review verdict is three lists: blocking, notes, questions. Only
-  blocking gates; notes and questions land in the findings record and never send anything back.
-  Blocking is an acceptance criterion unmet or behaviour wrong, cited; a note is everything else,
-  including whatever the toolchain catches; a question is a context-free "is X intentional?" that the
-  reviewer answers from the record where the record settles it (`skills/review-brief.ts`).
+- **Two channels, one gate.** A review verdict is two lists: blocking and notes. Only blocking
+  gates; notes land in the findings record and never send anything back. Blocking is an acceptance
+  criterion unmet or behaviour wrong, cited; a note is everything else, including whatever the
+  toolchain catches. There is no questions channel: nobody in an autonomous run answers one, so the
+  reviewer judges instead. Reason: the GH-332 trial's reviewer asked the same two questions on both
+  passes, each already ruled in the design, and the plan resume answered neither (`skills/review-brief.ts`).
 - **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
   Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
   evidence never needs more than the count line.
