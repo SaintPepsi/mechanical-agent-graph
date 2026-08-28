@@ -816,6 +816,25 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(error.container).toBe("fixture-root")
     expect(error.decision).toBe("flag is set")
   })
+
+  test("a construct whose decisions cannot be drawn refuses at .finalise, before any run", () => {
+    // Declared inside the test body: a top-level throw at module evaluation would take the whole
+    // suite down with it, since `.finalise` runs at declaration time.
+    const error = thrown(DecisionNameCollides, () =>
+      Graph.construct<{ flag: boolean }>("fixture-colliding-host")
+        .when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+        .when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+        .finalise({
+          description: "Two decisions at one address — refused when the construct closes.",
+          input: Schema.Struct({ flag: Schema.Boolean }),
+          success: Schema.Struct({}),
+          scope: () => ({ ticket: "GH-332-colliding", graph: "fixture-colliding-host", worktree: false }),
+          seed: (input) => input,
+          out: () => ({})
+        }))
+
+    expect(error.decision).toBe("flag is set")
+  })
 })
 
 // Compile-time pin, following the `.finalise` error-union pin above: `Graph.shapeOf`'s return type

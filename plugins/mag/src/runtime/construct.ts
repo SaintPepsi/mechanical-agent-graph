@@ -547,6 +547,10 @@ const closeSteps = <Seed extends object, Ctx extends object, E, R, SI, SA>(
     applied,
     close: (newSteps, newApplied) => closeSteps(name, options, newSteps, newApplied)
   })
+  // The shape is not an afterthought of a construct: one that cannot be drawn refuses here, at
+  // import, rather than at whatever later moment first asks for its shape. `close` recurses into
+  // this same function, so a bent variant is gated exactly as a freshly finalised one is.
+  projectSteps(name, steps)
   return node
 }
 
