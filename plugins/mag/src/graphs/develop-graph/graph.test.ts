@@ -455,7 +455,7 @@ describe("develop-graph", () => {
       expect(byId.get(`${publishTailId}/1:node:create-pr`)).toBeDefined()
     })
 
-    test("prepare's .fork is one fork element with two branch edges; checkout's .when is one decision with a branch edge to worktree-add", () => {
+    test("prepare's .fork is one fork element with two branch edges; checkout's .when is one decision with a branch edge to the node it guards", () => {
       const forkId = "develop-graph/0:group:prepare/0:fork"
       const leftId = "develop-graph/0:group:prepare/0:left:resolve-base"
       const rightId = "develop-graph/0:group:prepare/0:right:fetch-ticket"
@@ -465,12 +465,12 @@ describe("develop-graph", () => {
       expect(branchEdgesFromFork).toContainEqual({ kind: "branch", from: forkId, to: leftId, label: "left" })
       expect(branchEdgesFromFork).toContainEqual({ kind: "branch", from: forkId, to: rightId, label: "right" })
 
-      const decisionId = "develop-graph/1:group:checkout/0:decision:worktree-add"
+      const decisionId = "develop-graph/1:group:checkout/0:decision:run wants a worktree"
       const guardedId = "develop-graph/1:group:checkout/0:node:worktree-add"
       expect(byId.get(decisionId)).toEqual({
         kind: "decision",
         id: decisionId,
-        label: "worktree-add",
+        label: "run wants a worktree",
         parent: "develop-graph/1:group:checkout"
       })
       expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })

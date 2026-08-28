@@ -131,7 +131,7 @@ const checkout = Graph.construct<{
   worktreeSetup: string
 }>("checkout")
   .when(
-    (s) => s.worktree,
+    { name: "run wants a worktree", reads: ["worktree"], test: (s) => s.worktree },
     worktreeAdd, (s) => ({ base: s.base, setup: s.worktreeSetup }),
     { path: (tree) => tree.path }
   )
@@ -211,7 +211,7 @@ const publishTail = Graph.construct<{
     body: s.body
   }))
   .when(
-    (s) => s.path !== undefined,
+    { name: "worktree to retire", reads: ["path"], test: (s) => s.path !== undefined },
     worktreeRemove, (s) => ({ path: s.path as string }),
     {}
   )
@@ -307,7 +307,11 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
     }
   )
   .when(
-    (s) => s.tersenedHeadSha !== s.builtHeadSha,
+    {
+      name: "terseness changed HEAD",
+      reads: ["tersenedHeadSha", "builtHeadSha"],
+      test: (s) => s.tersenedHeadSha !== s.builtHeadSha
+    },
     verification, (s) => ({ command: s.verification, headSha: s.tersenedHeadSha as string }),
     {}
   )

@@ -130,7 +130,7 @@ const bendableFinalise = (graph: string, ticket: string, description: string) =>
 
 const bendableSub = Graph.construct<{ flag: boolean }>("fixture-bendable")
   .when(
-    (s) => s.flag,
+    { name: "flag is set", reads: ["flag"], test: (s) => s.flag },
     guarded, () => ({}),
     { guardedRan: (g) => g.ran }
   )
@@ -212,7 +212,7 @@ const sub = Graph.construct<{ ticket: string; flag: boolean; seedVal: string }>(
   )
   .join(joiner, (s) => ({ a: s.a, b: s.b }))
   .when(
-    (s) => s.flag,
+    { name: "flag is set", reads: ["flag"], test: (s) => s.flag },
     guarded, () => ({}),
     { guardedRan: (g) => g.ran }
   )
@@ -420,6 +420,26 @@ describe("Graph.construct — borrow/modify lifecycle", () => {
 
     expect(true).toBe(true)
   })
+
+  test("compile time: a decision without a name or a field list does not compile", () => {
+    const pins = Graph.construct<{ flag: boolean; other: string }>("fixture-decision-pins")
+
+    // The positive control: a decision that names itself and declares what it reads compiles.
+    pins.when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+
+    // @ts-expect-error — no name: a decision the shape cannot address
+    pins.when({ reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+    // @ts-expect-error — no read list: nothing for a data edge to start from
+    pins.when({ name: "flag is set", test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — an empty read list fails the non-empty tuple
+    pins.when({ name: "flag is set", reads: [], test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — `missing` is not a field of this construct's context
+    pins.when({ name: "flag is set", reads: ["missing"], test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — the test reads `other`, which this decision did not declare
+    pins.when({ name: "flag is set", reads: ["flag"], test: (s) => s.other.length > 0 }, guarded, () => ({}), {})
+
+    expect(true).toBe(true)
+  })
 })
 
 describe("Graph.construct — convolution guard", () => {
@@ -506,7 +526,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("a target that matches nothing throws ModifierTargetMissing, naming the real candidates", () => {
     const steps: readonly Step[] = [
-      { kind: "when", condition: () => true, node: guarded, wire: () => ({}), keep: {} }
+      { kind: "when", decision: { name: "flag is set", reads: ["flag"], test: () => true }, node: guarded, wire: () => ({}), keep: {} }
     ]
     const modifiers: readonly Modifier[] = [{ kind: "removeWhen", target: notify }]
 
@@ -539,7 +559,9 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
   test("removeWhen rewrites a when step into an unconditional node step, keeping its wire and keep", () => {
     const wire = () => ({})
     const keep = { guardedRan: (a: { readonly ran: boolean }) => a.ran }
-    const steps: readonly Step[] = [{ kind: "when", condition: () => false, node: guarded, wire, keep }]
+    const steps: readonly Step[] = [
+      { kind: "when", decision: { name: "flag is set", reads: ["flag"], test: () => true }, node: guarded, wire, keep }
+    ]
 
     const result = applyModifiers(blueprintOf(steps), [{ kind: "removeWhen", target: guarded }])
 
@@ -599,9 +621,9 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(byId.get(joinId)).toEqual({ kind: "node", id: joinId, label: "fixture-join", parent: containerId })
 
     // The `.when` is one decision element with a branch edge to the node it guards.
-    const decisionId = `${containerId}/2:decision:fixture-guarded`
+    const decisionId = `${containerId}/2:decision:flag is set`
     const guardedId = `${containerId}/2:node:fixture-guarded`
-    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "fixture-guarded", parent: containerId })
+    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "flag is set", parent: containerId })
     expect(byId.get(guardedId)).toEqual({ kind: "node", id: guardedId, label: "fixture-guarded", parent: containerId })
     expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
 
@@ -651,7 +673,7 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(plainShape).toBeDefined()
     if (bentShape === undefined || plainShape === undefined) return
 
-    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "fixture-guarded")).toBe(true)
+    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "flag is set")).toBe(true)
     expect(bentShape.elements.some((element) => element.kind === "decision")).toBe(false)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-guarded")).toBe(true)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-quiet-notify")).toBe(true)

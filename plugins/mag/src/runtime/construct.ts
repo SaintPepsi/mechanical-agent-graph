@@ -30,13 +30,29 @@ type Wire<Ctx, I> = (ctx: Ctx) => I
  *  data, the list of fields that stage contributes to the context. */
 type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
 
+/** The fields a decision declares, as a non-empty tuple of the context's own keys: a decision that
+ *  reads nothing is not one the shape can draw an edge for. */
+type Reads<Ctx> = readonly [keyof Ctx & string, ...Array<keyof Ctx & string>]
+
+/** A decision as data: what it is called, what it reads, what it tests. `test` sees the declared
+ *  fields and nothing else, so the list and the test cannot drift — there is only one list. */
+type Decision<Ctx, R extends Reads<Ctx>> = {
+  readonly name: string
+  readonly reads: R
+  readonly test: (fields: Pick<Ctx, R[number]>) => boolean
+}
+
 /** The step list's existential types: the list is heterogeneous, so its element types cannot be
  *  named per-Construct. The public `Construct<Seed, Ctx, E, R>` generics stay exact; these are
  *  confined to `Step`, the fold, and the modifier machinery below. */
 type AnyNode = GraphNode<any, any, any, any>
 type AnyWire = (ctx: any) => any
 type AnyKeep = Record<string, (a: any) => any>
-type AnyCondition = (ctx: any) => boolean
+type AnyDecision = {
+  readonly name: string
+  readonly reads: readonly string[]
+  readonly test: (ctx: any) => boolean
+}
 type AnyVia = (ctx: any) => Effect.Effect<any, any, any>
 
 /** `removeWhen` / `replaceNode` as data, targeted by node value — the borrowing site's declared
@@ -66,7 +82,7 @@ export type Step =
   }
   | {
     readonly kind: "when"
-    readonly condition: AnyCondition
+    readonly decision: AnyDecision
     readonly node: AnyNode
     readonly wire: AnyWire
     readonly keep: AnyKeep
@@ -191,8 +207,8 @@ const tallyApplications = (graphName: string, steps: readonly Step[]): number =>
     return Math.max(heaviest, applications)
   }, 0)
 
-/** `removeWhen` keeps the matched `when` step's wire and keep, dropping only its condition: the
- *  guarded node now runs unconditionally. */
+/** `removeWhen` keeps the matched `when` step's wire and keep, dropping the whole decision — its
+ *  name and declared reads included: the guarded node now runs unconditionally. */
 const rewrite = (step: Step, modifier: Modifier): Step => {
   if (modifier.kind === "removeWhen") {
     if (step.kind !== "when") throw new Error("rewrite: removeWhen matched a non-when step")
@@ -308,7 +324,7 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
       case "when":
         return acc.pipe(
           Effect.flatMap((flowed) =>
-            step.condition(flowed)
+            step.decision.test(flowed)
               ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
               : // The skipped branch adds none of `keep`'s fields, matching `.when`'s `Partial<B>` result.
                 Effect.succeed(flowed)
@@ -394,10 +410,10 @@ export const projectSteps = (
         break
       }
       case "when": {
-        primary = `${at}:decision:${step.node.name}`
+        primary = `${at}:decision:${step.decision.name}`
         const guardedId = `${at}:node:${step.node.name}`
         elements.push(
-          { kind: "decision", id: primary, label: step.node.name, parent: containerId },
+          { kind: "decision", id: primary, label: step.decision.name, parent: containerId },
           { kind: "node", id: guardedId, label: step.node.name, parent: containerId }
         )
         edges.push({ kind: "branch", from: primary, to: guardedId, label: "true" })
@@ -508,10 +524,12 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
   ) => Borrowed<Seed, Ctx & B, E | E2, R | R2>
-  /** The sketch's `.when`: the node runs only when the condition holds on the context; skipped, the
-   *  context flows on unchanged, so `keep`'s fields arrive `Partial` downstream. */
-  readonly when: <I, A, B extends object, E2, R2>(
-    condition: (ctx: Ctx) => boolean,
+  /** The sketch's `.when`: a named decision over the context fields it declares, guarding a node that
+   *  runs only when the test holds; skipped, the context flows on unchanged, so `keep`'s fields
+   *  arrive `Partial` downstream. The declared reads are what the shape draws a data edge for, one
+   *  per field, from the stage that produced it. */
+  readonly when: <const F extends Reads<Ctx>, I, A, B extends object, E2, R2>(
+    decision: Decision<Ctx, F>,
     node: GraphNode<I, A, E2, R2>,
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
@@ -539,9 +557,10 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
  *  is impossible; every failure mode lives in `.finalise`, the one beat holding the borrowed graph
  *  and the modifiers at once. */
 interface Borrowed<Seed extends object, Ctx extends object, E, R> extends Construct<Seed, Ctx, E, R> {
-  /** Strips the borrowed subgraph's `when` condition at this borrowing site: the finalised graph
-   *  runs the guarded node unconditionally. Targets the guarded node itself, because a `.when`
-   *  condition is an anonymous closure with no other handle. */
+  /** Strips the borrowed subgraph's `when` decision at this borrowing site: the finalised graph
+   *  runs the guarded node unconditionally. Targets the guarded node itself: a decision now has a
+   *  handle of its own, its name, but targeting stays by node because decision names are what a
+   *  later lifecycle change will target, not this one. */
   readonly removeWhen: <I, A, E2, R2>(target: GraphNode<I, A, E2, R2>) => Borrowed<Seed, Ctx, E, R>
   /** Swaps a node inside the borrowed subgraph for a replacement at this borrowing site. `NoInfer`
    *  pins every parameter to the target's, so the replacement must accept what the target accepted,
@@ -564,8 +583,8 @@ const makeConstruct = <Seed extends object, Ctx extends object, E, R>(
   join: (node, wire) => makeConstruct(name, [...steps, nodeStep(node, wire)]),
   borrow: (node, wire) => makeBorrowed(name, [...steps, nodeStep(node, wire)]),
   borrowKeep: (node, wire, keep) => makeBorrowed(name, [...steps, nodeStep(node, wire, keep)]),
-  when: (condition, node, wire, keep) =>
-    makeConstruct(name, [...steps, { kind: "when", condition, node, wire, keep }]),
+  when: (decision, node, wire, keep) =>
+    makeConstruct(name, [...steps, { kind: "when", decision, node, wire, keep }]),
   via: (stageName, f, keep) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f, keep }]),
   finalise: (options) => {
     // Tallied on the unresolved steps: resolveBorrows zeroes `modifiers`, so this is the only
