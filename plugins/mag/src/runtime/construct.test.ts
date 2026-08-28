@@ -7,6 +7,7 @@ import type { PlatformError } from "effect/PlatformError"
 import {
   applyModifiers,
   type Blueprint,
+  DecisionNameCollides,
   FieldHasNoProducer,
   Graph,
   type Modifier,
@@ -801,6 +802,19 @@ describe("Graph.shapeOf / projectSteps", () => {
 
     expect(error.field).toBe("x")
     expect(error.opaque).toEqual(["fixture-root/0:node:fixture-unenumerable"])
+  })
+
+  test("two decisions sharing a name in one container refuse: a name is an address", () => {
+    const decision = { name: "flag is set", reads: ["flag"], test: () => true }
+    const steps: readonly Step[] = [
+      { kind: "when", decision, node: guarded, wire: () => ({}), keep: {} },
+      { kind: "when", decision, node: guarded, wire: () => ({}), keep: {} }
+    ]
+
+    const error = thrown(DecisionNameCollides, () => projectSteps("fixture-root", steps))
+
+    expect(error.container).toBe("fixture-root")
+    expect(error.decision).toBe("flag is set")
   })
 })
 

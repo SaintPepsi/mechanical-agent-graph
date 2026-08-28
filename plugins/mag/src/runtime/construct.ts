@@ -168,6 +168,14 @@ export class FieldHasNoProducer extends Data.TaggedError("FIELD_HAS_NO_PRODUCER"
   readonly opaque: readonly string[]
 }> {}
 
+/** Two decisions at one address in one container. Carried as `decision`, never as `name`:
+ *  `Data.TaggedError` assigns every payload key as an own property, so a member called `name` would
+ *  shadow the tag and print the decision's own name where `DECISION_NAME_COLLIDES` belongs. */
+export class DecisionNameCollides extends Data.TaggedError("DECISION_NAME_COLLIDES")<{
+  readonly container: string
+  readonly decision: string
+}> {}
+
 /** Every node slot a modifier of this kind could have meant: `removeWhen`'s candidates are guarded
  *  nodes only, `replaceNode`'s are every node any step runs. `describe` is what
  *  `ModifierTargetAmbiguous.matched` reports: the occurrence's position, not a repeat of the name
@@ -397,6 +405,9 @@ export const projectSteps = (
    *  kind declares or derives its own; once it is not, the walk refuses rather than draw an edge from
    *  the entry that may be a lie. */
   const opaque: string[] = []
+  /** Decision names already seen in this container: a name is an address, so a repeat is a target
+   *  a later lifecycle change could not resolve unambiguously. */
+  const named = new Set<string>()
 
   const contribute = (fields: readonly string[] | undefined, from: string): void => {
     if (fields === undefined) {
@@ -409,6 +420,11 @@ export const projectSteps = (
   /** Called before the step records its own contributions, so a decision only ever resolves against
    *  stages above it. */
   const resolveReads = (decision: AnyDecision, to: string): void => {
+    if (named.has(decision.name)) {
+      throw new DecisionNameCollides({ container: containerId, decision: decision.name })
+    }
+    named.add(decision.name)
+
     for (const field of new Set(decision.reads)) {
       const from = producers.get(field)
       if (from === undefined && opaque.length > 0) {
