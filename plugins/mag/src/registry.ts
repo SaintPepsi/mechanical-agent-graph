@@ -10,6 +10,7 @@ import { conformance } from "mag/graph-nodes/conformance/graph-node"
 import { create } from "mag/graph-nodes/create/graph-node"
 import { createGraphFolder } from "mag/graph-nodes/create-graph-folder/graph-node"
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
+import { designRulings } from "mag/graph-nodes/design-rulings/graph-node"
 import { deriveVision } from "mag/graph-nodes/derive-vision/graph-node"
 import { design } from "mag/graph-nodes/design/graph-node"
 import { plan } from "mag/graph-nodes/plan/graph-node"
@@ -103,6 +104,7 @@ export const registry: Registry = [
   { kind: "command", node: analyseReviews },
   { kind: "command", node: resumeRun },
   { kind: "command", node: commentTicket },
+  { kind: "command", node: designRulings },
   { kind: "command", node: reviewPatternGraph },
   // Both children register on their own beside their graph, design-graph's own precedent.
   { kind: "command", node: writeTicket },

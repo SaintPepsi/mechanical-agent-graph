@@ -71,6 +71,8 @@ graph TD
     PRB["compose-pr-body · Mechanical<br/>append Closes #n and the run id to the written description"]
     PB["push-branch · Mechanical<br/>push with upstream tracking set"]
     CPR["create-pr · Mechanical<br/>open the PR, or return the one already open"]
+    DR["design-rulings · Mechanical<br/>lift the design's Interpretation Rulings into a comment body, or none"]
+    CT["comment-ticket · Mechanical<br/>post the rulings to the ticket, only when the design ruled"]
     WR["worktree-remove · Mechanical<br/>retire the worktree, success only"]
   end
   RD -- "verdict = clean: headSha → headSha" --> PTE
@@ -84,6 +86,9 @@ graph TD
   PB -- "branch → source" --> CPR
   RB -- "base → base" --> CPR
   FT -- "ticket, title → title (composed: '{ticket}: {title}')" --> CPR
+  CPR -- "url → prUrl" --> DR
+  DR -. "rulingsPath present: rulingsPath → path" .-> CT
+  DR -. "no ruling: (skips comment-ticket)" .-> WR
   WPB -. "fails: PrBodyRunRootMissing | PrBodyGitFailed | PrBodyDiffWriteFailed" .-> DEADTREE
   PB -. "fails: PushDirty | PushEmpty | PushRejected" .-> DEADTREE
   CPR -. "fails: CreatePrFailed | UnsupportedHost" .-> DEADTREE

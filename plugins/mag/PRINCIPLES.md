@@ -147,6 +147,19 @@ maintainer rules otherwise.
   choice the ticket does not settle keeps existing behaviour and says so. A run that cannot decide
   has failed, not asked. Reason: the two trial runs' open questions were hedges already answered in
   the same document, each costing a design, plan and review pass.
+- **Three channels, one gate.** A review verdict is three lists: blocking, notes, questions. Only
+  blocking gates; notes and questions land in the findings record and never send anything back.
+  Blocking is an acceptance criterion unmet or behaviour wrong, cited; a note is everything else,
+  including whatever the toolchain catches; a question is a context-free "is X intentional?" that the
+  reviewer answers from the record where the record settles it (`skills/review-brief.ts`).
+- **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
+  Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
+  evidence never needs more than the count line.
+- **The tracker is the only writable copy of ticket truth.** The run-root ticket is a read-only
+  snapshot. A ruling that changes what the ticket means, an interpretation the design committed
+  to, is posted back to the tracker as one consolidated comment once the PR is open
+  (`publish-tail`'s `design-rulings` and `comment-ticket` steps), so a reader of the ticket sees what
+  a reader of the run record sees.
 - **One concern per session.** A node's prompt asks one question and the session writes one
   artifact; a second question is a second node. A session given two concerns degrades on both, in
   the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) and

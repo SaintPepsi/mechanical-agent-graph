@@ -65,6 +65,7 @@ const runShell = (options: {
       if (line.startsWith("git rev-list --count ")) return ok("1\n")
       if (line.startsWith(`gh pr list --repo ${slug}`)) return ok("[]\n")
       if (line.startsWith(`gh pr create --repo ${slug}`)) return ok(`${PR_URL}\n`)
+      if (line.startsWith("gh issue comment 150 --body-file ")) return ok("")
       if (argv[0] === "git" && argv[1] === "diff") return Effect.succeed({ exitCode: 1, stdout: "", stderr: "" })
       if (argv[0] === "git") return ok("")
       throw new Error(`runShell: unexpected argv: ${line}`)
@@ -97,7 +98,7 @@ const writeAt = (destination: string, text: string): string => {
  * single `design` route entirely: this graph never dispatches `design`, only the subgraph that
  * replaces it.
  */
-const runAgent = (root: string) => {
+const runAgent = (root: string, design = "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n") => {
   const requests: Array<ClaudePrint<unknown>> = []
   const service: ClaudeAgentService = {
     prompt: <A>(request: ClaudePrint<A>) => {
@@ -120,7 +121,7 @@ const runAgent = (root: string) => {
         // brainstorm's write step backtick-quotes the path it resolved through `recordPath`,
         // so the stub reads it back the way `design-graph/graph.test.ts` does rather than composing
         // its own from `root` and silently agreeing with a placement the node no longer makes.
-        const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
+        const path = writeAt(destinationOf(prompt, "Write the design doc to"), design)
         return reply<A>({ designPath: path }, "session-brainstorm", 0.2)
       }
       if (prompt.includes("Read the design below")) {
@@ -244,11 +245,14 @@ describe("develop-graph", () => {
       // and the publish tail runs as the sketch's boxes — never the fused `publish` composite.
       for (const name of [
         "prepare", "require-acs", "checkout", "write-body", "publish-tail",
-        "resolve-notations", "envision-visions", "discover", "recycle-map", "design-under-review", "brainstorm", "plan", "review-plan", "build-under-review", "push-branch", "create-pr"
+        "resolve-notations", "envision-visions", "discover", "recycle-map", "design-under-review", "brainstorm", "plan", "review-plan", "build-under-review", "push-branch", "create-pr", "design-rulings"
       ]) {
         expect(names).toContain(name)
       }
       expect(names).not.toContain("publish")
+      // The fixture design ruled on nothing, so nothing is posted back to the ticket.
+      expect(names).not.toContain("comment-ticket")
+      expect(calls.some((call) => call[0] === "gh" && call[1] === "issue" && call[2] === "comment")).toBe(false)
       // Composition mints no second scope: every row shares the host's run id and is stamped with its name.
       for (const row of rows) {
         expect(row["runId"]).toBe(RUN_ID)
@@ -264,6 +268,47 @@ describe("develop-graph", () => {
       // for `"committed"`.
       const designPath = `${workRoot}/docs/graph/${TICKET}/design.md`
       expect(calls).not.toContainEqual(["git", "add", "--", designPath])
+    } finally {
+      await removeDir(temp)
+    }
+  })
+
+  test("a design that ruled on an ambiguity posts its Interpretation Rulings back to the ticket, once, after the PR is open", async () => {
+    const temp = mkdtempSync(join(tmpdir(), "develop-graph-rulings-"))
+    try {
+      const repoRoot = join(temp, "repo")
+      mkdirSync(repoRoot, { recursive: true })
+      const workRoot = `${repoRoot}-worktrees/${TICKET}-${RUN_ID}`
+      mkdirSync(workRoot, { recursive: true })
+
+      const { calls, service } = runShell({ repoRoot })
+      const agent = runAgent(
+        workRoot,
+        "# Design\n\n## Interpretation Rulings\n\n| AC | Reading | Basis |\n| --- | --- | --- |\n| AC.01 | NUL bytes are stripped, not refused | ticket line 9 |\n"
+      )
+
+      const result = await Effect.runPromise(
+        Effect.result(
+          developGraph.run({ ticket: TICKET }).pipe(
+            Effect.provide(Layer.mergeAll(shellLayer(service), claudeAgentLayer(agent.service))),
+            Effect.provideService(RunId, RUN_ID),
+            Effect.provideService(RunRootEnv, { env: { CLAUDE_CONFIG_DIR: temp }, home: "/unused" })
+          )
+        )
+      )
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+
+      const comments = calls.filter((call) => call[0] === "gh" && call[1] === "issue" && call[2] === "comment")
+      expect(comments).toHaveLength(1)
+      expect(comments[0]!.slice(0, 5)).toStrictEqual(["gh", "issue", "comment", "150", "--body-file"])
+      const body = readFileSync(comments[0]![5]!, "utf8")
+      expect(body).toContain(`Interpretation rulings from the design behind ${PR_URL}, for ${TICKET}.`)
+      expect(body).toContain("| AC.01 | NUL bytes are stripped, not refused | ticket line 9 |")
+      // The comment follows the PR, never precedes it: a ruling is posted against a landed change.
+      const prIndex = calls.findIndex((call) => call[0] === "gh" && call[1] === "pr" && call[2] === "create")
+      expect(calls.indexOf(comments[0]!)).toBeGreaterThan(prIndex)
     } finally {
       await removeDir(temp)
     }

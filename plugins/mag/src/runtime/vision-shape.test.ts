@@ -103,7 +103,7 @@ describe("readShape", () => {
     expect(conditionOf("ticket → (R channel: ticket, runId)")).toEqual([])
   })
 
-  test("develop-graph's complete condition list: nine, none of them a truncated gate mapping", () => {
+  test("develop-graph's complete condition list: eleven, none of them a truncated gate mapping", () => {
     const result = readShape("develop-graph/vision.md", developGraphVision)
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
@@ -116,6 +116,8 @@ describe("readShape", () => {
       "review-diff -> checkout-through-publish error, uncaught when verdict = blocked, cap exhausted",
       "review-diff -> checkout-through-publish error, uncaught when adjudicating pass rejected",
       "review-diff -> prompt-terseness-evaluator when verdict = clean",
+      "design-rulings -> comment-ticket when rulingsPath present",
+      "design-rulings -> worktree-remove when no ruling",
       "create-pr -> worktree-remove when worktree = true"
     ])
   })
