@@ -36,9 +36,9 @@ const EdgeEnds = { from: Schema.String, to: Schema.String }
 
 export const SequenceEdgeSchema = Schema.Struct({ kind: Schema.tag("sequence"), ...EdgeEnds })
 export const BranchEdgeSchema = Schema.Struct({ kind: Schema.tag("branch"), ...EdgeEnds, label: Schema.String })
-/** No producer emits this yet: `.when`'s condition is an anonymous closure with no declared read
- *  list (`construct.ts`, the `.when` case). A future declared-reads mechanism is what would make a
- *  `data` edge derivable; the kind ships now so the schema does not have to grow a union member later. */
+/** One declared read of a decision: `from` is the element of the single stage that produced the
+ *  field, `to` the decision that declared it, and `field` its name. A field no stage above the
+ *  decision produced comes from the seed, so its `from` is the enclosing container's own group. */
 export const DataEdgeSchema = Schema.Struct({ kind: Schema.tag("data"), ...EdgeEnds, field: Schema.String })
 
 export const ShapeEdgeSchema = Schema.Union([SequenceEdgeSchema, BranchEdgeSchema, DataEdgeSchema]).pipe(

@@ -3,6 +3,7 @@ import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
 import type { RunScope } from "mag/runtime/run-layers"
+import { schemaFieldNames } from "mag/runtime/schema-fields"
 
 /**
  * The rail-sketch's `Graph.construct` notation made real, so a graph's source reads the way its
@@ -156,6 +157,16 @@ export class TooConvoluted extends Data.TaggedError("TOO_CONVOLUTED")<{
       `past the limit of ${this.limit}: envision a new graph instead.`
   }
 }
+
+/** A declared read that resolves to nothing, below a stage whose contributed fields could not be
+ *  enumerated: the type promised the field exists, so falling back to the entry would draw an edge
+ *  that may be false. `opaque` names the stages that made the fallback unsafe. */
+export class FieldHasNoProducer extends Data.TaggedError("FIELD_HAS_NO_PRODUCER")<{
+  readonly container: string
+  readonly decision: string
+  readonly field: string
+  readonly opaque: readonly string[]
+}> {}
 
 /** Every node slot a modifier of this kind could have meant: `removeWhen`'s candidates are guarded
  *  nodes only, `replaceNode`'s are every node any step runs. `describe` is what
@@ -378,6 +389,35 @@ export const projectSteps = (
   const edges: ShapeEdge[] = []
   let previous: string | undefined
 
+  /** One slot per field, overwritten as the walk descends: a field produced twice belongs to the
+   *  nearest producer above the decision, the one whose value actually reached it. */
+  const producers = new Map<string, string>()
+  /** Stages whose contributed fields could not be enumerated. While this is empty, "not produced
+   *  above" is evidence of "seeded", because a context field has exactly two origins and every stage
+   *  kind declares or derives its own; once it is not, the walk refuses rather than draw an edge from
+   *  the entry that may be a lie. */
+  const opaque: string[] = []
+
+  const contribute = (fields: readonly string[] | undefined, from: string): void => {
+    if (fields === undefined) {
+      opaque.push(from)
+      return
+    }
+    for (const field of fields) producers.set(field, from)
+  }
+
+  /** Called before the step records its own contributions, so a decision only ever resolves against
+   *  stages above it. */
+  const resolveReads = (decision: AnyDecision, to: string): void => {
+    for (const field of new Set(decision.reads)) {
+      const from = producers.get(field)
+      if (from === undefined && opaque.length > 0) {
+        throw new FieldHasNoProducer({ container: containerId, decision: decision.name, field, opaque })
+      }
+      edges.push({ kind: "data", from: from ?? containerId, to, field })
+    }
+  }
+
   steps.forEach((step, index) => {
     const at = `${containerId}/${index}`
     let primary: string
@@ -388,11 +428,13 @@ export const projectSteps = (
         const projected = projectNode(containerId, primary, step.node)
         elements.push(...projected.elements)
         edges.push(...projected.edges)
+        contribute(step.keep ? Object.keys(step.keep) : schemaFieldNames(step.node.success.ast), primary)
         break
       }
       case "via":
         primary = `${at}:node:${step.name}`
         elements.push({ kind: "node", id: primary, label: step.name, parent: containerId })
+        contribute(Object.keys(step.keep), primary)
         break
       case "fork": {
         primary = `${at}:fork`
@@ -407,6 +449,8 @@ export const projectSteps = (
           ...left.edges,
           ...right.edges
         )
+        contribute(schemaFieldNames(step.left.success.ast), leftId)
+        contribute(schemaFieldNames(step.right.success.ast), rightId)
         break
       }
       case "when": {
@@ -417,6 +461,9 @@ export const projectSteps = (
           { kind: "node", id: guardedId, label: step.node.name, parent: containerId }
         )
         edges.push({ kind: "branch", from: primary, to: guardedId, label: "true" })
+        resolveReads(step.decision, primary)
+        // A `when` records the guarded node's id: the node is what produced the field.
+        contribute(Object.keys(step.keep), guardedId)
         break
       }
     }

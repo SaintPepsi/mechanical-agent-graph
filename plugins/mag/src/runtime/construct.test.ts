@@ -7,6 +7,7 @@ import type { PlatformError } from "effect/PlatformError"
 import {
   applyModifiers,
   type Blueprint,
+  FieldHasNoProducer,
   Graph,
   type Modifier,
   ModifierConflict,
@@ -89,6 +90,14 @@ const quietNotify = make({
   input: Schema.Struct({}),
   success: Schema.Struct({ notified: Schema.String }),
   run: () => Effect.succeed({ notified: "quiet" })
+})
+
+const unenumerable = make({
+  name: "fixture-unenumerable",
+  description: "Its success is a union, so no field list can be read off it — the opaque case.",
+  input: Schema.Struct({}),
+  success: Schema.Union([Schema.Struct({ x: Schema.String }), Schema.Struct({ y: Schema.String })]),
+  run: () => Effect.succeed({ x: "x" })
 })
 
 class FixtureNotifyError extends Data.TaggedError("FIXTURE_NOTIFY_ERROR")<{ readonly reason: string }> {}
@@ -703,6 +712,95 @@ describe("Graph.shapeOf / projectSteps", () => {
       { kind: "node", id: "fixture-root/0:node:fixture-notify", label: "fixture-notify", parent: "fixture-root" }
     ])
     expect(edges).toEqual([])
+  })
+
+  test("a declared read draws a data edge from the keep that produced the field", () => {
+    const steps: readonly Step[] = [
+      {
+        kind: "node",
+        node: notify,
+        wire: () => ({}),
+        keep: { tag: (a: { readonly notified: string }) => a.notified },
+        modifiers: []
+      },
+      {
+        kind: "when",
+        decision: { name: "tag is loud", reads: ["tag"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root/0:node:fixture-notify",
+      to: "fixture-root/1:decision:tag is loud",
+      field: "tag"
+    })
+  })
+
+  test("a keep-less stage produces every field of its node's success", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: notify, wire: () => ({}), modifiers: [] },
+      {
+        kind: "when",
+        decision: { name: "notified at all", reads: ["notified"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root/0:node:fixture-notify",
+      to: "fixture-root/1:decision:notified at all",
+      field: "notified"
+    })
+  })
+
+  test("a seeded read arrives from the container itself, the entry of the graph", () => {
+    const steps: readonly Step[] = [
+      {
+        kind: "when",
+        decision: { name: "flag is set", reads: ["flag"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root",
+      to: "fixture-root/0:decision:flag is set",
+      field: "flag"
+    })
+  })
+
+  test("disconfirming: a read below a stage whose fields cannot be enumerated refuses, naming the opaque stage", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: unenumerable, wire: () => ({}), modifiers: [] },
+      {
+        kind: "when",
+        decision: { name: "x is set", reads: ["x"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
+
+    expect(error.field).toBe("x")
+    expect(error.opaque).toEqual(["fixture-root/0:node:fixture-unenumerable"])
   })
 })
 
