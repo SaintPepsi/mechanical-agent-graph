@@ -145,7 +145,7 @@ describe("envision-notation", () => {
       expect(calls).toHaveLength(0)
     }))
 
-  test("a declared blocked verdict writes the reason to the run root and fails NotationVisionBlocked naming it — no vision read, no git call, no retry from this node", () =>
+  test("a declared blocked verdict writes the reason to the run root and fails NotationVisionBlocked naming it: no vision read, no git call, no retry from this node", () =>
     withRepo(async (_repoRoot, runRoot, run) => {
       const agent = stubAgent({ verdict: { visionPath: "x", blocked: "the ticket names no ideal shape to draw" } })
       const { calls, service: shell } = scriptedShell([])

@@ -152,7 +152,7 @@ describe("fetch-ticket", () => {
   })
 
   describe("the node", () => {
-    test("the recorded argv is exactly the one gh call — no sh anywhere", () =>
+    test("the recorded argv is exactly the one gh call, no sh anywhere", () =>
       withRunRoot("fetch-ticket", async (runRoot) => {
         const { calls, service } = stubShell(okIssue({ title: "Fix it", body: "body", author: "maintainer" }))
         await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service, testRunInfo({ runRoot }))
@@ -179,7 +179,7 @@ describe("fetch-ticket", () => {
         )
       }))
 
-    test("the maintainer is an ordinary input, not a credential this node resolves — the same issue reply succeeds or fails purely on which maintainer the caller passes, and no gh api user call ever fires (the stub throws if one does)", () =>
+    test("the maintainer is an ordinary input, not a credential this node resolves: the same issue reply succeeds or fails purely on which maintainer the caller passes, and no gh api user call ever fires (the stub throws if one does)", () =>
       withRunRoot("fetch-ticket", async (runRoot) => {
         const issueReply = okIssue({
           title: "T",
@@ -213,7 +213,7 @@ describe("fetch-ticket", () => {
       expect(calls).toStrictEqual([])
     })
 
-    test("gh issue view exit 4 is TrackerUnreachable — gh's own documented authentication-required code", async () => {
+    test("gh issue view exit 4 is TrackerUnreachable, gh's own documented authentication-required code", async () => {
       const { service } = stubShell({ exitCode: 4, stdout: "", stderr: "gh: authentication required\n" })
       const error = await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
       expect(error).toBeInstanceOf(TrackerUnreachable)
@@ -235,7 +235,7 @@ describe("fetch-ticket", () => {
       expect((error as TrackerFailed).exitCode).toBe(42)
     })
 
-    test("a foreign-authored issue is TicketNotMaintainerAuthored — nothing in it may enter a prompt", async () => {
+    test("a foreign-authored issue is TicketNotMaintainerAuthored: nothing in it may enter a prompt", async () => {
       const { service } = stubShell(okIssue({ title: "T", body: "b", author: "stranger" }))
       expect(await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(TicketNotMaintainerAuthored)
     })

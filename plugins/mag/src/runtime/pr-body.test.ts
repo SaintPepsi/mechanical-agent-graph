@@ -1,10 +1,25 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { Effect } from "effect"
-import { issueNumber, prBody } from "mag/runtime/pr-body"
+import { Effect, Result } from "effect"
+import { issueNumber, prBody, PrBodyComposeFailed } from "mag/runtime/pr-body"
 import { RunInfo } from "mag/runtime/run-info"
 import { testRunInfo, withRunRoot } from "mag/test/node-fixture"
+
+// Compile-time pin on `prBody`'s declared error: a public `runtime/` type ships with a pin
+// (`construct.test.ts`'s `.finalise` precedent), since nothing at runtime can observe `E`. A
+// `bun run typecheck` failure here is the whole test; the `describe` below only keeps it visible.
+type Extends<A, B> = [A] extends [B] ? true : false
+type ComposeError = Effect.Error<ReturnType<typeof prBody>>
+const _ownTagSurvives: Extends<PrBodyComposeFailed, ComposeError> = true
+const _nothingElseLeaks: Extends<ComposeError, PrBodyComposeFailed> = true
+
+describe("prBody's error union is its own tag alone", () => {
+  test("the pin is a typecheck fact; this test exists so the file names it", () => {
+    expect(_ownTagSurvives).toBe(true)
+    expect(_nothingElseLeaks).toBe(true)
+  })
+})
 
 describe("issueNumber", () => {
   // The ticket id's trailing `-`-separated segment — `fetch-ticket` already rejected an id that
@@ -56,6 +71,19 @@ describe("prBody", () => {
   test("the body carries no review-pass count — a revert goes red", async () => {
     expect((await composed(DESCRIPTION)).body).not.toContain("review passes")
   })
+
+  test("a missing description file fails PrBodyComposeFailed naming it, never a bare platform error", () =>
+    withRunRoot("pr-body", async (runRoot) => {
+      const descriptionPath = join(runRoot, "absent.md")
+      const result = await Effect.runPromise(
+        Effect.result(prBody({ descriptionPath }).pipe(Effect.provideService(RunInfo, testRunInfo({ runRoot }))))
+      )
+      expect(Result.isFailure(result)).toBe(true)
+      if (!Result.isFailure(result)) return
+      expect(result.failure).toBeInstanceOf(PrBodyComposeFailed)
+      expect(result.failure.descriptionPath).toBe(descriptionPath)
+      expect(result.failure.runRoot).toBe(runRoot)
+    }))
 
   test("a multi-line description keeps Closes #<n> isolated on its own line", async () => {
     const multiline = `${DESCRIPTION}\n\n- Renames \`ships\` to \`description\` on the review verdict.`

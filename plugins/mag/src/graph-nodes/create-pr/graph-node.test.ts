@@ -5,20 +5,7 @@ import { inputExamples, successExamples } from "mag/graph-nodes/create-pr/exampl
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-
-/** Like branch's `scriptedShell`: one canned reply per call, in order, recording every argv. */
-const scriptedShell = (replies: readonly ShellResult[]) => {
-  const calls: Array<string[]> = []
-  const service: ShellService = {
-    run: (argv) => {
-      calls.push([...argv])
-      const reply = replies[calls.length - 1]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-  return { calls, service }
-}
+import { scriptedShell } from "mag/test/node-fixture"
 
 const out = (stdout: string): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
 const exit = (exitCode: number, stderr = ""): ShellResult => ({ exitCode, stdout: "", stderr })

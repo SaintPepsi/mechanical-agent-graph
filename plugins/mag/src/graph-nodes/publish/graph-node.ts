@@ -13,7 +13,7 @@ import { make } from "mag/runtime/graph-node.definition"
  * here. `success` is `createPr.success` itself, reused rather than redefined, so there is no second
  * schema to drift from the first.
  *
- * `bodyPath` is a required input, forwarded to `create-pr` unchanged — `publish` is a
+ * `bodyPath` is a required input, forwarded to `create-pr` unchanged: `publish` is a
  * pass-through composite, so it decorates nothing and defaults nothing; deciding what the body says
  * is the calling graph's business (`runtime/pr-body.ts`).
  */

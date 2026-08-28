@@ -29,7 +29,7 @@ const probeVerdicts = (text: string) =>
   Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({})], { concurrency: "unbounded" })
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
- * assignment — spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
+ * assignment, spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
  * cannot drift from each other. */
 const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }) => ({
   ticket: input.ticket,

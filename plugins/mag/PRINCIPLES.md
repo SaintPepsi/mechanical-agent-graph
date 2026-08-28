@@ -131,14 +131,17 @@ maintainer rules otherwise.
 - **Skill text is cold-startable and repo-agnostic.** Compiled skill content states its rules as
   terse imperatives a session in any repo can follow: no ticket numbers, no repo file references,
   no decision archeology, no argued rationale.
-- **Anything a session consumes or produces is an artifact on disk in the run root; a node passes
-  paths between sessions, never text.** Agents can't remember, they can only reference: text
-  spliced into a prompt lasts exactly one context window, while a file is a cited baseline every
-  later session reopens on the same terms, and the journal records a path instead of a copy per
-  node. The ticket is the first instance: `fetch-ticket` writes `<runRoot>/ticket.md` once, no
-  node changes it afterwards, no input schema carries its body, and every prompt carries the id
-  and title as its header line, then `Read the ticket at <path>` (`runtime/ticket.ts`), and
-  nothing else from the ticket. Precedent: v1's ingest step
+- **The ticket and every model-produced string is a run-root file that schemas name by path.**
+  Agents can't remember, they can only reference: text spliced into a prompt lasts exactly one
+  context window, while a file is a cited baseline every later session reopens on the same terms,
+  and the journal records a path instead of a copy per node. `fetch-ticket` writes
+  `<runRoot>/ticket.md` once and no node changes it afterwards; a ticket-driven prompt opens with
+  the id and title, then `Read the ticket at <path>` (`runtime/ticket.ts`), and nothing else from
+  the ticket. A session's own prose (a build summary, a dispute, a PR description, a declared
+  block) lands as `<prefix>-N.md` and its success or error carries the path. Two inputs still carry
+  text between nodes, deliberately: the assembled brainstorm prompt (`brainstorm.input.prompt`,
+  budget-checked by `assemble-brainstorm-prompt`) and the caller-authored addenda
+  (`build.addendum`, `review-diff.addendum`). Precedent: v1's ingest step
   wrote the immutable ticket doc once and every later step read it as the fixed baseline.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one

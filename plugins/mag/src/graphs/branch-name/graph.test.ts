@@ -58,7 +58,7 @@ describe("branch-name (graph)", () => {
     expect(Object.keys(result.success).sort()).toStrictEqual(["branch", "ticket", "title"])
   })
 
-  test("every branch is feat/ until a node produces labels — the gap is real, not hidden", async () => {
+  test("every branch is feat/ until a node produces labels: the gap is real, not hidden", async () => {
     // fetch-ticket's success shape carries title and ticket path only, so `branchType` never sees "bug"
     // here even though the ticket is one. This test exists so closing that gap has to change a test.
     const result = await runWith(branchName.run({ ticket: "GH-98" }), stubShell(okIssue("Fix a bug", "body")))

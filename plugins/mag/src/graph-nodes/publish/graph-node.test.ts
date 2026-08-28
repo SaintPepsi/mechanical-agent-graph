@@ -7,21 +7,7 @@ import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { platform } from "mag/runtime/platform"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { testJournalLayer, testRunInfo } from "mag/test/node-fixture"
-
-/** Like push-branch's and create-pr's own `scriptedShell`: one canned reply per call, in order, recording argv. */
-const scriptedShell = (replies: readonly ShellResult[]) => {
-  const calls: Array<string[]> = []
-  const service: ShellService = {
-    run: (argv) => {
-      calls.push([...argv])
-      const reply = replies[calls.length - 1]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-  return { calls, service }
-}
+import { scriptedShell, testJournalLayer, testRunInfo } from "mag/test/node-fixture"
 
 const ok = (stdout = ""): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
 const exit = (exitCode: number, stderr = ""): ShellResult => ({ exitCode, stdout: "", stderr })

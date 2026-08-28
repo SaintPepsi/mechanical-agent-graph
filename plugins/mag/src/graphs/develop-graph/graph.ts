@@ -154,10 +154,10 @@ const checkout = Graph.construct<{
 /**
  * The rail-sketch's `WriteBody`: `write-pr-body` describes the branch's own merge-base diff into a
  * run-root file, then `compose-pr-body` reads it and writes the body with `Closes #n` and the run id
- * as a second file. The compose step stays `runtime/pr-body.ts`'s helper rather than a node: its
- * only failures are the file read and write, a `PlatformError` every `graph()` union already
- * carries, so `.via`, not a box of its own. It reads the ticket and run id from `RunInfo`, never as
- * a parameter. write-pr-body writes no code, so it carries no agent.
+ * as a second file. The compose step stays `runtime/pr-body.ts`'s helper rather than a node, its
+ * one failure tagged as its own `PrBodyComposeFailed`, so `.via`, not a box of its own. It reads
+ * the ticket and run id from `RunInfo`, never as a parameter. write-pr-body writes no code, so it
+ * carries no agent.
  */
 const writeBody = Graph.construct<{ ticket: string; base: string; model: string }>("write-body")
   .thenKeep(

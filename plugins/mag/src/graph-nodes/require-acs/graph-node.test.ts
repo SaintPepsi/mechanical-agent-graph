@@ -100,8 +100,8 @@ describe("require-acs", () => {
         expect(error.message).toContain("maintainer")
       }))
 
-    // `Effect.runPromise` typechecks only against a `never` requirement, so it also proves the node
-    // reaches nothing but the file: no `Shell`, no agent, nothing that could draft the criteria it is refusing over.
+    // Run with no `Shell` and no agent provided: the node reaches nothing but the file (its own
+    // `platform`), so nothing here could draft the criteria it is refusing over.
     test("a ticket file with criteria succeeds with the count", () =>
       withTicket("## Acceptance Criteria\n\n**AC.01 - First**\n\n**AC.02 - Second**\n", async (ticketPath) => {
         const value = await Effect.runPromise(requireAcs.run({ ticket: "GH-98", title: "Fix the parser", ticketPath }))

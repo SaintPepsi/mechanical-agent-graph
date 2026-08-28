@@ -20,6 +20,13 @@ export class NotationVisionBlocked extends Data.TaggedError("NOTATION_VISION_BLO
   readonly sessions: readonly string[]
 }> {}
 
+/** The declared reason could not land in the run root, after a real session already declared it. */
+export class NotationVisionReasonWriteFailed extends Data.TaggedError("NOTATION_VISION_REASON_WRITE_FAILED")<{
+  readonly runRoot: string
+  readonly detail: string
+  readonly sessions: readonly string[]
+}> {}
+
 /**
  * The session declared success but the vision is missing, empty after trim, or byte-identical to
  * its pre-dispatch snapshot — `envision-mermaid`'s `VisionMissing` precedent, one notation wide. The

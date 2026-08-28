@@ -5,6 +5,7 @@ import {
   NotationVisionCopyFailed,
   NotationVisionGitFailed,
   NotationVisionMissing,
+  NotationVisionReasonWriteFailed,
   UnknownNotation
 } from "mag/graph-nodes/envision-notation/errors"
 import { writeArtifact } from "mag/runtime/artifact"
@@ -110,10 +111,10 @@ export const envisionNotation = make({
 
       if (reply.verdict.blocked !== undefined) {
         // The declared reason is the only artifact this dispatch produced, so it lands in the run
-        // root before the failure carries its path; a failed write is a run-root write failure like any other.
+        // root before the failure carries its path.
         const reasonPath = yield* writeArtifact(fs, runInfo.runRoot, "vision-blocked", reply.verdict.blocked).pipe(
           Effect.catch((error) =>
-            Effect.fail(new NotationVisionCopyFailed({ path: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
+            Effect.fail(new NotationVisionReasonWriteFailed({ runRoot: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
           )
         )
         return yield* Effect.fail(new NotationVisionBlocked({ notation: input.notation, reasonPath, sessions: reply.sessions }))

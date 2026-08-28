@@ -35,7 +35,7 @@ const bitbucketPullRequestUrl = (target: RequestTarget): string =>
  *
  * A PR body that names the ticket it closes matters: without it, every graph-opened PR leaves its
  * ticket open on merge. The body is a run-root file the caller composed (`runtime/pr-body.ts`),
- * handed to `gh pr create --body-file` by path and read by nothing here — the same discipline
+ * handed to `gh pr create --body-file` by path and read by nothing here, the same discipline
  * `title` already follows; deciding what it says is the graph's business, not this node's.
  *
  * GitHub is the CLI arm: it asks `gh` for an open request from source to base first and returns
