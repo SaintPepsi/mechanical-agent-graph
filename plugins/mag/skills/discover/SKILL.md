@@ -25,6 +25,6 @@ Reframe the request as a pure learning question:
 
 1. Reframe the request as a learning question ("How does X currently work?")
 2. Explore: read files, trace paths, note patterns
-3. Write findings to the note: the learning question first, then what exists (files, patterns, conventions, what this task could reuse, each cited path:line) and what's notable (gaps, constraints, unknowns)
+3. Write findings to the note: the learning question first, then what exists (files, patterns, conventions, each cited path:line) and what's notable (gaps, constraints, unknowns)
 
 Write the note to the path the request names, else `docs/graph/discover.md`. Read only; the note is your only write.

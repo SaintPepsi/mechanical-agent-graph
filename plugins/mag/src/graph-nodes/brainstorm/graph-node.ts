@@ -34,6 +34,7 @@ const promptFor = (
     readonly ticketPath: string
     readonly visionPaths: readonly string[]
     readonly discoverPath: string
+    readonly recycleMapPath: string
     readonly prompt: string
   },
   designPath: string
@@ -41,9 +42,10 @@ const promptFor = (
   [
     ...ticketReference(input),
     "",
-    "Read each vision below and the discover note as citations. Do not redraw a vision or re-run recon.",
+    "Read each vision below, the discover note and the recycle map as citations. Do not redraw a vision or re-run recon.",
     ...input.visionPaths.map((path) => `- ${path}`),
     `- ${input.discoverPath}`,
+    `- ${input.recycleMapPath}`,
     "",
     // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
     // success), not text this node composes itself — unlike `design/graph-node.ts`'s `skillFor`,
@@ -92,6 +94,7 @@ export const brainstorm = make({
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    recycleMapPath: Schema.String,
     /** A named agent to run the session as, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */

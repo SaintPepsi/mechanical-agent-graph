@@ -6,6 +6,7 @@ import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
+import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
 import { DesignGraphTicketUnreadable } from "mag/graphs/design-graph/errors"
 import { graph } from "mag/runtime/graph"
@@ -42,11 +43,12 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 })
 
 /**
- * The spine is **Envision ∥ Discover → Brainstorm**. The three probes run first and gate what
- * `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side by side,
- * and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even though nothing
- * upstream feeds it: it has no dependency on the probes or the visions, so waiting for them first
- * would only cost wall-clock for no reason. `brainstorm` is the only node that reads both halves.
+ * The spine is **Envision ∥ Discover → Recycle-map → Brainstorm**. The three probes run first and
+ * gate what `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side
+ * by side, and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even
+ * though nothing upstream feeds it: it has no dependency on the probes or the visions, so waiting
+ * for them first would only cost wall-clock for no reason. `recycleMap` follows discovery alone,
+ * since it reads the discover note; `brainstorm` is the only node that reads every half.
  */
 const pipeline = (input: {
   readonly ticket: string
@@ -74,11 +76,14 @@ const pipeline = (input: {
       { concurrency: "unbounded" }
     )
 
+    const recycled = yield* recycleMap.run({ ...ticketFields(input), discoverPath: discovered.discoverPath, ...agentFields(input) })
+
     const designed = yield* brainstorm.run({
       ...ticketFields(input),
       prompt: assembled.prompt,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
+      recycleMapPath: recycled.recycleMapPath,
       ...agentFields(input)
     })
 
@@ -87,9 +92,10 @@ const pipeline = (input: {
       headSha: designed.headSha,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
-      sessions: [...visions.sessions, ...discovered.sessions, ...designed.sessions],
+      recycleMapPath: recycled.recycleMapPath,
+      sessions: [...visions.sessions, ...discovered.sessions, ...recycled.sessions, ...designed.sessions],
       // One unpriced session makes the run's figure unpriced, never silently zero — `graphs/develop-graph/graph.ts`'s own reduction.
-      costUsd: [visions.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
+      costUsd: [visions.costUsd, discovered.costUsd, recycled.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
     }
   }).pipe(Effect.provide(platform))
 
@@ -109,7 +115,7 @@ const pipeline = (input: {
  */
 export const designGraph = graph({
   name: "design-graph",
-  description: "Envision every matched stack's notation, discover what exists, and brainstorm them into a design.",
+  description: "Envision every matched stack's notation, discover what exists, map what to reuse, and brainstorm them into a design.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -127,6 +133,7 @@ export const designGraph = graph({
     headSha: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    recycleMapPath: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)
   }),

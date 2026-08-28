@@ -112,6 +112,10 @@ const runAgent = (root: string) => {
         const path = writeAt(destinationOf(prompt, "Write your findings to"), "# Discover\n\nNothing relevant found.\n")
         return reply<A>({ discoverPath: path }, "session-discover", 0.15)
       }
+      if (prompt.includes("Map what this ticket can reuse")) {
+        const path = writeAt(destinationOf(prompt, "Write the map to"), "# Recycle map\n\nNothing to reuse.\n")
+        return reply<A>({ recycleMapPath: path }, "session-recycle", 0.1)
+      }
       if (prompt.includes("Read each vision below")) {
         // brainstorm's write step backtick-quotes the path it resolved through `recordPath`,
         // so the stub reads it back the way `design-graph/graph.test.ts` does rather than composing
@@ -235,7 +239,7 @@ describe("develop-graph", () => {
       // and the publish tail runs as the sketch's boxes — never the fused `publish` composite.
       for (const name of [
         "prepare", "require-acs", "checkout", "write-body", "publish-tail",
-        "resolve-notations", "envision-visions", "discover", "brainstorm", "build-under-review", "push-branch", "create-pr"
+        "resolve-notations", "envision-visions", "discover", "recycle-map", "brainstorm", "build-under-review", "push-branch", "create-pr"
       ]) {
         expect(names).toContain(name)
       }

@@ -5,7 +5,8 @@ export const inputExamples = [
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-svelte.md", "docs/graph/GH-288/vision-generic.md"],
-    discoverPath: "docs/graph/GH-288/discover.md"
+    discoverPath: "docs/graph/GH-288/discover.md",
+    recycleMapPath: "docs/graph/GH-288/recycle-map.md"
   },
   {
     ticket: "GH-288",
@@ -14,6 +15,7 @@ export const inputExamples = [
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-generic.md"],
     discoverPath: "docs/graph/GH-288/discover.md",
+    recycleMapPath: "docs/graph/GH-288/recycle-map.md",
     agent: "effect-expert",
     model: "opus"
   }

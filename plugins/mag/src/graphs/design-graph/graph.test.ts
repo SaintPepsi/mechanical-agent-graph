@@ -31,9 +31,10 @@ const inputWith = (repoRoot: string) => {
  * `graph-node.ts`). Cheaper than threading a fourth channel through the stub, and it doubles as a
  * structural check: a route can only be told apart by text its own node actually composed.
  */
-const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" => {
+const routeOf = (prompt: string): "envision" | "discover" | "recycle" | "brainstorm" => {
   if (prompt.includes("Draw the ideal shape")) return "envision"
   if (prompt.includes("Recon this repository")) return "discover"
+  if (prompt.includes("Map what this ticket can reuse")) return "recycle"
   if (prompt.includes("Read each vision below")) return "brainstorm"
   throw new Error(`stub agent: unrecognised route in prompt: ${prompt.slice(0, 120)}`)
 }
@@ -75,6 +76,15 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
         writeFileSync(destination, "# Discover\n\nNothing relevant found.\n")
         return Effect.succeed(
           { verdict: { discoverPath: destination } as A, result: {}, sessions: ["session-discover"], costUsd: 0.2, attempts: 1 } as ClaudeReply<A>
+        )
+      }
+
+      if (route === "recycle") {
+        const destination = destinationOf(request.prompt, "Write the map to")
+        mkdirSync(dirname(destination), { recursive: true })
+        writeFileSync(destination, "# Recycle map\n\nNothing to reuse.\n")
+        return Effect.succeed(
+          { verdict: { recycleMapPath: destination } as A, result: {}, sessions: ["session-recycle"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
         )
       }
 
@@ -163,6 +173,8 @@ describe("design-graph", () => {
 
       expect(success.discoverPath).toBe(`${repoRoot}/docs/graph/GH-288/discover.md`)
       expect(readFileSync(success.discoverPath, "utf8").length).toBeGreaterThan(0)
+      expect(success.recycleMapPath).toBe(`${repoRoot}/docs/graph/GH-288/recycle-map.md`)
+      expect(readFileSync(success.recycleMapPath, "utf8").length).toBeGreaterThan(0)
 
       expect(success.designPath).toBe(join(repoRoot, "docs", "graph", "GH-288", "design.md"))
       expect(readFileSync(success.designPath, "utf8")).toContain("## Vision Reconciliation")
@@ -177,7 +189,7 @@ describe("design-graph", () => {
       // appears, only the host's children and the composed subgraph). Only a graph composed BENEATH
       // another graph's scope gets its own row, the same test's `fixture-subgraph` entry.
       const names = journalRows(root, repoRoot, "GH-288").map((row) => row.node)
-      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "assemble-brainstorm-prompt", "brainstorm"]) {
+      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "recycle-map", "assemble-brainstorm-prompt", "brainstorm"]) {
         expect(names).toContain(name)
       }
       // envision-visions fans out one envision-notation row per matched notation.
@@ -337,7 +349,7 @@ describe("design-graph", () => {
         )
       )
 
-      for (const path of [...success.visionPaths, success.discoverPath, success.designPath]) {
+      for (const path of [...success.visionPaths, success.discoverPath, success.recycleMapPath, success.designPath]) {
         expect(path.startsWith(recordsRoot)).toBe(true)
         expect(path.startsWith(workRoot)).toBe(false)
       }

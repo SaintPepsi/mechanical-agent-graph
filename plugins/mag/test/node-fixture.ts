@@ -50,6 +50,27 @@ export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string) => Pr
   }
 }
 
+/**
+ * A disposable checkout plus a disposable run root for a record-writing node under the home-run
+ * policy (`recordsRoot === workRoot`): every success path copies into `runRoot` for real
+ * (`records.ts`'s `record`). `prefix` names the temp dir after the node under test.
+ */
+export const withRecordRepo = async <T>(
+  prefix: string,
+  fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>
+): Promise<T> => {
+  const base = mkdtempSync(join(tmpdir(), `${prefix}-`))
+  const repoRoot = join(base, "repo")
+  const runRoot = join(base, "run")
+  mkdirSync(repoRoot, { recursive: true })
+  mkdirSync(runRoot, { recursive: true })
+  try {
+    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
+  } finally {
+    await removeDir(base)
+  }
+}
+
 /** In-order scripted shell: one canned reply per call, recording every argv; an unscripted call throws. */
 export const scriptedShell = (replies: readonly ShellResult[]) => {
   const calls: string[][] = []

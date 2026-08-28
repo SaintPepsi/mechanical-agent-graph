@@ -12,6 +12,8 @@ import { inputExamples as discoverInputs } from "mag/graph-nodes/discover/exampl
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { inputExamples as notationInputs } from "mag/graph-nodes/envision-notation/examples"
 import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
+import { inputExamples as recycleInputs } from "mag/graph-nodes/recycle-map/examples"
+import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { inputExamples as reviewInputs } from "mag/graph-nodes/review-diff/examples"
@@ -48,6 +50,7 @@ const NODES: ReadonlyArray<{
   readonly shell: () => ShellService
 }> = [
   { node: discover, input: discoverInputs[0]!, shell: () => scriptedShell([]).service },
+  { node: recycleMap, input: recycleInputs[0]!, shell: () => scriptedShell([]).service },
   { node: brainstorm, input: brainstormInputs[0]!, shell: () => scriptedShell([]).service },
   { node: design, input: designInputs[0]!, shell: () => scriptedShell([]).service },
   { node: envisionNotation, input: notationInputs[0]!, shell: () => scriptedShell([]).service },

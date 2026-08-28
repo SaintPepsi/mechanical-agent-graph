@@ -102,14 +102,15 @@ describe("brainstorm", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(brainstorm.success)(example)
   })
 
-  test("the prompt names every vision path and the discover path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
+  test("the prompt names every vision path, the discover path and the recycle map path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
       await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
 
       const request = agent.requests[0]!
       for (const path of INPUT.visionPaths) expect(request.prompt).toContain(path)
-      expect(request.prompt).toContain(INPUT.discoverPath)
+      expect(request.prompt).toContain(`- ${INPUT.discoverPath}`)
+      expect(request.prompt).toContain(`- ${INPUT.recycleMapPath}`)
       expect(request.prompt).toContain(INPUT.prompt)
     }))
 
