@@ -163,7 +163,7 @@ const loopAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,
@@ -247,7 +247,7 @@ const disputeAgent = (secondReviewBlocks: boolean) => {
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,
@@ -324,7 +324,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,

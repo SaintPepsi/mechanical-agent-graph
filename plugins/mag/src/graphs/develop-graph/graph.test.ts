@@ -119,11 +119,11 @@ const runAgent = (root: string) => {
         const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
         return reply<A>({ designPath: path }, "session-brainstorm", 0.2)
       }
-      if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0, note: "already terse" }, "session-terseness", 0.02)
+      if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0 }, "session-terseness", 0.02)
       // No blocking findings, so the review loop settles on its first pass: `build-under-review`'s
       // own test owns the send-back path, this one owns the spine.
       if (prompt.includes("reply with only the blocking findings")) return reply<A>({ blocking: [] }, "session-review-1", 0.1)
-      if (prompt.includes("Reduce this diff to the same behaviour in less code")) return reply<A>({ note: "nothing to trim" }, "session-simplify", 0.05)
+      if (prompt.includes("Reduce this diff to the same behaviour in less code")) return reply<A>({}, "session-simplify", 0.05)
       if (prompt.includes("Write the pull request description for the diff at")) {
         return reply<A>({ description: "Reticulates the splines." }, "session-write-pr-body", 0.05)
       }

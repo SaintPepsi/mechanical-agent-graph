@@ -71,7 +71,7 @@ export const recordingAgent = () => {
     prompt: <A>(request: ClaudePrint<A>) => {
       prompts.push(request.prompt)
       return Effect.succeed({
-        verdict: { summary: "did the work", note: "did the work", visionPath: "ignored", blocking: [] } as A,
+        verdict: { summary: "did the work", visionPath: "ignored", blocking: [] } as A,
         result: {},
         sessions: ["stub-session"],
         costUsd: 0.1,

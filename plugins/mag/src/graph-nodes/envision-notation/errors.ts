@@ -9,12 +9,14 @@ export class UnknownNotation extends Data.TaggedError("UNKNOWN_NOTATION")<{
 
 /**
  * The session declared its own failure — `verdict.blocked` present, `build`'s `dispute` idiom read
- * as this node's own "trust a declared failure" mechanism. Trusted immediately: no disk read, no
- * commit, no retry. Siblings in `envision-visions` keep running regardless.
+ * as this node's own "trust a declared failure" mechanism. Trusted immediately: no disk read of the
+ * vision, no commit, no retry. Siblings in `envision-visions` keep running regardless. The reason is
+ * model prose, so it lands as `<runRoot>/vision-blocked-N.md` and travels here by path: an error row
+ * records the tag alone, and a value on the payload would reach nobody.
  */
 export class NotationVisionBlocked extends Data.TaggedError("NOTATION_VISION_BLOCKED")<{
   readonly notation: string
-  readonly reason: string
+  readonly reasonPath: string
   readonly sessions: readonly string[]
 }> {}
 

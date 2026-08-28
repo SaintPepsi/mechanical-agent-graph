@@ -14,8 +14,8 @@ import { dirtyPaths } from "mag/runtime/porcelain"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { compileSubtraction, SIMPLIFY_PARAMS } from "mag/skills/subtraction"
 
-/** What the session must return: one line about what it did. Nothing that restates the diff — `simplified` is computed from `git`, never from this. */
-const VERDICT = verdictSchema(Schema.Struct({ note: Schema.String }))
+/** What the session must return: nothing. The commit is the artifact, and `simplified` is computed from `git`, never from a reply. */
+const VERDICT = verdictSchema(Schema.Struct({}))
 
 /**
  * The range, then the standard. Ticket-blind by design: no title, no body, a subtraction pass judges

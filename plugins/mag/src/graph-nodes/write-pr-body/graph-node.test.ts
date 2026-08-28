@@ -160,7 +160,7 @@ describe("write-pr-body", () => {
       expect(readFileSync(`${runRoot}/diff-1.patch`, "utf8")).toBe(DIFF)
     }))
 
-  test("success carries the stub's description verbatim and the HEAD the node actually read", () =>
+  test("success names the description's run-root file, holding the stub's text verbatim, beside the HEAD the node actually read", () =>
     withRunRoot(async (runRoot) => {
       const shell = gitStub({ head: HEAD })
       const agent = stubAgent()
@@ -169,11 +169,12 @@ describe("write-pr-body", () => {
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
       expect(result.success).toStrictEqual({
-        description: DESCRIPTION,
+        descriptionPath: `${runRoot}/pr-description-1.md`,
         headSha: HEAD,
         sessions: ["write-pr-body-session"],
         costUsd: 0.12
       })
+      expect(readFileSync(result.success.descriptionPath, "utf8")).toBe(DESCRIPTION)
     }))
 
   test("an empty runRoot is a wiring bug, not a data problem — PrBodyRunRootMissing before any dispatch", async () => {

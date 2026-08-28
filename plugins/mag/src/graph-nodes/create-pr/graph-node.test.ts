@@ -32,7 +32,7 @@ const GITHUB = {
   base: "main",
   source: "feat/gh-110",
   title: "GH-110: push and PR nodes",
-  body: "Fixes the NUL-byte crash at the artifact writer.\n\nCloses #110\n\nrun: run-1"
+  bodyPath: "/repo/.claude/graph/run-1/pr-body-1.md"
 }
 
 describe("create-pr", () => {
@@ -43,7 +43,7 @@ describe("create-pr", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(createPr.success)(example)
   })
 
-  test("GitHub with no open request creates one — title and body supplied verbatim — and returns its URL", () => {
+  test("GitHub with no open request creates one, title verbatim and body by file, and returns its URL", () => {
     const { calls, service } = scriptedShell([out("[]\n"), out("https://github.com/owner/repo/pull/12\n")])
     const result = runWith(createPr.run(GITHUB), service)
 
@@ -54,7 +54,7 @@ describe("create-pr", () => {
       ["gh", "pr", "list", "--repo", "owner/repo", "--head", "feat/gh-110", "--base", "main", "--state", "open", "--json", "url"],
       [
         "gh", "pr", "create", "--repo", "owner/repo", "--base", "main", "--head", "feat/gh-110",
-        "--title", "GH-110: push and PR nodes", "--body", "Fixes the NUL-byte crash at the artifact writer.\n\nCloses #110\n\nrun: run-1"
+        "--title", "GH-110: push and PR nodes", "--body-file", "/repo/.claude/graph/run-1/pr-body-1.md"
       ]
     ])
   })
@@ -72,7 +72,7 @@ describe("create-pr", () => {
   test("a GitLab host builds the MR-new URL without any CLI call, branches percent-encoded", () => {
     const { calls, service } = scriptedShell([])
     const result = runWith(
-      createPr.run({ host: "gitlab.example.com", slug: "group/project", base: "main", source: "feat/gh-110", title: "t", body: "b" }),
+      createPr.run({ host: "gitlab.example.com", slug: "group/project", base: "main", source: "feat/gh-110", title: "t", bodyPath: "/run/pr-body-1.md" }),
       service
     )
 
@@ -88,7 +88,7 @@ describe("create-pr", () => {
   test("bitbucket.org builds the PR-new URL without any CLI call", () => {
     const { calls, service } = scriptedShell([])
     const result = runWith(
-      createPr.run({ host: "bitbucket.org", slug: "workspace/repo", base: "main", source: "feat/gh-110", title: "t", body: "b" }),
+      createPr.run({ host: "bitbucket.org", slug: "workspace/repo", base: "main", source: "feat/gh-110", title: "t", bodyPath: "/run/pr-body-1.md" }),
       service
     )
 
@@ -103,7 +103,7 @@ describe("create-pr", () => {
   test("an unrecognized host fails as UnsupportedHost citing the host, with no CLI call", () => {
     const { calls, service } = scriptedShell([])
     const result = runWith(
-      createPr.run({ host: "git.sr.ht", slug: "~u/repo", base: "main", source: "feat/gh-110", title: "t", body: "b" }),
+      createPr.run({ host: "git.sr.ht", slug: "~u/repo", base: "main", source: "feat/gh-110", title: "t", bodyPath: "/run/pr-body-1.md" }),
       service
     )
 

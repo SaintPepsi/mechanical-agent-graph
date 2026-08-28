@@ -20,7 +20,26 @@ import type { Ticket } from "mag/skills/ticket/schema"
 
 const INPUT = inputExamples[0]!
 
-const TICKET: Ticket = successExamples[0]!.ticket as Ticket
+/** The structure the stub session answers with; the draft on disk is what the success names. */
+const TICKET: Ticket = {
+  title: "ticket-writer flow: What/Why/How in, house-style ticket filed",
+  executiveSummary: "A ticket-writer graph turns three sentences into a filed house-style ticket.",
+  type: "Story",
+  component: ["plugins/mag/src/graphs/"],
+  context: "Ticket writing today consumes a session's context.",
+  acceptanceCriteria: [
+    {
+      title: "The writer's reply is the ticket's structure",
+      given: "inputs What, Why, How",
+      when: "write-ticket runs",
+      then: ["its success value is schema-validated ticket structure"],
+      source: "The writer's reply is the ticket's structure"
+    }
+  ],
+  dependsOn: [],
+  blocks: [],
+  graphNodes: [{ marker: "+", name: "write-ticket" }]
+}
 
 /** Always answers with `verdict`, bypassing the transport's own schema decode — `write-pr-body`'s own `stubAgent` precedent. */
 const stubAgent = (verdict: Ticket = TICKET) => {
@@ -130,7 +149,6 @@ describe("write-ticket", () => {
 
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
-      expect(result.success.ticket).toStrictEqual(TICKET)
       expect(result.success.ticketPath).toBe(`${runRoot}/ticket-1.json`)
       expect(JSON.parse(readFileSync(result.success.ticketPath, "utf8"))).toStrictEqual(TICKET)
       expect(result.success.sessions).toStrictEqual(["write-ticket-session"])

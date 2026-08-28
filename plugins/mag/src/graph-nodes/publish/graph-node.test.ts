@@ -35,7 +35,7 @@ const INPUT = {
   slug: "SaintPepsi/mechanical-agent-graph",
   base: "main",
   title: "GH-168: publish is a GraphNode composed of push-branch and create-pr",
-  body: "Fixes the NUL-byte crash at the artifact writer.\n\nCloses #168\n\nrun: run-1"
+  bodyPath: "/repo/.claude/graph/run-1/pr-body-1.md"
 }
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService, runInfo: RunInfoService = RUN) =>
@@ -91,7 +91,7 @@ describe("publish", () => {
     expect(create![create!.indexOf("--title") + 1]).toBe(INPUT.title)
   })
 
-  test("body arrives as a plain input field and reaches `gh pr create --body` verbatim, formatted by nothing here", () => {
+  test("bodyPath arrives as a plain input field and reaches `gh pr create --body-file` verbatim, read by nothing here", () => {
     const { calls, service } = scriptedShell([
       ok(),
       ok("1\n"),
@@ -103,7 +103,7 @@ describe("publish", () => {
 
     const create = calls.find((call) => call.includes("create"))
     expect(create).toBeDefined()
-    expect(create![create!.indexOf("--body") + 1]).toBe(INPUT.body)
+    expect(create![create!.indexOf("--body-file") + 1]).toBe(INPUT.bodyPath)
   })
 
   test("a rejected push short-circuits: PushRejected, and `gh` is never called", () => {

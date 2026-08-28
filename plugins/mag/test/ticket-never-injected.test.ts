@@ -62,11 +62,16 @@ const commandNodes = (entries: Registry): ReadonlyArray<GraphNode<any, any, any,
     entry.kind === "command" ? [entry.node] : entry.kind === "group" ? commandNodes(entry.children) : []
   )
 
-/** The input schema's own field names, read off its AST the way `schema-flags.ts` walks it. */
-const inputFields = (node: GraphNode<any, any, any, any>): ReadonlyArray<PropertyKey> => {
-  const ast = node.input.ast
-  return ast._tag === "Objects" ? ast.propertySignatures.map((signature) => signature.name) : []
-}
+/** A schema's own field names, read off its AST the way `schema-flags.ts` walks it. */
+const fieldsOf = (schema: { readonly ast: { readonly _tag: string; readonly propertySignatures?: ReadonlyArray<{ readonly name: PropertyKey }> } }): ReadonlyArray<PropertyKey> =>
+  schema.ast._tag === "Objects" ? (schema.ast.propertySignatures ?? []).map((signature) => signature.name) : []
+
+/**
+ * Field names under which model prose has ridden a success value before, and may not again: each
+ * is a run-root file now (`build-N.md`, `dispute-N.md`, `pr-description-N.md`, `vision-blocked-N.md`)
+ * or was dropped because the commit is the artifact. A success carries the file's path, never the text.
+ */
+const MODEL_PROSE_FIELDS: ReadonlyArray<PropertyKey> = ["description", "summary", "note", "dispute", "reason", "blocking", "body"]
 
 const dispatch = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService, runRoot: string) =>
   Effect.runPromise(
@@ -81,9 +86,16 @@ const dispatch = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentSe
 describe("the ticket is never injected", () => {
   test("every registered node whose input carries ticketPath is dispatched here, or is named as non-dispatching", () => {
     const covered = new Set([...NODES.map(({ node }) => node.name), ...NON_DISPATCHING])
-    const carriers = commandNodes(registry).filter((node) => inputFields(node).includes("ticketPath")).map((node) => node.name)
+    const carriers = commandNodes(registry).filter((node) => fieldsOf(node.input).includes("ticketPath")).map((node) => node.name)
     expect(carriers.length).toBeGreaterThan(0)
     for (const name of carriers) expect(covered).toContain(name)
+  })
+
+  test("no registered node's success schema carries model prose by value under a name it once did", () => {
+    const offenders = commandNodes(registry).flatMap((node) =>
+      fieldsOf(node.success).filter((field) => MODEL_PROSE_FIELDS.includes(field)).map((field) => `${node.name}.${String(field)}`)
+    )
+    expect(offenders).toStrictEqual([])
   })
 
   for (const { node, input, shell } of NODES) {

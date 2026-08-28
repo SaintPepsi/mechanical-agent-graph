@@ -152,29 +152,30 @@ const checkout = Graph.construct<{
   })
 
 /**
- * The rail-sketch's `WriteBody`: `write-pr-body` describes the branch's own merge-base diff, then
- * `compose-pr-body` appends `Closes #n` and the run id. The compose step stays `runtime/pr-body.ts`'s
- * total helper rather than a node — a node needs a tagged error, and `prBody` has no failure mode
- * to name — so `.via`, not a box of its own. It reads the ticket and run id from `RunInfo`, never as
+ * The rail-sketch's `WriteBody`: `write-pr-body` describes the branch's own merge-base diff into a
+ * run-root file, then `compose-pr-body` reads it and writes the body with `Closes #n` and the run id
+ * as a second file. The compose step stays `runtime/pr-body.ts`'s helper rather than a node: its
+ * only failures are the file read and write, a `PlatformError` every `graph()` union already
+ * carries, so `.via`, not a box of its own. It reads the ticket and run id from `RunInfo`, never as
  * a parameter. write-pr-body writes no code, so it carries no agent.
  */
 const writeBody = Graph.construct<{ ticket: string; base: string; model: string }>("write-body")
   .thenKeep(
     writePrBody, (s) => ({ base: s.base, model: s.model }),
-    (written) => ({ description: written.description, sessions: written.sessions, costUsd: written.costUsd })
+    (written) => ({ descriptionPath: written.descriptionPath, sessions: written.sessions, costUsd: written.costUsd })
   )
-  .via("compose-pr-body", (s) => prBody({ description: s.description }).pipe(Effect.map((body) => ({ body }))))
+  .via("compose-pr-body", (s) => prBody({ descriptionPath: s.descriptionPath }).pipe(Effect.map((bodyPath) => ({ bodyPath }))))
   .finalise({
     description: "Write the PR description from the merge-base diff, then compose the tracker-closing body.",
     input: Schema.Struct({ ticket: Schema.String, base: Schema.String, model: Schema.String }),
     success: Schema.Struct({
-      body: Schema.String,
+      bodyPath: Schema.String,
       sessions: Schema.Array(Schema.String),
       costUsd: Schema.NullOr(Schema.Number)
     }),
     scope: (input) => ({ ticket: input.ticket, graph: "write-body", worktree: false }),
     seed: (input) => input,
-    out: (s) => ({ body: s.body, sessions: s.sessions, costUsd: s.costUsd })
+    out: (s) => ({ bodyPath: s.bodyPath, sessions: s.sessions, costUsd: s.costUsd })
   })
 
 /**
@@ -204,7 +205,7 @@ const publishTail = Graph.construct<{
     base: s.base,
     source: s.branch,
     title: `${s.ticket}: ${s.title}`,
-    body: s.body
+    bodyPath: s.bodyPath
   }))
   .when(
     (s) => s.path !== undefined,
