@@ -11,7 +11,7 @@ import { type ClaudeAgentService, claudeAgentLayer, type ClaudePrint, type Claud
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { compileRecon, RECON_PARAMS } from "mag/skills/recon"
+import { compileRecon } from "mag/skills/recon"
 import { removeDir, testRunInfo, withForeignRepo } from "mag/test/node-fixture"
 
 /** In-order scripted shell, `simplify/graph-node.test.ts`'s idiom. */
@@ -129,7 +129,7 @@ describe("discover", () => {
     expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
     expect(request.prompt).toContain("Read only.")
     expect(request.prompt).toContain(`docs/graph/${INPUT.ticket}/discover.md`)
-    expect(request.prompt).toContain(compileRecon(RECON_PARAMS))
+    expect(request.prompt).toContain(compileRecon())
     expect(request.prompt).not.toContain("vision")
     expect(request.prompt).not.toContain("design.md")
   })
@@ -336,29 +336,19 @@ describe("discover", () => {
       expect(failure.argv).toContain("git commit")
     }))
 
-  // The compiled standard opens with the learning question, reports the reuse map first, and
-  // carries the empty-search and size rules, a pure-function assertion, no dispatch.
-  test("the compiled standard opens with the learning question, then the reuse map, and carries the empty-search and size rules", () => {
-    const compiled = compileRecon(RECON_PARAMS)
-    expect(compiled.startsWith("Reframe the ticket as one learning question")).toBe(true)
-    expect(compiled).toContain("Report what exists; the design decides what changes.")
-    expect(compiled.indexOf("Reuse map")).toBeLessThan(compiled.indexOf("Relevant files"))
-    expect(compiled.indexOf("Relevant files")).toBeLessThan(compiled.indexOf("Constraints"))
-    expect(compiled.indexOf("Constraints")).toBeLessThan(compiled.indexOf("Open unknowns"))
-    expect(compiled).toContain("names the searches that came up empty")
-    expect(compiled).toContain("a path and one line per entry")
-    // The sections whose copied text made a 30 KB note are gone; their content is one line per file above.
-    expect(compiled).not.toContain("Types and data shapes")
-    expect(compiled).not.toContain("Integration points")
+  // The compiled standard is the maintainer's phase text: the learning question, then what
+  // exists and what's notable, a pure-function assertion, no dispatch.
+  test("the compiled standard is the learning-question phase, its load-bearing line verbatim", () => {
+    const compiled = compileRecon()
+    expect(compiled.startsWith("# Discover\n")).toBe(true)
+    expect(compiled).toContain("No problem-solving. Just learning.")
+    expect(compiled).toContain("Reframe the request as a learning question")
+    expect(compiled.indexOf("the learning question first")).toBeLessThan(compiled.indexOf("what's notable"))
   })
 
-  // The standard names no generated index, and every committed-policy git call names the note
-  // itself, never a bare directory.
-  test("the standard names no generated index, and every committed-policy git call names the note itself, never a bare directory", () =>
+  // Every committed-policy git call names the note itself, never a bare directory.
+  test("every committed-policy git call names the note itself, never a bare directory", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
-      const compiled = compileRecon(RECON_PARAMS)
-      expect(compiled).toContain("Read no generated index and write none")
-
       const agent = stubAgent({}, () => writeNote(repoRoot))
       const { calls, service } = commitsCleanly()
       await runWith(discover.run(INPUT), agent.service, service, { ...run, records: "committed" })

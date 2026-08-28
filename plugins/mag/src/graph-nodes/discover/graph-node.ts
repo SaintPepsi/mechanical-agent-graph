@@ -8,7 +8,7 @@ import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
-import { compileRecon, DISCOVER_DESTINATION, RECON_PARAMS } from "mag/skills/recon"
+import { compileRecon, DISCOVER_DESTINATION } from "mag/skills/recon"
 
 /**
  * What the agent must return: the note's own path, per `design`'s `DESIGN` precedent — the
@@ -31,7 +31,7 @@ const promptFor = (
     "Recon this repository for what this ticket touches. Read only.",
     `Write your findings to \`${notePath}\`. Change nothing else.`,
     "",
-    compileRecon(RECON_PARAMS)
+    compileRecon()
   ].join("\n")
 
 /**

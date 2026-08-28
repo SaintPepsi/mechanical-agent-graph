@@ -1,27 +1,6 @@
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
 
 /**
- * The recon standard's definition, as data, not as a `.md` template — `src/skills/CLAUDE.md`'s
- * pattern, the same shape as `subtraction.ts`: this standard has exactly one variant
- * (`RECON_PARAMS`). `compileRecon` is a pure renderer, `(params) => string`, no I/O; the `discover`
- * node compiles its own copy inside its own runtime, at dispatch, and splices the result into the
- * agent's prompt, and the installed `discover` skill (`installed.ts`) renders the same text under
- * an interactive opening, so the step and the skill cannot drift from each other.
- *
- * What matters for recon content discipline is the learning question, the findings and the
- * citation rules below: what a note must report and how it must cite its claims. Where the note
- * gets filed and how the pipeline sequences it are concerns for the calling node, not for this
- * standard.
- */
-
-/** One variant's decisions: the question a note answers, what it must report, and the rules it reports under. */
-export interface ReconParams {
-  readonly question: string
-  readonly findings: readonly string[]
-  readonly rules: readonly string[]
-}
-
-/**
  * Single home for the discover node's destination: the write instruction the node splices into the
  * prompt (`discover/graph-node.ts`'s `promptFor`) and the node's own path composer both read this,
  * so they cannot disagree — `write-and-confirm.ts`'s `DESIGN_DESTINATION` precedent. `TICKET_TOKEN` is
@@ -30,44 +9,35 @@ export interface ReconParams {
 export const DISCOVER_DESTINATION = `docs/graph/${TICKET_TOKEN}/discover.md`
 
 /**
- * The gate's only variant. The note answers one task-agnostic learning question, the maintainer's
- * original discover phase: learn how the thing works today, and report what exists. `findings` are
- * the note's sections in render order — reuse map first, so ordering is enforced by data rather
- * than by an instruction telling the session to sort (Data Drives Behavior). Each entry is a path
- * and one line; the size rule below is what keeps a note readable whole by the design session.
+ * The maintainer's discover phase, verbatim: one task-agnostic learning question, answered by
+ * exploring, reported as what exists and what's notable. The single source for the step's prompt
+ * (`discover/graph-node.ts`) and the installed `discover` skill (`installed.ts`), so the two cannot
+ * drift; the step prefixes the ticket reference and its write line, the skill its interactive
+ * destination.
  */
-export const RECON_PARAMS: ReconParams = {
-  question:
-    "Reframe the ticket as one learning question of the form \"How does X currently work today?\" and write it as the note's first line. Answer it by reading the code. Report what exists; the design decides what changes.",
-  findings: [
-    "Reuse map: which existing modules, components, or services already cover parts of this ticket, cited by name and path, versus what is genuinely new.",
-    "Relevant files: where the behaviour this ticket touches lives today, one line per file: entry points, the modules it changes, where similar behaviour already sits, and the consumers a change would ripple to, each line carrying the house micro-convention a change there will echo (log-tag style, error-message shape, comment idiom) where it matters.",
-    "Constraints: existing contracts, validation rules, or behaviour that must not break.",
-    "Open unknowns: questions the code alone could not resolve."
-  ],
-  rules: [
-    "Derive search terms from the ticket's own nouns and their case variants (kebab/camel/snake/Pascal) and synonyms, never from export syntax.",
-    "Cite every claim with a repo-relative path or path:line, and report only what you verified in the code, never what you assume is there.",
-    "Every \"genuinely new\" claim in the reuse map names the searches that came up empty for it, and where they were run.",
-    "Read no generated index and write none: the map is computed fresh, per ticket, by search.",
-    "A contradiction between two documents is an open unknown quoting both, never silently resolved by picking one.",
-    "Keep the note to what the next reader needs to find each file: a path and one line per entry; the reader opens the file for the rest.",
-    "The note is your only write."
-  ]
-}
+export const DISCOVER_STANDARD = `# Discover
 
-/**
- * Assembles the standard: the question, then two labelled lists — the same shape as
- * `compileSubtraction` under one opening line. Terse deliberately: prompts are model-authored and
- * model-specific, only terse instructions survive a model change.
- */
-export const compileRecon = (params: ReconParams): string =>
-  [
-    params.question,
-    "",
-    "Report:",
-    ...params.findings.map((finding) => `- ${finding}`),
-    "",
-    "Rules:",
-    ...params.rules.map((rule) => `- ${rule}`)
-  ].join("\n")
+Answers the question: "What do I need to understand about the codebase before I can reason about this task?"
+
+Extract a task-agnostic learning question from the request, then explore the codebase to answer it. No problem-solving. Just learning.
+
+## Learning question extraction
+
+Reframe the request as a pure learning question:
+
+| Request | Learning question |
+|---|---|
+| "Fix a bug in auth code" | How does authentication work e2e? |
+| "Unexpected behaviour when adding user" | How does the add-user flow currently work? |
+| "Add ability to remove phone numbers" | How do users manage their details? |
+| "CSV diff doesn't show validation error" | How does the CSV diff work? |
+| "Validation error not displaying" | How do errors show in the UI? |
+
+## Execution
+
+1. Reframe the request as a learning question ("How does X currently work?")
+2. Explore: read files, trace paths, note patterns
+3. Write findings to the note: the learning question first, then what exists (files, patterns, conventions, what this task could reuse, each cited path:line) and what's notable (gaps, constraints, unknowns)`
+
+/** The step's copy of the standard, compiled inside the node's own runtime at dispatch. */
+export const compileRecon = (): string => DISCOVER_STANDARD

@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import { composeDesignPrompt } from "mag/skills/design/compose"
 import { INSTALLED_DESIGN } from "mag/skills/design/variants"
-import { compileRecon, RECON_PARAMS } from "mag/skills/recon"
+import { DISCOVER_STANDARD } from "mag/skills/recon"
 
 /**
  * The single home for "where do this checkout's installed skills live, and which variants are
@@ -38,17 +38,14 @@ export const INSTALLED_SKILLS: readonly InstalledSkill[] = [
   {
     name: "discover",
     description:
-      "Recon what a request touches in the repository you are in, as a cited note: one learning question answered by reading the code, a reuse map, relevant files, constraints and open unknowns. USE WHEN asked to discover, recon, or map what already exists for a feature, bug or refactor before designing or planning it, or before building in an unfamiliar area.",
-    // The step's own standard (`discover/graph-node.ts` compiles the same `RECON_PARAMS`) under an
-    // interactive opening: the request stands in for the ticket, and the destination is the user's.
+      "Answer one task-agnostic learning question about the codebase before reasoning about a task: reframe the request as \"How does X currently work?\", explore, and write what exists and what's notable to a cited note. USE WHEN asked to discover, recon, or map what already exists for a feature, bug or refactor before designing or planning it, or before building in an unfamiliar area.",
+    // The step's own standard (`discover/graph-node.ts` splices the same text) plus the interactive
+    // destination the step states through its own write line.
     body: () =>
       [
-        "# Discover",
+        DISCOVER_STANDARD,
         "",
-        "Take the request you were given as the ticket. Recon this repository for what it touches. Read only.",
-        "Write your findings to the path the request names, else `docs/graph/discover.md`. Change nothing else.",
-        "",
-        compileRecon(RECON_PARAMS)
+        "Write the note to the path the request names, else `docs/graph/discover.md`. Read only; the note is your only write."
       ].join("\n")
   }
 ]

@@ -1,26 +1,30 @@
 ---
 name: discover
-description: Recon what a request touches in the repository you are in, as a cited note: one learning question answered by reading the code, a reuse map, relevant files, constraints and open unknowns. USE WHEN asked to discover, recon, or map what already exists for a feature, bug or refactor before designing or planning it, or before building in an unfamiliar area.
+description: Answer one task-agnostic learning question about the codebase before reasoning about a task: reframe the request as "How does X currently work?", explore, and write what exists and what's notable to a cited note. USE WHEN asked to discover, recon, or map what already exists for a feature, bug or refactor before designing or planning it, or before building in an unfamiliar area.
 ---
 
 # Discover
 
-Take the request you were given as the ticket. Recon this repository for what it touches. Read only.
-Write your findings to the path the request names, else `docs/graph/discover.md`. Change nothing else.
+Answers the question: "What do I need to understand about the codebase before I can reason about this task?"
 
-Reframe the ticket as one learning question of the form "How does X currently work today?" and write it as the note's first line. Answer it by reading the code. Report what exists; the design decides what changes.
+Extract a task-agnostic learning question from the request, then explore the codebase to answer it. No problem-solving. Just learning.
 
-Report:
-- Reuse map: which existing modules, components, or services already cover parts of this ticket, cited by name and path, versus what is genuinely new.
-- Relevant files: where the behaviour this ticket touches lives today, one line per file: entry points, the modules it changes, where similar behaviour already sits, and the consumers a change would ripple to, each line carrying the house micro-convention a change there will echo (log-tag style, error-message shape, comment idiom) where it matters.
-- Constraints: existing contracts, validation rules, or behaviour that must not break.
-- Open unknowns: questions the code alone could not resolve.
+## Learning question extraction
 
-Rules:
-- Derive search terms from the ticket's own nouns and their case variants (kebab/camel/snake/Pascal) and synonyms, never from export syntax.
-- Cite every claim with a repo-relative path or path:line, and report only what you verified in the code, never what you assume is there.
-- Every "genuinely new" claim in the reuse map names the searches that came up empty for it, and where they were run.
-- Read no generated index and write none: the map is computed fresh, per ticket, by search.
-- A contradiction between two documents is an open unknown quoting both, never silently resolved by picking one.
-- Keep the note to what the next reader needs to find each file: a path and one line per entry; the reader opens the file for the rest.
-- The note is your only write.
+Reframe the request as a pure learning question:
+
+| Request | Learning question |
+|---|---|
+| "Fix a bug in auth code" | How does authentication work e2e? |
+| "Unexpected behaviour when adding user" | How does the add-user flow currently work? |
+| "Add ability to remove phone numbers" | How do users manage their details? |
+| "CSV diff doesn't show validation error" | How does the CSV diff work? |
+| "Validation error not displaying" | How do errors show in the UI? |
+
+## Execution
+
+1. Reframe the request as a learning question ("How does X currently work?")
+2. Explore: read files, trace paths, note patterns
+3. Write findings to the note: the learning question first, then what exists (files, patterns, conventions, what this task could reuse, each cited path:line) and what's notable (gaps, constraints, unknowns)
+
+Write the note to the path the request names, else `docs/graph/discover.md`. Read only; the note is your only write.
