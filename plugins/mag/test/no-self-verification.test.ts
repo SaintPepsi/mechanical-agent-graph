@@ -8,10 +8,10 @@ import { inputExamples as notationInputs } from "mag/graph-nodes/envision-notati
 import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
 import { inputExamples as simplifyInputs } from "mag/graph-nodes/simplify/examples"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
-import { type ClaudeAgentService, claudeAgentLayer, type ClaudePrint, type ClaudeReply } from "mag/runtime/claude/service"
+import { type ClaudeAgentService, claudeAgentLayer } from "mag/runtime/claude/service"
 import { RunInfo } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { testRunInfo } from "mag/test/node-fixture"
+import { recordingAgent, scriptedShell, testRunInfo } from "mag/test/node-fixture"
 
 /**
  * No compiled prompt, and no agent definition, may instruct a session to run the
@@ -27,37 +27,7 @@ const NAMES_THE_SUITE = /verification suite|bun run (typecheck|test)|red suite/i
 /** Resolved from this file's location, `skills/installed.ts`'s `SKILLS_ROOT` idiom, never `process.cwd()`. */
 const AGENTS_DIR = join(import.meta.dirname, "..", "..", "..", ".claude", "agents")
 
-/** In-order scripted shell, `build/graph-node.test.ts`'s idiom: enough replies for one clean, committing pass. */
-const scriptedShell = (replies: readonly ShellResult[]): ShellService => {
-  let call = 0
-  return {
-    run: (argv) => {
-      const reply = replies[call++]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${call}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-}
-
 const out = (stdout: string): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
-
-/** Records every prompt dispatched, whatever the node asks for, `build/graph-node.test.ts`'s stub, generalised to any verdict shape. */
-const recordingAgent = () => {
-  const prompts: string[] = []
-  const service: ClaudeAgentService = {
-    prompt: <A>(request: ClaudePrint<A>) => {
-      prompts.push(request.prompt)
-      return Effect.succeed({
-        verdict: { summary: "did the work", note: "did the work", visionPath: "ignored" } as A,
-        result: {},
-        sessions: ["stub-session"],
-        costUsd: 0.1,
-        attempts: 1
-      } as ClaudeReply<A>)
-    }
-  }
-  return { prompts, service }
-}
 
 /**
  * Dispatches one node far enough to record its prompt. Every failure is swallowed: a stub that
@@ -83,7 +53,7 @@ describe("no self-verification", () => {
   test("build's prompt names no suite command, across every example row", async () => {
     const agent = recordingAgent()
     for (const input of buildInputs) {
-      const shell = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")])
+      const shell = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")]).service
       await dispatch(build.run(input), agent.service, shell)
     }
 
@@ -94,7 +64,7 @@ describe("no self-verification", () => {
   test("simplify's prompt names no suite command", async () => {
     const agent = recordingAgent()
     const input = simplifyInputs[0]!
-    const shell = scriptedShell([out(`${input.headSha}\n`), out("x.ts\n"), out(""), out(""), out(`${input.headSha}\n`)])
+    const shell = scriptedShell([out(`${input.headSha}\n`), out("x.ts\n"), out(""), out(""), out(`${input.headSha}\n`)]).service
     await dispatch(simplify.run(input), agent.service, shell)
 
     expect(agent.prompts).toHaveLength(1)
@@ -106,7 +76,7 @@ describe("no self-verification", () => {
   // prompt is asserted here mechanically rather than trusted by inspection.
   test("envision-notation's prompt names no suite command", async () => {
     const agent = recordingAgent()
-    await dispatch(envisionNotation.run(notationInputs[0]!), agent.service, scriptedShell([]))
+    await dispatch(envisionNotation.run(notationInputs[0]!), agent.service, scriptedShell([]).service)
 
     expect(agent.prompts).toHaveLength(1)
     expect(agent.prompts[0]!).not.toMatch(NAMES_THE_SUITE)

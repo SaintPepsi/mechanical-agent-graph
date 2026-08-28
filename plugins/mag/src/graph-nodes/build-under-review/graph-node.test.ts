@@ -25,7 +25,7 @@ const DIFF = "diff --git a/x.ts b/x.ts\n-old\n+new\n"
 const INPUT = {
   ticket: "GH-98",
   title: "Fix the NUL-byte crash",
-  body: "NUL bytes abort the run.",
+  ticketPath: "/repo/.claude/graph/run-1/ticket.md",
   branch: "feat/GH-98-fix-the-nul-byte-crash",
   command: SUITE,
   base: "main",
@@ -163,7 +163,7 @@ const loopAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,
@@ -247,7 +247,7 @@ const disputeAgent = (secondReviewBlocks: boolean) => {
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,
@@ -324,7 +324,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
       if (isSimplifyPrompt(request as ClaudePrint<unknown>)) {
         simplifies += 1
         return Effect.succeed({
-          verdict: { note: "collapsed a duplicate helper" } as A,
+          verdict: {} as A,
           result: {},
           sessions: [`session-simplify-${simplifies}`],
           costUsd: 0.05,
@@ -656,7 +656,7 @@ describe("build-under-review", () => {
     // would re-derive intent instead of continuing the work that's already in progress.
     expect(buildRequests[1]!.resume).toBe("session-build-1")
     expect(buildRequests[1]!.prompt).toContain(join(runInfo.runRoot, "verification-1.txt"))
-    expect(buildRequests[1]!.prompt).not.toContain(INPUT.body)
+    expect(buildRequests[1]!.prompt).not.toContain(INPUT.ticketPath)
 
     // The repair's own commit rides the composite's own `commits` total,
     // 1 from the original pass, 1 from the repair.

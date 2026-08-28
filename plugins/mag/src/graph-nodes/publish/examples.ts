@@ -6,7 +6,7 @@ export const inputExamples = [
     slug: "SaintPepsi/mechanical-agent-graph",
     base: "main",
     title: "GH-110: push-branch and create-pr graph nodes",
-    body: "Fixes the NUL-byte crash at the artifact writer.\n\nCloses #110\n\nrun: 019bd0f4-3c21-7f1a-9c0e-2f0f2c1a4b77"
+    bodyPath: "/home/dev/repo/.claude/graph/GH-110/run-1/pr-body-1.md"
   }
 ]
 

@@ -7,21 +7,7 @@ import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { platform } from "mag/runtime/platform"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { testJournalLayer, testRunInfo } from "mag/test/node-fixture"
-
-/** Like push-branch's and create-pr's own `scriptedShell`: one canned reply per call, in order, recording argv. */
-const scriptedShell = (replies: readonly ShellResult[]) => {
-  const calls: Array<string[]> = []
-  const service: ShellService = {
-    run: (argv) => {
-      calls.push([...argv])
-      const reply = replies[calls.length - 1]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-  return { calls, service }
-}
+import { scriptedShell, testJournalLayer, testRunInfo } from "mag/test/node-fixture"
 
 const ok = (stdout = ""): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
 const exit = (exitCode: number, stderr = ""): ShellResult => ({ exitCode, stdout: "", stderr })
@@ -35,7 +21,7 @@ const INPUT = {
   slug: "SaintPepsi/mechanical-agent-graph",
   base: "main",
   title: "GH-168: publish is a GraphNode composed of push-branch and create-pr",
-  body: "Fixes the NUL-byte crash at the artifact writer.\n\nCloses #168\n\nrun: run-1"
+  bodyPath: "/repo/.claude/graph/run-1/pr-body-1.md"
 }
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService, runInfo: RunInfoService = RUN) =>
@@ -91,7 +77,7 @@ describe("publish", () => {
     expect(create![create!.indexOf("--title") + 1]).toBe(INPUT.title)
   })
 
-  test("body arrives as a plain input field and reaches `gh pr create --body` verbatim, formatted by nothing here", () => {
+  test("bodyPath arrives as a plain input field and reaches `gh pr create --body-file` verbatim, read by nothing here", () => {
     const { calls, service } = scriptedShell([
       ok(),
       ok("1\n"),
@@ -103,7 +89,7 @@ describe("publish", () => {
 
     const create = calls.find((call) => call.includes("create"))
     expect(create).toBeDefined()
-    expect(create![create!.indexOf("--body") + 1]).toBe(INPUT.body)
+    expect(create![create!.indexOf("--body-file") + 1]).toBe(INPUT.bodyPath)
   })
 
   test("a rejected push short-circuits: PushRejected, and `gh` is never called", () => {

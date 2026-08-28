@@ -12,7 +12,7 @@ import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellService, shellLayer } from "mag/runtime/shell"
 import { removeDir, testRunInfo } from "mag/test/node-fixture"
 
-const INPUT = { ticket: "GH-288", title: "Envision and build the design graph", body: "## Executive Summary\n\nTwo notations." }
+const INPUT = { ticket: "GH-288", title: "Envision and build the design graph", ticketPath: "/run/ticket.md" }
 
 /** `git diff --cached --quiet` is the only argv this stub inspects; every other call it lets
  * through — order-independent, unlike `envision-notation`'s own `scriptedShell`, because the two

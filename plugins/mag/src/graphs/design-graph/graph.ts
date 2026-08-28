@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Effect, FileSystem, Schema } from "effect"
 import { assembleBrainstormPrompt } from "mag/graph-nodes/assemble-brainstorm-prompt/graph-node"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
@@ -6,8 +6,11 @@ import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
+import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
+import { DesignGraphTicketUnreadable } from "mag/graphs/design-graph/errors"
 import { graph } from "mag/runtime/graph"
+import { platform } from "mag/runtime/platform"
 
 // `graphs/develop-graph/graph.ts`'s own records-policy check, copied rather than shared: this graph and that one
 // each own their own input schema, and a check hanging off a `Schema.String` is what lets
@@ -27,12 +30,12 @@ const probeVerdicts = (text: string) =>
   Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({})], { concurrency: "unbounded" })
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
- * assignment — spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
+ * assignment, spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
  * cannot drift from each other. */
-const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly body: string }) => ({
+const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }) => ({
   ticket: input.ticket,
   title: input.title,
-  body: input.body
+  ticketPath: input.ticketPath
 })
 const agentFields = (input: { readonly agent?: string; readonly model?: string }) => ({
   ...(input.agent === undefined ? {} : { agent: input.agent }),
@@ -40,21 +43,28 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 })
 
 /**
- * The spine is **Envision ∥ Discover → Brainstorm**. The three probes run first and gate what
- * `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side by side,
- * and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even though nothing
- * upstream feeds it: it has no dependency on the probes or the visions, so waiting for them first
- * would only cost wall-clock for no reason. `brainstorm` is the only node that reads both halves.
+ * The spine is **Envision ∥ Discover → Recycle-map → Brainstorm**. The three probes run first and
+ * gate what `envisionVisions` dispatches; envisioning, discovery and prompt assembly then run side
+ * by side, and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all` even
+ * though nothing upstream feeds it: it has no dependency on the probes or the visions, so waiting
+ * for them first would only cost wall-clock for no reason. `recycleMap` follows discovery alone,
+ * since it reads the discover note; `brainstorm` is the only node that reads every half.
  */
 const pipeline = (input: {
   readonly ticket: string
   readonly title: string
-  readonly body: string
+  readonly ticketPath: string
   readonly agent?: string
   readonly model?: string
 }) =>
   Effect.gen(function* () {
-    const verdicts = yield* probeVerdicts(`${input.title}\n${input.body}`)
+    // The probes match manifests against the ticket's own words, read here from the ticket file:
+    // a file is a trust boundary, tagged the way `require-acs` tags the same read.
+    const fs = yield* FileSystem.FileSystem
+    const text = yield* fs.readFileString(input.ticketPath).pipe(
+      Effect.mapError((error) => new DesignGraphTicketUnreadable({ ticket: input.ticket, path: input.ticketPath, detail: String(error) }))
+    )
+    const verdicts = yield* probeVerdicts(text)
     const resolved = yield* resolveNotations.run({ verdicts })
 
     const [visions, discovered, assembled] = yield* Effect.all(
@@ -66,11 +76,14 @@ const pipeline = (input: {
       { concurrency: "unbounded" }
     )
 
+    const recycled = yield* recycleMap.run({ ...ticketFields(input), discoverPath: discovered.discoverPath, ...agentFields(input) })
+
     const designed = yield* brainstorm.run({
       ...ticketFields(input),
       prompt: assembled.prompt,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
+      recycleMapPath: recycled.recycleMapPath,
       ...agentFields(input)
     })
 
@@ -79,11 +92,12 @@ const pipeline = (input: {
       headSha: designed.headSha,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
-      sessions: [...visions.sessions, ...discovered.sessions, ...designed.sessions],
+      recycleMapPath: recycled.recycleMapPath,
+      sessions: [...visions.sessions, ...discovered.sessions, ...recycled.sessions, ...designed.sessions],
       // One unpriced session makes the run's figure unpriced, never silently zero — `graphs/develop-graph/graph.ts`'s own reduction.
-      costUsd: [visions.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
+      costUsd: [visions.costUsd, discovered.costUsd, recycled.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
     }
-  })
+  }).pipe(Effect.provide(platform))
 
 /**
  * design-graph: one GraphNode for the design lane, in the slot `develop-graph`'s host graph
@@ -101,11 +115,11 @@ const pipeline = (input: {
  */
 export const designGraph = graph({
   name: "design-graph",
-  description: "Envision every matched stack's notation, discover what exists, and brainstorm them into a design.",
+  description: "Envision every matched stack's notation, discover what exists, map what to reuse, and brainstorm them into a design.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent for every session this graph dispatches, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model` for every session this graph dispatches, same convention as `agent`. */
@@ -119,6 +133,7 @@ export const designGraph = graph({
     headSha: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    recycleMapPath: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)
   }),

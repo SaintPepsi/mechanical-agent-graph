@@ -2,11 +2,13 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Effect, FileSystem, type Option, Schema } from "effect"
+import type { ClaudeAgentService, ClaudePrint, ClaudeReply } from "mag/runtime/claude/service"
 import { execute, make } from "mag/runtime/graph-node.definition"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { journalLayer } from "mag/runtime/journal/service"
 import { platform } from "mag/runtime/platform"
 import type { RunInfoService } from "mag/runtime/run-info"
+import type { ShellResult, ShellService } from "mag/runtime/shell"
 
 /** One node's on-disk shape for a fixture: a name plus verbatim file contents. */
 export interface NodeSpec {
@@ -36,6 +38,69 @@ export const removeDir = (path: string): Promise<void> => {
       yield* fs.remove(path, { recursive: true })
     }).pipe(Effect.provide(platform))
   )
+}
+
+/** A real, disposable run root for a node whose dispatch writes an artifact into it. `prefix` names the temp dir after the node under test. */
+export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string) => Promise<T>): Promise<T> => {
+  const runRoot = mkdtempSync(join(tmpdir(), `${prefix}-`))
+  try {
+    return await fn(runRoot)
+  } finally {
+    await removeDir(runRoot)
+  }
+}
+
+/**
+ * A disposable checkout plus a disposable run root for a record-writing node under the home-run
+ * policy (`recordsRoot === workRoot`): every success path copies into `runRoot` for real
+ * (`records.ts`'s `record`). `prefix` names the temp dir after the node under test.
+ */
+export const withRecordRepo = async <T>(
+  prefix: string,
+  fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>
+): Promise<T> => {
+  const base = mkdtempSync(join(tmpdir(), `${prefix}-`))
+  const repoRoot = join(base, "repo")
+  const runRoot = join(base, "run")
+  mkdirSync(repoRoot, { recursive: true })
+  mkdirSync(runRoot, { recursive: true })
+  try {
+    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
+  } finally {
+    await removeDir(base)
+  }
+}
+
+/** In-order scripted shell: one canned reply per call, recording every argv; an unscripted call throws. */
+export const scriptedShell = (replies: readonly ShellResult[]) => {
+  const calls: string[][] = []
+  const service: ShellService = {
+    run: (argv) => {
+      calls.push([...argv])
+      const reply = replies[calls.length - 1]
+      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
+      return Effect.succeed(reply)
+    }
+  }
+  return { calls, service }
+}
+
+/** Records every prompt dispatched, whatever the node asks for, answering one canned reply generalised to any verdict shape. */
+export const recordingAgent = () => {
+  const prompts: string[] = []
+  const service: ClaudeAgentService = {
+    prompt: <A>(request: ClaudePrint<A>) => {
+      prompts.push(request.prompt)
+      return Effect.succeed({
+        verdict: { summary: "did the work", visionPath: "ignored", blocking: [] } as A,
+        result: {},
+        sessions: ["stub-session"],
+        costUsd: 0.1,
+        attempts: 1
+      } as ClaudeReply<A>)
+    }
+  }
+  return { prompts, service }
 }
 
 /** The plugin's root (`plugins/mag`), derived from this module's own location, never `process.cwd()`. */

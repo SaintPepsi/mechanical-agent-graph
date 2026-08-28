@@ -13,7 +13,7 @@ type NotationFailure = Effect.Error<ReturnType<typeof envisionNotation.run>>
 const dispatchOne = (input: {
   readonly ticket: string
   readonly title: string
-  readonly body: string
+  readonly ticketPath: string
   readonly agent?: string
   readonly model?: string
 }) =>
@@ -25,7 +25,7 @@ const dispatchOne = (input: {
       notation,
       ticket: input.ticket,
       title: input.title,
-      body: input.body,
+      ticketPath: input.ticketPath,
       ...(input.agent === undefined ? {} : { agent: input.agent }),
       ...(input.model === undefined ? {} : { model: input.model })
     })
@@ -75,7 +75,7 @@ export const envisionVisions = make({
     notations: Schema.Array(Schema.String),
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent to run every route's session as, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model` for every route's dispatch, same convention as `agent`. */

@@ -1,5 +1,10 @@
 import { Effect, FileSystem, Schema } from "effect"
-import { PrBodyDiffWriteFailed, PrBodyGitFailed, PrBodyRunRootMissing } from "mag/graph-nodes/write-pr-body/errors"
+import {
+  PrBodyDescriptionWriteFailed,
+  PrBodyDiffWriteFailed,
+  PrBodyGitFailed,
+  PrBodyRunRootMissing
+} from "mag/graph-nodes/write-pr-body/errors"
 import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
 import { verdictSchema } from "mag/runtime/claude/verdict-schema"
@@ -80,7 +85,8 @@ export const writePrBody = make({
     model: Schema.optional(Schema.String)
   }),
   success: Schema.Struct({
-    description: Schema.String,
+    /** The description as a run-root artifact, `pr-description-N.md`: the composer reads it from here, the journal records the path. */
+    descriptionPath: Schema.String,
     /** The tree this description is about — the checkout's own `HEAD`, read by this node, not declared by a caller. */
     headSha: Schema.String,
     sessions: Schema.Array(Schema.String),
@@ -135,6 +141,12 @@ export const writePrBody = make({
         ...(input.model === undefined ? {} : { model: input.model })
       })
 
-      return { description: reply.verdict.description, headSha, sessions: reply.sessions, costUsd: reply.costUsd }
+      const descriptionPath = yield* writeArtifact(fs, runInfo.runRoot, "pr-description", reply.verdict.description).pipe(
+        Effect.catch((error) =>
+          Effect.fail(new PrBodyDescriptionWriteFailed({ runRoot: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
+        )
+      )
+
+      return { descriptionPath, headSha, sessions: reply.sessions, costUsd: reply.costUsd }
     }).pipe(Effect.provide(platform))
 })

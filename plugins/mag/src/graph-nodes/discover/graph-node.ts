@@ -6,8 +6,9 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
-import { compileRecon, DISCOVER_DESTINATION, RECON_PARAMS } from "mag/skills/recon"
+import { compileRecon, DISCOVER_DESTINATION } from "mag/skills/recon"
 
 /**
  * What the agent must return: the note's own path, per `design`'s `DESIGN` precedent — the
@@ -21,18 +22,16 @@ const VERDICT = verdictSchema(Schema.Struct({ discoverPath: Schema.String }))
  * carries neither, so that parallelism is a property of the schema, not a promise kept here.
  */
 const promptFor = (
-  input: { readonly ticket: string; readonly title: string; readonly body: string },
+  input: { readonly ticket: string; readonly title: string; readonly ticketPath: string },
   notePath: string
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
-    "",
-    input.body,
+    ...ticketReference(input),
     "",
     "Recon this repository for what this ticket touches. Read only.",
     `Write your findings to \`${notePath}\`. Change nothing else.`,
     "",
-    compileRecon(RECON_PARAMS)
+    compileRecon()
   ].join("\n")
 
 /**
@@ -62,7 +61,7 @@ export const discover = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent to run the session as, same convention as `build`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */

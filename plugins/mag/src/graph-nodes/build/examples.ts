@@ -2,13 +2,13 @@ export const inputExamples = [
   {
     ticket: "GH-98",
     title: "NUL bytes in a ticket body abort the run",
-    body: "## Executive Summary\n\nA NUL byte reaching the artifact writer kills the run.",
+    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte"
   },
   {
     ticket: "GH-98",
     title: "NUL bytes in a ticket body abort the run",
-    body: "## Executive Summary\n\nA NUL byte reaching the artifact writer kills the run.",
+    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
     addendum: "Address every reviewer finding below, then commit:\n- the fix misses the second NUL at line 105",
     agent: "effect-expert",
@@ -19,17 +19,17 @@ export const inputExamples = [
     // `addendum` alongside it.
     ticket: "GH-98",
     title: "NUL bytes in a ticket body abort the run",
-    body: "## Executive Summary\n\nA NUL byte reaching the artifact writer kills the run.",
+    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
     findingsPath: "/home/dev/repo/.claude/graph/GH-98/run-1/review-diff-1.md"
   },
   {
-    // A resumed repair, dispatched by the loop against a red suite's own report. The ticket triple
-    // and branch are here only because the schema keeps them required; the resumed prompt drops
-    // them, the session it resumes already holding them.
+    // A resumed repair, dispatched by the loop against a red suite's own report. The ticket
+    // reference and branch are here only because the schema keeps them required; the resumed
+    // prompt drops them, the session it resumes already holding them.
     ticket: "GH-98",
     title: "NUL bytes in a ticket body abort the run",
-    body: "## Executive Summary\n\nA NUL byte reaching the artifact writer kills the run.",
+    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
     resume: "a1b2c3",
     addendum: "Verification failed on this pass's head. Read the report at\n/home/dev/repo/.claude/graph/GH-98/run-1/verification-1.txt and fix what it names."

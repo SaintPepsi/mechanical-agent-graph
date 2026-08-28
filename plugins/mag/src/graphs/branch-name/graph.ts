@@ -19,14 +19,14 @@ const MAINTAINER = "SaintPepsi"
  *    in-process composition already has typed values, and re-decoding what the type system proved
  *    is ceremony paid per node per run.
  * 2. **The transform between the nodes is visible, in the graph file, on purpose.** The two schemas
- *    nearly line up: `fetch-ticket` yields `{ ticket, title, body }` and `format-branch-name` wants
- *    `{ ticket, title, labels? }`. `body` is dropped and `labels` has no producer, so the pipe is
- *    not straight, and the seam shows where a node is asking for something no node makes.
+ *    nearly line up: `fetch-ticket` yields `{ ticket, title, ticketPath }` and `format-branch-name`
+ *    wants `{ ticket, title, labels? }`. `ticketPath` is dropped and `labels` has no producer, so the
+ *    pipe is not straight, and the seam shows where a node is asking for something no node makes.
  * 3. **A graph wears the GraphNode shape.** Node, phase and graph are the same shape at every level,
  *    which is also what lets the existing registry run this with no graph-runner subsystem invented
  *    for it.
  *
- * Labels are the honest gap. `fetch-ticket`'s success shape carries title and body only, so
+ * Labels are the honest gap. `fetch-ticket`'s success shape carries title and ticket path only, so
  * `branchType` never sees a label and every branch this graph names comes out `feat/`.
  * Closing it needs a tracker verb that does not exist yet, and inventing one here would be building
  * ahead of a graph that has asked for it.
@@ -35,7 +35,7 @@ export const branchName = make({
   name: "branch-name",
   description: "Fetch a ticket and compute the branch name it should use.",
   input: Schema.Struct({ ticket: Schema.String }),
-  // `body` is fetched and deliberately not carried: nothing downstream of here consumes it yet.
+  // `ticketPath` is minted and deliberately not carried: nothing downstream of here consumes it yet.
   success: Schema.Struct({ ticket: Schema.String, title: Schema.String, branch: Schema.String }),
   run: (input) =>
     Effect.gen(function* () {

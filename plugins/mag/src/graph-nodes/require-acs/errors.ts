@@ -1,5 +1,12 @@
 import { Data } from "effect"
 
+/** The ticket file at `ticketPath` could not be read. A file is a trust boundary: it is read here, never assumed present. */
+export class TicketUnreadable extends Data.TaggedError("REQUIRE_ACS_TICKET_UNREADABLE")<{
+  readonly ticket: string
+  readonly path: string
+  readonly detail: string
+}> {}
+
 /**
  * The ticket's body carries no criterion line inside an acceptance-criteria section. Terminal:
  * nothing catches this tag, since a caller that could absorb it would be a caller that runs a ticket
