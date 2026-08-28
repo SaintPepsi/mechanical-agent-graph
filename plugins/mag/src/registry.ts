@@ -10,11 +10,8 @@ import { conformance } from "mag/graph-nodes/conformance/graph-node"
 import { create } from "mag/graph-nodes/create/graph-node"
 import { createGraphFolder } from "mag/graph-nodes/create-graph-folder/graph-node"
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
-import { designRulings } from "mag/graph-nodes/design-rulings/graph-node"
 import { deriveVision } from "mag/graph-nodes/derive-vision/graph-node"
 import { design } from "mag/graph-nodes/design/graph-node"
-import { plan } from "mag/graph-nodes/plan/graph-node"
-import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { detectConflicts } from "mag/graph-nodes/detect-conflicts/graph-node"
 import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
 import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
@@ -27,6 +24,7 @@ import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import { fixConflicts } from "mag/graph-nodes/fix-conflicts/graph-node"
 import { gatherReviews } from "mag/graph-nodes/gather-reviews/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
+import { plan } from "mag/graph-nodes/plan/graph-node"
 import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
 import { publish } from "mag/graph-nodes/publish/graph-node"
 import { pushBranch } from "mag/graph-nodes/push-branch/graph-node"
@@ -36,6 +34,7 @@ import { resolveBase } from "mag/graph-nodes/resolve-base/graph-node"
 import { resolveConflicts } from "mag/graph-nodes/resolve-conflicts/graph-node"
 import { resumeRun } from "mag/graph-nodes/resume-run/graph-node"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
+import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
 import { stageShippedGraph } from "mag/graph-nodes/stage-shipped-graph/graph-node"
 import { verification } from "mag/graph-nodes/verification/graph-node"
@@ -104,7 +103,6 @@ export const registry: Registry = [
   { kind: "command", node: analyseReviews },
   { kind: "command", node: resumeRun },
   { kind: "command", node: commentTicket },
-  { kind: "command", node: designRulings },
   { kind: "command", node: reviewPatternGraph },
   // Both children register on their own beside their graph, design-graph's own precedent.
   { kind: "command", node: writeTicket },

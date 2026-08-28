@@ -14,7 +14,7 @@ export class DesignMissing extends Data.TaggedError("DESIGN_MISSING")<{
 /**
  * A failed git read, nothing spent: the first pass's `git ls-files` for the rulings files,
  * `commitPath`'s git-failure constructor (`git add` failed), and the final `git rev-parse HEAD`
- * that stamps `headSha` — today's `design/errors.ts`'s `DesignGitFailed` shape, reused at every call
+ * that stamps `headSha`, today's `design/errors.ts`'s `DesignGitFailed` shape, reused at every call
  * site. Under `records: "committed"` that `rev-parse` reads the HEAD the commit just made; under
  * the default `run-root`, nothing here commits, so it reads the tree's HEAD as it already stood.
  * `commitPath`'s own `onGitFailure` constructor needs the identical three-field shape for the

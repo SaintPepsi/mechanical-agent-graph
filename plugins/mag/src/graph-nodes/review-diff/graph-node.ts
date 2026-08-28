@@ -9,12 +9,13 @@ import {
   ReviewHeadMoved,
   ReviewRunRootMissing
 } from "mag/graph-nodes/review-diff/errors"
-import { governingPrinciples, nulPaths, PRINCIPLES_PATHSPEC } from "mag/graph-nodes/review-diff/principles"
+import { governingPrinciples } from "mag/graph-nodes/review-diff/principles"
 import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
 import { make } from "mag/runtime/graph-node.definition"
 import { gitRead, gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
+import { nulPaths, PRINCIPLES_PATHSPEC } from "mag/runtime/rulings"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 import { SWEEP_LABEL, SWEEP_TRIGGER } from "mag/skills/design/reference-sweep"
@@ -34,7 +35,7 @@ interface DiffRef {
 
 /**
  * One line naming the diff file, then the charter, replacing the inline `--- diff ---` section:
- * prompt size must not scale with diff size — E2BIG at `posix_spawn`. Kept terse: prompts are
+ * prompt size must not scale with diff size, E2BIG at `posix_spawn`. Kept terse: prompts are
  * model-authored and model-specific; only terse, concise instructions survive model change.
  */
 const diffBlock = (diffRef: DiffRef, priorFindingsPath: string | undefined): readonly string[] => [

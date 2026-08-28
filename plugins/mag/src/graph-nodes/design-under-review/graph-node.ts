@@ -5,7 +5,7 @@ import type { PlanBlocked } from "mag/graph-nodes/review-plan/errors"
 import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { make } from "mag/runtime/graph-node.definition"
 
-/** The loop's whole spend, folded pass by pass — `build-under-review`'s own reduction; `null` poisons the total. */
+/** The loop's whole spend, folded pass by pass, `build-under-review`'s own reduction; `null` poisons the total. */
 interface Spend {
   readonly costUsd: number | null
   readonly sessions: readonly string[]
@@ -19,8 +19,8 @@ const charge = (spend: Spend, sessions: readonly string[], costUsd: number | nul
 /**
  * The design lane's backward edge as a composite GraphNode, `build-under-review`'s shape:
  * brainstorm → plan → review-plan, a blocking review sending its findings back into brainstorm, at
- * most `cap` times. The loop is one generator over the error channel — `PLAN_BLOCKED` IS the
- * failure track — and its state lives in loop locals, so nothing about the loop escapes this node.
+ * most `cap` times. The loop is one generator over the error channel, `PLAN_BLOCKED` IS the
+ * failure track, and its state lives in loop locals, so nothing about the loop escapes this node.
  *
  * A send-back resumes the brainstorm session that wrote the reviewed design (`sessionRef`), so a
  * fix keeps the context that made the design; a fresh session would re-derive it. `plan` runs
@@ -30,7 +30,7 @@ const charge = (spend: Spend, sessions: readonly string[], costUsd: number | nul
  * The reviewer is blind to code by the schema of `review-plan` itself (no `base`, no diff), and
  * fresh every pass; the one exception is an adjudicating pass, handed the design's own dispute of
  * the findings it is re-reviewing. That pass's verdict is terminal either way: clean settles the
- * loop, blocked is `PlanDisputeRejected`, which escalates — there is no design work a third pass
+ * loop, blocked is `PlanDisputeRejected`, which escalates, there is no design work a third pass
  * could invent over documents that did not change. No build node is reachable from here.
  */
 export const designUnderReview = make({

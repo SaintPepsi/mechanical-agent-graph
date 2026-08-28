@@ -155,11 +155,6 @@ maintainer rules otherwise.
 - **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
   Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
   evidence never needs more than the count line.
-- **The tracker is the only writable copy of ticket truth.** The run-root ticket is a read-only
-  snapshot. A ruling that changes what the ticket means, an interpretation the design committed
-  to, is posted back to the tracker as one consolidated comment once the PR is open
-  (`publish-tail`'s `design-rulings` and `comment-ticket` steps), so a reader of the ticket sees what
-  a reader of the run record sees.
 - **One concern per session.** A node's prompt asks one question and the session writes one
   artifact; a second question is a second node. A session given two concerns degrades on both, in
   the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) and

@@ -83,6 +83,11 @@ describe("run-outcome section — summaryPath is not a develop-graph failure fie
 })
 
 describe("ticket-writer is named as the way to write a new ticket", () => {
+  test("SKILL.md's outcome section states quiet on green: the PR URL and the count line, the full report only on failure", () => {
+    expect(SKILL).toContain("a green run reports the PR URL and the closing count line, nothing else")
+    expect(SKILL).toContain("a failed\nrun gets the full report")
+  })
+
   test("SKILL.md names the ticket-writer command", () => {
     expect(SKILL).toContain("ticket-writer")
   })

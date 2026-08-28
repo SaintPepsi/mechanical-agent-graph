@@ -38,7 +38,7 @@ const BuildDesign = Graph.construct("build-design")
   .borrow(VerifyVisions)         // { visions[] } → { visionPaths[] } !NotationDeclaredFailure !VisionUnverified
   .then(CommitDesignArtifacts)
     // { designPath, visionPaths[] } → { designPath, visionPaths[] }, git add + commit onto the ticket's own branch, success only
-  .finalise()   // outside: { ticket, title, body } → { designPath, visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
+  .finalise()   // outside: { ticket, title, body } → { visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
 
 const DiscoverGraph = Graph.construct("discover")
   .then(Discover)
@@ -51,12 +51,16 @@ const DesignGraph = Graph.construct("design")
   .fork(BuildDesign, DiscoverGraph)
     // { ticket, title, body } → { designPath, visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
     //   ∥   { ticket, title, body } → { discoverPath } !DiscoverNoteMissing
-  .join(Brainstorm)
-    // { designPath, visionPaths[], discoverPath } → { designPath, visionPaths[], discoverPath }
-    // reconciles every vision against discover's recon; records each collision's resolution before build begins
+  .join(RecycleMap)
+    // { discoverPath } → { recycleMapPath } !RecycleMapMissing
+  .borrow(DesignUnderReview)
+    // { visionPaths[], discoverPath, recycleMapPath } → { designPath, planPath, headSha }
+    //   brainstorm → plan → review-plan; a blocking review sends its findings back into brainstorm, at most cap times
+    //   !DesignMissing !PlanMissing !PlanBlocked (cap spent) !PlanDisputeRejected
   .finalise()
-    // outside: { ticket, title, body } → { designPath, visionPaths, discoverPath }
-    //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing
+    // outside: { ticket, title, body } → { designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }
+    //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing
+    //   | DesignMissing | PlanMissing | PlanBlocked | PlanDisputeRejected
 ```
 
 Gaps flagged, not patched:

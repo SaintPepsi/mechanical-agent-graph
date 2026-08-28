@@ -26,8 +26,7 @@ build-under-review          build → verification → simplify → review-diff,
                             the same session until the diff is clean or the cap is spent
 prompt-terseness-evaluator  rewrite any verbose prompt text the build added, re-verify if it
                             moved HEAD
-publish-tail                PR body from the merge-base diff, push, open the PR, post the design's
-                            interpretation rulings back to the ticket
+publish-tail                PR body from the merge-base diff, push, open the PR
 ```
 
 ## Install the skills

@@ -26,9 +26,9 @@ const resumesHeadOnly = () => scriptedShell([headSha()])
 /** `ls-files` (none), `git add` ok, `git diff --cached --quiet` exit 1 (staged), `git commit` ok, `git rev-parse HEAD` ok. */
 const commitsCleanly = () => scriptedShell([ok(), ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), headSha()])
 
-/** The verdict echoes a path the node never trusts — the success carries the path the node computed. */
+/** The verdict echoes a path the node never trusts, the success carries the path the node computed. */
 const stubAgent = (reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) =>
-  recordAgent({ designPath: "ignored — the node uses its own computed path" }, reply, write)
+  recordAgent({ designPath: "ignored, the node uses its own computed path" }, reply, write)
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService, run: RunInfoService) =>
   Effect.runPromise(
@@ -317,7 +317,6 @@ describe("brainstorm", () => {
       expect(request.prompt).toContain(`Read the ticket at \`${sendBack.ticketPath}\`.`)
       expect(request.prompt).toContain(sendBack.findingsPath!)
       expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
-      expect(request.prompt).toContain("A finding that quotes a rulings file the ticket itself contradicts is disputed, not fixed.")
       expect(request.prompt).not.toContain(sendBack.prompt)
       expect(request.prompt).not.toContain(sendBack.recycleMapPath)
       expect(request.prompt).not.toContain("Read each vision below")

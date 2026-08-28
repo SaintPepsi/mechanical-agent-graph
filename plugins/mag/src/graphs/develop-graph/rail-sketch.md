@@ -92,12 +92,6 @@ const PublishTail = Graph.construct("publish-tail")
   .join(CreatePr)
     // { body, source, base, ticket, title } → { url } !CreatePrFailed !UnsupportedHost
     // title composed as "{ticket}: {title}"; opens the PR, or returns the one already open for this branch
-  .then(DesignRulings)
-    // { ticket, designPath, url } → { rulingsPath? } !DesignRulingsUnreadable !DesignRulingsWriteFailed
-    // lifts the design's Interpretation Rulings section into a run-root comment body; none when the design ruled on nothing
-  .when(rulingsPath, CommentTicket)
-    // { ticket, rulingsPath } → {} !CommentBodyMissing !CommentTrackerUnreachable !CommentFailed
-    // the tracker is the only writable copy of ticket truth: a ruling that changes what the ticket means is posted back
   .when(worktree, WorktreeRemove)
     // { path, url } → { url } !WorktreeRemoveFailed
     // success-only tail, gated to start only once CreatePr succeeds; retires the worktree WorktreeAdd created

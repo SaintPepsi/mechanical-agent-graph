@@ -11,9 +11,9 @@ The design lane gets two new nodes, `plan` and `review-plan`, so a design defect
 
 ## Definitions
 
-- Design record: the file `design.md` that the `brainstorm` node writes into the run root. It states the chosen approach and its open questions.
+- Design record: the file `design.md` that the `brainstorm` node writes into the run root. It states the chosen approach and its interpretation rulings.
 - Plan: a file `plan.md` in the run root. It lists the build as small ordered tasks. Each task names the files to change and the test that proves it.
-- Open question: a decision that the design record leaves to the maintainer.
+- Undecided ruling: a ruling in the design record stated as a choice still open, or with no basis named. An autonomous design decides; a run that cannot decide has failed, not asked.
 - Findings: a file that a review node writes into the run root. It lists each defect with a location and a reason.
 - Dispute: a file that the disputed node writes into the run root. It answers each finding it does not accept.
 
@@ -30,7 +30,7 @@ Run `GH-332/20260827085239-211a` shows the second cost. The build session on Son
 `design-graph` becomes `envision ∥ discover → brainstorm → plan → review-plan`.
 
 - `plan` is a GraphNode. It runs one session with the `writing-plans` skill. It reads `design.md` and writes `plan.md`.
-- `review-plan` is a GraphNode. It runs one review session at the altitude of v1 step 5: acceptance criteria coverage, collisions with a ruling in a `CLAUDE.md` or `PRINCIPLES.md`, and open questions. It reads `design.md`, `plan.md` and the ticket. It does not review code.
+- `review-plan` is a GraphNode. It runs one review session at the altitude of v1 step 5: acceptance criteria coverage, collisions with a ruling in a `CLAUDE.md` or `PRINCIPLES.md`, and undecided rulings. It reads `design.md`, `plan.md` and the ticket. It does not review code.
 - The errors of `review-plan` mirror the errors of `review-diff`: `PLAN_BLOCKED` with a `findingsPath`, and `PLAN_DISPUTE_REJECTED` with a `disputePath`.
 - `build-under-review` reads `plan.md`. `design.md` stays in the run root as the record of why.
 - One review session covers both files. The pipeline does not run a second review for the design.
@@ -65,17 +65,17 @@ Run `GH-332/20260827085239-211a` shows the second cost. The build session on Son
 
 &nbsp;
 
-**AC.03 - An open question is a blocking finding**
+**AC.03 - An undecided ruling is a blocking finding**
 
 **GIVEN** AC.02
 
-**AND** `design.md` has a non-empty Open Questions section
+**AND** `design.md` states a ruling as a choice still open, or with no basis named
 
 **WHEN** the `review-plan` node runs
 
 **THEN** the `review-plan` node fails with the tag `PLAN_BLOCKED`
 
-**AND** the findings file names each open question as a finding
+**AND** the findings file quotes each undecided ruling as a finding
 
 &nbsp;
 

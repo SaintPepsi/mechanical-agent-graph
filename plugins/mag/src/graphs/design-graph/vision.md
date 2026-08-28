@@ -1,7 +1,7 @@
 ```mermaid
 graph TD
   IN[["design(ticket, title, body)"]]
-  OUT[["{ designPath, visionPaths, discoverPath }"]]
+  OUT[["{ designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }"]]
 
   subgraph Probes["probes · parallel, no ticket dependency"]
     PS["detect-svelte · Mechanical<br/>manifest walk for a svelte dependency"]
@@ -42,11 +42,29 @@ graph TD
   IN -- "ticket, title, body → ticket, title, body" --> DISC
   DISC -. "note missing or empty: discoverPath → discoverPath" .-> DEADDISC[/"die: DiscoverNoteMissing<br/>kept: worktree, nothing committed"/]
 
-  BS["brainstorm · Model<br/>reconcile the visions against discover's recon; record every collision's resolution before build begins"]
+  RM["recycle-map · Model<br/>map what this ticket reuses, from the discover note; the map every later session cites"]
+  DISC -- "discoverPath → discoverPath" --> RM
+  RM -. "map missing or empty: recycleMapPath → recycleMapPath" .-> DEADRM[/"die: RecycleMapMissing<br/>kept: worktree, nothing committed"/]
+
+  subgraph Loop["design-under-review · loop, cap send-backs"]
+    BS["brainstorm · Model<br/>reconcile the visions against discover's recon; every ambiguity a ruling with a basis, or answer the standing findings"]
+    PL["plan · Model<br/>the build as small ordered tasks over the design, rerun only when the design changed"]
+    RP["review-plan · Model<br/>adversarial read of design and plan against the ticket, no code; or adjudicate the design's own dispute"]
+  end
   CMT -- "designPath, visionPaths → designPath, visionPaths" --> BS
   DISC -- "discoverPath → discoverPath" --> BS
+  RM -- "recycleMapPath → recycleMapPath" --> BS
+  BS -- "designPath → designPath" --> PL
+  RM -- "recycleMapPath → recycleMapPath" --> PL
+  PL -- "planPath, headSha → planPath, headSha" --> RP
+  RM -- "recycleMapPath → recycleMapPath" --> RP
+  RP -. "verdict = blocked, sendbacks < cap: findingsPath → findingsPath" .-> BS
+  BS -. "verdict = disputed: findingsPath, disputePath → findingsPath, disputePath" .-> RP
+  BS -. "design missing or unchanged and silent: designPath → designPath" .-> DEADLOOP[/"die: DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected<br/>kept: worktree, the records so far"/]
+  RP -. "verdict = blocked, cap exhausted: findingsPath → (escalates)" .-> DEADLOOP
+  RP -. "adjudicating pass rejected: PlanDisputeRejected → (escalates)" .-> DEADLOOP
 
-  BS -- "designPath, visionPaths, discoverPath → designPath, visionPaths, discoverPath" --> OUT
+  RP -- "verdict = clean: designPath, planPath, headSha → designPath, planPath, headSha" --> OUT
 ```
 
 Gaps flagged, not patched:

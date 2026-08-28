@@ -19,9 +19,9 @@ const HEAD_SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 const readsHeadOnly = () => scriptedShell([{ exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" }])
 const commitsCleanly = () => scriptedShell([ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), { exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" }])
 
-/** The verdict echoes a path the node never trusts — the success carries the path the node computed. */
+/** The verdict echoes a path the node never trusts, the success carries the path the node computed. */
 const planAgent = (write?: () => void, reply: Partial<ClaudeReply<unknown>> = {}) =>
-  stubAgent({ planPath: "ignored — the node uses its own computed path" }, reply, write)
+  stubAgent({ planPath: "ignored, the node uses its own computed path" }, reply, write)
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService, run: RunInfoService) =>
   Effect.runPromise(

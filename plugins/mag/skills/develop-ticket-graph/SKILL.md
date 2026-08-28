@@ -79,6 +79,9 @@ not turn into a reason to keep polling in the foreground.
 
 ## Reading the outcome (the "after" half)
 
+Quiet on green: a green run reports the PR URL and the closing count line, nothing else; a failed
+run gets the full report below.
+
 One run emits four things:
 
 - **stdout, success only**: one JSON line, `{ ticket, branch, summaryPath, commits, costUsd,

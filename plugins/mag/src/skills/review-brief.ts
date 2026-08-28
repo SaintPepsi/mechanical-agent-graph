@@ -38,7 +38,7 @@ const TARGET: Record<ReviewTarget, string> = {
 const PLAN_AUDITS: readonly string[] = [
   "",
   "Structure audit: every seam the design's Envisioned Shell and Seams & Ownership name has a task in the plan with an exact path. A seam collapsed into another file, or an extract resolved as a copy, is blocking; so is a created module whose responsibility re-implements logic that already exists elsewhere, unless the plan quotes a principle that licenses the duplication.",
-  "Principles audit: the design's Principles Applied section was written by the plan's author. Check the plan honours each rule it claims, and that every deviation quotes a real escape clause from the file it names.",
+  "Principles audit: the design's Principles Applied section was written by the design session. Check the plan honours each rule it claims, and that every deviation quotes a real escape clause from the file it names.",
   "Prior-art hunt: for every symbol, module or capability the plan introduces, derive search terms from its own nouns (name variants across kebab, camel and snake case, filenames, concepts) and search the repo. Prior art covering it is blocking, cited path:line."
 ]
 

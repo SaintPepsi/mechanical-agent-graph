@@ -31,10 +31,10 @@ graph TD
   WA -. "fails: WorktreeAddFailed | WorktreeSetupFailed" .-> DEADTREE
   BR -. "fails: BranchCheckoutFailed | BranchCreateFailed" .-> DEADTREE
 
-  DG[["design-graph · borrowed whole<br/>probes → design-session → verify-visions ∥ discover → brainstorm"]]
+  DG[["design-graph · borrowed whole<br/>probes → design-session → verify-visions ∥ discover → recycle-map → design-under-review (brainstorm → plan → review-plan, findings sent back into the design)"]]
   FT -- "ticket, title, body → ticket, title, body" --> DG
   BR -- "branch → (gate: design writes on this checkout, and commits here too under records = committed)" --> DG
-  DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing" .-> DEADTREE
+  DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing | DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected" .-> DEADTREE
 
   PTE["prompt-terseness-evaluator · Model<br/>rewrite verbose prompt text the run wrote — the build's included — and commit the repair; a moved head re-runs the declared suite"]
   RB -- "base → base" --> PTE
@@ -50,7 +50,7 @@ graph TD
   DG -- "headSha → (gate: build starts from the designed tree)" --> B
   FT -- "ticket, title, body → ticket, title, body" --> B
   FBN -- "branch → branch" --> B
-  DG -- "designPath → designPath (first pass only)" --> B
+  DG -- "designPath, planPath → designPath, planPath (first pass only)" --> B
   B -- "headSha → headSha" --> V
   IN -- "verification? → command" --> V
   V -- "command → (gate: tree is green)" --> S
@@ -71,8 +71,6 @@ graph TD
     PRB["compose-pr-body · Mechanical<br/>append Closes #n and the run id to the written description"]
     PB["push-branch · Mechanical<br/>push with upstream tracking set"]
     CPR["create-pr · Mechanical<br/>open the PR, or return the one already open"]
-    DR["design-rulings · Mechanical<br/>lift the design's Interpretation Rulings into a comment body, or none"]
-    CT["comment-ticket · Mechanical<br/>post the rulings to the ticket, only when the design ruled"]
     WR["worktree-remove · Mechanical<br/>retire the worktree, success only"]
   end
   RD -- "verdict = clean: headSha → headSha" --> PTE
@@ -86,9 +84,6 @@ graph TD
   PB -- "branch → source" --> CPR
   RB -- "base → base" --> CPR
   FT -- "ticket, title → title (composed: '{ticket}: {title}')" --> CPR
-  CPR -- "url → prUrl" --> DR
-  DR -. "rulingsPath present: rulingsPath → path" .-> CT
-  DR -. "no ruling: (skips comment-ticket)" .-> WR
   WPB -. "fails: PrBodyRunRootMissing | PrBodyGitFailed | PrBodyDiffWriteFailed" .-> DEADTREE
   PB -. "fails: PushDirty | PushEmpty | PushRejected" .-> DEADTREE
   CPR -. "fails: CreatePrFailed | UnsupportedHost" .-> DEADTREE

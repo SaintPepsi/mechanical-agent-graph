@@ -1,9 +1,7 @@
 import { Effect, Schema } from "effect"
 import { branch } from "mag/graph-nodes/branch/graph-node"
 import { buildUnderReview } from "mag/graph-nodes/build-under-review/graph-node"
-import { commentTicket } from "mag/graph-nodes/comment-ticket/graph-node"
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
-import { designRulings } from "mag/graph-nodes/design-rulings/graph-node"
 import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import { formatBranchNameNode } from "mag/graph-nodes/format-branch-name/graph-node"
 import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
@@ -183,11 +181,8 @@ const writeBody = Graph.construct<{ ticket: string; base: string; model: string 
 /**
  * The rail-sketch's `PublishTail`: `write-body` ∥ `push-branch` — the description reads the local
  * merge-base diff and the push moves refs, so neither waits on the other — joined by `create-pr`,
- * then the design's Interpretation Rulings posted back to the ticket as one comment (the tracker
- * is the only writable copy of ticket truth, and a ruling changes what the ticket means; a design
- * that ruled on nothing posts nothing), then `worktree-remove` on success only, exactly when
- * `checkout` materialized a path to retire. The PR title is composed here, "{ticket}: {title}",
- * the tail's own concern as drawn.
+ * then `worktree-remove` on success only, exactly when `checkout` materialized a path to retire.
+ * The PR title is composed here, "{ticket}: {title}", the tail's own concern as drawn.
  */
 const publishTail = Graph.construct<{
   ticket: string
@@ -199,7 +194,6 @@ const publishTail = Graph.construct<{
   host: string
   slug: string
   model: string
-  designPath: string
 }>("publish-tail")
   .fork(
     writeBody, (s) => ({ ticket: s.ticket, base: s.base, model: s.model }),
@@ -213,19 +207,13 @@ const publishTail = Graph.construct<{
     title: `${s.ticket}: ${s.title}`,
     bodyPath: s.bodyPath
   }))
-  .then(designRulings, (s) => ({ ticket: s.ticket, designPath: s.designPath, prUrl: s.url }))
-  .when(
-    (s) => s.rulingsPath !== undefined,
-    commentTicket, (s) => ({ ticket: s.ticket, path: s.rulingsPath as string }),
-    () => ({})
-  )
   .when(
     (s) => s.path !== undefined,
     worktreeRemove, (s) => ({ path: s.path as string }),
     () => ({})
   )
   .finalise({
-    description: "Write the body and push in parallel, open the PR, post the design's rulings to the ticket, then retire the worktree on success.",
+    description: "Write the body and push in parallel, open the PR, then retire the worktree on success.",
     input: Schema.Struct({
       ticket: Schema.String,
       title: Schema.String,
@@ -235,9 +223,7 @@ const publishTail = Graph.construct<{
       remote: Schema.String,
       host: Schema.String,
       slug: Schema.String,
-      model: Schema.String,
-      /** The design record whose Interpretation Rulings are posted back to the ticket once the PR is open. */
-      designPath: Schema.String
+      model: Schema.String
     }),
     success: Schema.Struct({
       url: Schema.String,
@@ -330,8 +316,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       remote: s.remote,
       host: s.host,
       slug: s.slug,
-      model: MODEL_BUILD,
-      designPath: s.designPath
+      model: MODEL_BUILD
     }),
     (published) => ({ prUrl: published.url, publishSessions: published.sessions, publishCost: published.costUsd })
   )

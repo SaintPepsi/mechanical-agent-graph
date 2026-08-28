@@ -1,8 +1,3 @@
-import { nulPaths, PRINCIPLES_PATHSPEC } from "mag/runtime/rulings"
-
-/** The pathspec and the `-z` reader live in `runtime/rulings.ts` now, shared with `review-plan`; re-exported so this node's own callers keep one import. */
-export { nulPaths, PRINCIPLES_PATHSPEC }
-
 /**
  * A principles file governs a changed path when its own directory is that path's directory or an
  * ancestor of it. Comparing against the directory *including* its

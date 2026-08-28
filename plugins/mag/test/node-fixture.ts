@@ -281,7 +281,7 @@ export const scriptedShell = (replies: readonly ShellResult[]) => {
 /**
  * Records every request and answers with one canned reply; `write` fires inside `prompt`, standing
  * in for the real session's own write of the record the node then verifies. `verdict` is whatever
- * the node's own schema expects — never trusted by a record-writing node, which uses its own
+ * the node's own schema expects, never trusted by a record-writing node, which uses its own
  * computed path.
  */
 export const stubAgent = (verdict: unknown, reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) => {

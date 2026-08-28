@@ -11,12 +11,12 @@ import { ticketReference } from "mag/runtime/ticket"
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
 import { compilePlan, PLAN_DESTINATION, PLAN_PARAMS } from "mag/skills/plan"
 
-/** What the agent must return: the plan's own path, `brainstorm`'s `designPath` precedent. Never trusted — the success carries the path this node computed. */
+/** What the agent must return: the plan's own path, `brainstorm`'s `designPath` precedent. Never trusted, the success carries the path this node computed. */
 const VERDICT = verdictSchema(Schema.Struct({ planPath: Schema.String }))
 
 /**
- * Frames the ticket, cites the design, the discover note and the recycle map by path — read-only
- * references, never inlined, since an oversized prompt dies at execve — names this run's own
+ * Frames the ticket, cites the design, the discover note and the recycle map by path, read-only
+ * references, never inlined, since an oversized prompt dies at execve, names this run's own
  * destination for the plan, and splices the compiled plan standard.
  */
 const promptFor = (

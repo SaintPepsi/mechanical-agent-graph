@@ -378,7 +378,7 @@ describe("design-graph", () => {
       const headShaCalls = calls.filter((call) => call.argv[1] === "rev-parse" && call.argv[2] === "HEAD")
       expect(headShaCalls.length).toBeGreaterThan(0)
       for (const call of headShaCalls) expect(call.cwd).toBe(workRoot)
-      // Nothing commits under the default policy — the rev-parse reads above plus the two rulings
+      // Nothing commits under the default policy, the rev-parse reads above plus the two rulings
       // `ls-files` reads (`brainstorm`'s first pass and `review-plan`'s) are every call this graph
       // makes, so no record write ever reaches a git call to check the cwd of.
       const lsFilesCalls = calls.filter((call) => call.argv[1] === "ls-files")

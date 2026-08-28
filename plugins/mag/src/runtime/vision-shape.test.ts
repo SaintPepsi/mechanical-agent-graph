@@ -42,6 +42,23 @@ describe("readShape", () => {
     expect(shape.conditions.some((condition) => condition.startsWith("commit-design-artifacts ->"))).toBe(false)
   })
 
+  test("design-graph's complete condition list: the probe, vision, discover and recycle-map deaths, plus the design-under-review loop's five", () => {
+    const result = readShape("design-graph/vision.md", designGraphVision)
+    expect(Result.isSuccess(result)).toBe(true)
+    if (!Result.isSuccess(result)) return
+    const loop = result.success.conditions.filter((condition) =>
+      condition.startsWith("brainstorm ->") || condition.startsWith("review-plan ->") || condition.startsWith("recycle-map ->")
+    )
+    expect(loop).toEqual([
+      "recycle-map -> RecycleMapMissing when map missing or empty",
+      "review-plan -> brainstorm when verdict = blocked, sendbacks < cap",
+      "brainstorm -> review-plan when verdict = disputed",
+      "brainstorm -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when design missing or unchanged and silent",
+      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when verdict = blocked, cap exhausted",
+      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when adjudicating pass rejected"
+    ])
+  })
+
   test("a subgraph title carrying the box's own bracket-plus-quote shape is excluded by the line filter", () => {
     const text = '```mermaid\ngraph TD\n  subgraph Probes["probes"]\n  A["load · Mechanical<br/>job"]\n  end\n```'
     const result = readShape("fixture", text)
@@ -103,7 +120,7 @@ describe("readShape", () => {
     expect(conditionOf("ticket → (R channel: ticket, runId)")).toEqual([])
   })
 
-  test("develop-graph's complete condition list: eleven, none of them a truncated gate mapping", () => {
+  test("develop-graph's complete condition list: nine, none of them a truncated gate mapping", () => {
     const result = readShape("develop-graph/vision.md", developGraphVision)
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
@@ -116,8 +133,6 @@ describe("readShape", () => {
       "review-diff -> checkout-through-publish error, uncaught when verdict = blocked, cap exhausted",
       "review-diff -> checkout-through-publish error, uncaught when adjudicating pass rejected",
       "review-diff -> prompt-terseness-evaluator when verdict = clean",
-      "design-rulings -> comment-ticket when rulingsPath present",
-      "design-rulings -> worktree-remove when no ruling",
       "create-pr -> worktree-remove when worktree = true"
     ])
   })

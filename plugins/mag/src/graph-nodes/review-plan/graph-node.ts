@@ -93,7 +93,7 @@ export const reviewPlan = make({
     headSha: Schema.String,
     /** The previous pass's findings on a send-back that changed the design: this pass judges the delta against them rather than hunting afresh. Never alongside `disputePath`, whose own block governs an adjudicating pass. */
     priorFindingsPath: Schema.optional(Schema.String),
-    /** The findings a disputed design pass was answering, present alongside `disputePath` — `review-diff`'s pair, same reasoning. */
+    /** The findings a disputed design pass was answering, present alongside `disputePath`, `review-diff`'s pair, same reasoning. */
     findingsPath: Schema.optional(Schema.String),
     /** The design pass's dispute of the previous verdict. Present makes this pass the decider: a blocking verdict is {@link PlanDisputeRejected}, which ends the run. */
     disputePath: Schema.optional(Schema.String),

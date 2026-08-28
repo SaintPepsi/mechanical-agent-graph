@@ -18,7 +18,7 @@ import { platform } from "mag/runtime/platform"
 const RECORDS_POLICIES = ["run-root", "committed"] as const
 type RecordsPolicy = (typeof RECORDS_POLICIES)[number]
 // Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning: one design round after
-// the first, then the findings escalate — a design still blocked after a full round is a ticket problem.
+// the first, then the findings escalate, a design still blocked after a full round is a ticket problem.
 const PLAN_CAP = 1
 
 const isRecordsPolicyCheck = Schema.makeFilter<string>(

@@ -2,7 +2,7 @@ import { Data } from "effect"
 
 /**
  * The session ended but `plan.md` it was told to write is absent, empty after trim, or
- * byte-identical to its pre-dispatch snapshot — `brainstorm`'s `DesignMissing` rule applied to
+ * byte-identical to its pre-dispatch snapshot, `brainstorm`'s `DesignMissing` rule applied to
  * the plan. `sessions` travels with it because the spend already happened by this point.
  */
 export class PlanMissing extends Data.TaggedError("PLAN_MISSING")<{

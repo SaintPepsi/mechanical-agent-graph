@@ -21,7 +21,7 @@ import { DESIGN_DESTINATION, designDestinationFor } from "mag/skills/design/writ
 import { SKILLS_ROOT } from "mag/skills/installed"
 
 /**
- * What the agent must return: `design/graph-node.ts`'s `DESIGN` precedent — the artifact travels
+ * What the agent must return: `design/graph-node.ts`'s `DESIGN` precedent, the artifact travels
  * back as a path, never trusted. `dispute` is `optionalKey`, `build`'s reasoning: `optional` would
  * show the model a nullable union on every ordinary pass, inviting an explicit null.
  */
@@ -31,21 +31,20 @@ const VERDICT = verdictSchema(Schema.Struct({ designPath: Schema.String, dispute
 const sendBackBlock = (findingsPath: string, designPath: string): readonly string[] => [
   "A reviewer examined this design and its plan and found blocking problems, recorded at",
   `${findingsPath}. Read that file and address every finding: rewrite the design at \`${designPath}\``,
-  "in place for each one that needs a change, and for any that need none — already answered, or",
-  "wrong — say why in your reply's `dispute` field instead of inventing a change to satisfy it. A",
-  "single pass may change the design and dispute the rest.",
-  "A finding that quotes a rulings file the ticket itself contradicts is disputed, not fixed."
+  "in place for each one that needs a change, and for any that need none (already answered, or",
+  "wrong) say why in your reply's `dispute` field instead of inventing a change to satisfy it. A",
+  "single pass may change the design and dispute the rest."
 ]
 
 /**
  * A first pass frames the ticket, cites every vision, the discover note and the recycle map by
- * path — read-only references, never inlined, since an oversized prompt dies at execve — names
+ * path, read-only references, never inlined, since an oversized prompt dies at execve, names
  * the repository's own rulings files, the same list `review-plan` will hold the design to, and
  * appends the already-composed, already-budget-checked brainstorm prompt
  * (`assemble-brainstorm-prompt`'s own job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>`
  * unfilled by design, and this is the one node in the pipeline that can fill them. A resumed pass
- * drops the citations and the compiled skill — the session already holds them, and restating them
- * invites a redesign from scratch — and carries the ticket reference plus the send-back alone, so
+ * drops the citations and the compiled skill, the session already holds them, and restating them
+ * invites a redesign from scratch, and carries the ticket reference plus the send-back alone, so
  * the session can still reopen the ticket the findings are judged against.
  */
 const promptFor = (
@@ -75,7 +74,7 @@ const promptFor = (
       ...rulingsBlock(rulings),
       "",
       // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
-      // success), not text this node composes itself — unlike `design/graph-node.ts`'s `skillFor`,
+      // success), not text this node composes itself, unlike `design/graph-node.ts`'s `skillFor`,
       // which owns its own composition and can rely on `DESIGN_DESTINATION` being exactly what it put
       // there. This line is the structural guarantee that survives regardless of what `input.prompt`
       // actually contains (proven by `brainstorm/graph-node.test.ts`'s own token-filling test, which
