@@ -11,5 +11,6 @@ export {
   NotationVisionCopyFailed,
   NotationVisionGitFailed,
   NotationVisionMissing,
+  NotationVisionReasonWriteFailed,
   UnknownNotation
 } from "mag/graph-nodes/envision-notation/errors"

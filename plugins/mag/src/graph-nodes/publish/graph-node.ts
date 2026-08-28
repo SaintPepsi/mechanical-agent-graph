@@ -13,7 +13,7 @@ import { make } from "mag/runtime/graph-node.definition"
  * here. `success` is `createPr.success` itself, reused rather than redefined, so there is no second
  * schema to drift from the first.
  *
- * `body` is a required input, forwarded to `create-pr` unchanged — `publish` is a
+ * `bodyPath` is a required input, forwarded to `create-pr` unchanged: `publish` is a
  * pass-through composite, so it decorates nothing and defaults nothing; deciding what the body says
  * is the calling graph's business (`runtime/pr-body.ts`).
  */
@@ -27,7 +27,7 @@ export const publish = make({
     slug: Schema.String,
     base: Schema.String,
     title: Schema.String,
-    body: Schema.String
+    bodyPath: Schema.String
   }),
   success: createPr.success, // publish's whole output IS create-pr's output, unchanged
   run: (input) =>
@@ -39,7 +39,7 @@ export const publish = make({
         base: input.base,
         source: pushed.branch,
         title: input.title,
-        body: input.body
+        bodyPath: input.bodyPath
       })
     })
 })

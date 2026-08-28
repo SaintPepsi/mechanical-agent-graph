@@ -164,7 +164,7 @@ describe("review-diff", () => {
       const request = agent.requests[0]!
       expect(request.cwd).toBe("/repo")
       expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-      expect(request.prompt).toContain(INPUT.body)
+      expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       // No diff bytes in argv — the prompt names the path, not the content.
       expect(request.prompt).not.toContain(DIFF)
       expect(request.prompt).toContain(`${runRoot}/diff-1.patch`)
@@ -200,7 +200,7 @@ describe("review-diff", () => {
         [
           `Ticket ${INPUT.ticket}: ${INPUT.title}`,
           "",
-          INPUT.body,
+          `Read the ticket at \`${INPUT.ticketPath}\`.`,
           "",
           // The line count is pinned as a literal, not
           // `DIFF.split("\n").length` (4) — `DIFF` is 3 lines plus a trailing newline, and the

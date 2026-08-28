@@ -40,6 +40,24 @@ export const removeDir = (path: string): Promise<void> => {
   )
 }
 
+/** Records every prompt dispatched, whatever the node asks for, answering one canned reply generalised to any verdict shape. */
+export const recordingAgent = () => {
+  const prompts: string[] = []
+  const service: ClaudeAgentService = {
+    prompt: <A>(request: ClaudePrint<A>) => {
+      prompts.push(request.prompt)
+      return Effect.succeed({
+        verdict: { summary: "did the work", visionPath: "ignored", blocking: [] } as A,
+        result: {},
+        sessions: ["stub-session"],
+        costUsd: 0.1,
+        attempts: 1
+      } as ClaudeReply<A>)
+    }
+  }
+  return { prompts, service }
+}
+
 /** The plugin's root (`plugins/mag`), derived from this module's own location, never `process.cwd()`. */
 const repoRoot = join(import.meta.dirname, "..")
 
@@ -234,7 +252,7 @@ export const withRecordRepo = async <T>(
   }
 }
 
-/** A real, disposable run root alone, for a node whose only write is an artifact into it (`review-plan`). */
+/** A real, disposable run root alone, for a node whose only write is an artifact into it (`review-plan`, `fetch-ticket`). `prefix` names the temp dir after the node under test. */
 export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string, run: RunInfoService) => Promise<T>): Promise<T> => {
   const runRoot = mkdtempSync(join(tmpdir(), `${prefix}-run-`))
   try {

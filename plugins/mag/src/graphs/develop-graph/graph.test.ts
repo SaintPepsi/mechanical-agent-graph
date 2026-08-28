@@ -112,6 +112,10 @@ const runAgent = (root: string) => {
         const path = writeAt(destinationOf(prompt, "Write your findings to"), "# Discover\n\nNothing relevant found.\n")
         return reply<A>({ discoverPath: path }, "session-discover", 0.15)
       }
+      if (prompt.includes("Map what this ticket can reuse")) {
+        const path = writeAt(destinationOf(prompt, "Write the map to"), "# Recycle map\n\nNothing to reuse.\n")
+        return reply<A>({ recycleMapPath: path }, "session-recycle", 0.1)
+      }
       if (prompt.includes("Read each vision below")) {
         // brainstorm's write step backtick-quotes the path it resolved through `recordPath`,
         // so the stub reads it back the way `design-graph/graph.test.ts` does rather than composing
@@ -119,16 +123,16 @@ const runAgent = (root: string) => {
         const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
         return reply<A>({ designPath: path }, "session-brainstorm", 0.2)
       }
-      if (prompt.includes("Read the design below and the discover note")) {
+      if (prompt.includes("Read the design below")) {
         const path = writeAt(destinationOf(prompt, "Write the plan to"), "# Plan\n\n### Task 1\n")
         return reply<A>({ planPath: path }, "session-plan", 0.25)
       }
       if (prompt.includes("Review the design at")) return reply<A>({ blocking: [] }, "session-review-plan", 0.1)
-      if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0, note: "already terse" }, "session-terseness", 0.02)
+      if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0 }, "session-terseness", 0.02)
       // No blocking findings, so the review loop settles on its first pass: `build-under-review`'s
       // own test owns the send-back path, this one owns the spine.
       if (prompt.includes("reply with only the blocking findings")) return reply<A>({ blocking: [] }, "session-review-1", 0.1)
-      if (prompt.includes("Reduce this diff to the same behaviour in less code")) return reply<A>({ note: "nothing to trim" }, "session-simplify", 0.05)
+      if (prompt.includes("Reduce this diff to the same behaviour in less code")) return reply<A>({}, "session-simplify", 0.05)
       if (prompt.includes("Write the pull request description for the diff at")) {
         return reply<A>({ description: "Reticulates the splines." }, "session-write-pr-body", 0.05)
       }
@@ -240,7 +244,7 @@ describe("develop-graph", () => {
       // and the publish tail runs as the sketch's boxes — never the fused `publish` composite.
       for (const name of [
         "prepare", "require-acs", "checkout", "write-body", "publish-tail",
-        "resolve-notations", "envision-visions", "discover", "design-under-review", "brainstorm", "plan", "review-plan", "build-under-review", "push-branch", "create-pr"
+        "resolve-notations", "envision-visions", "discover", "recycle-map", "design-under-review", "brainstorm", "plan", "review-plan", "build-under-review", "push-branch", "create-pr"
       ]) {
         expect(names).toContain(name)
       }
@@ -341,6 +345,7 @@ describe("develop-graph", () => {
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
+      // The ticket file's level-1 title heading is not a section, so the inventory omits it.
       expect(result.failure).toStrictEqual(
         new AcceptanceCriteriaMissing({ ticket: TICKET, title: TICKET_TITLE, headings: "Summary" })
       )

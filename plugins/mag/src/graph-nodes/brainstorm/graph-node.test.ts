@@ -55,14 +55,15 @@ describe("brainstorm", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(brainstorm.success)(example)
   })
 
-  test("the prompt names every vision path and the discover path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
+  test("the prompt names every vision path, the discover path and the recycle map path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
       await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
 
       const request = agent.requests[0]!
       for (const path of INPUT.visionPaths) expect(request.prompt).toContain(path)
-      expect(request.prompt).toContain(INPUT.discoverPath)
+      expect(request.prompt).toContain(`- ${INPUT.discoverPath}`)
+      expect(request.prompt).toContain(`- ${INPUT.recycleMapPath}`)
       expect(request.prompt).toContain(INPUT.prompt)
     }))
 
@@ -268,7 +269,7 @@ describe("brainstorm", () => {
       expect(result.failure).toBeInstanceOf(BrainstormGitFailed)
     }))
 
-  test("a send-back pass resumes the session, drops the ticket framing and the compiled skill, and names the findings file", () =>
+  test("a send-back pass resumes the session, keeps the ticket reference, drops the citations and the compiled skill, and names the findings file", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const sendBack = inputExamples[2]!
       const agent = stubAgent({}, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
@@ -277,10 +278,11 @@ describe("brainstorm", () => {
       expect(Result.isSuccess(result)).toBe(true)
       const request = agent.requests[0]!
       expect(request.resume).toBe("a1b2c3")
+      expect(request.prompt).toContain(`Read the ticket at \`${sendBack.ticketPath}\`.`)
       expect(request.prompt).toContain(sendBack.findingsPath!)
       expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
-      expect(request.prompt).not.toContain(sendBack.body)
       expect(request.prompt).not.toContain(sendBack.prompt)
+      expect(request.prompt).not.toContain(sendBack.recycleMapPath)
       expect(request.prompt).not.toContain("Read each vision below")
     }))
 

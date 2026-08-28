@@ -7,6 +7,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { TICKET_TOKEN } from "mag/skills/design/tokens"
 import { compilePlan, PLAN_DESTINATION, PLAN_PARAMS } from "mag/skills/plan"
 
@@ -14,22 +15,28 @@ import { compilePlan, PLAN_DESTINATION, PLAN_PARAMS } from "mag/skills/plan"
 const VERDICT = verdictSchema(Schema.Struct({ planPath: Schema.String }))
 
 /**
- * Frames the ticket, cites the design and the discover note by path — read-only references, never
- * inlined, since an oversized prompt dies at execve — names this run's own destination for the
- * plan, and splices the compiled plan standard.
+ * Frames the ticket, cites the design, the discover note and the recycle map by path — read-only
+ * references, never inlined, since an oversized prompt dies at execve — names this run's own
+ * destination for the plan, and splices the compiled plan standard.
  */
 const promptFor = (
-  input: { readonly ticket: string; readonly title: string; readonly body: string; readonly designPath: string; readonly discoverPath: string },
+  input: {
+    readonly ticket: string
+    readonly title: string
+    readonly ticketPath: string
+    readonly designPath: string
+    readonly discoverPath: string
+    readonly recycleMapPath: string
+  },
   planPath: string
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
+    ...ticketReference(input),
     "",
-    input.body,
-    "",
-    "Read the design below and the discover note as citations. Plan the build the design describes, as it stands.",
+    "Read the design below, the discover note and the recycle map as citations. Plan the build the design describes, as it stands.",
     `- ${input.designPath}`,
     `- ${input.discoverPath}`,
+    `- ${input.recycleMapPath}`,
     "",
     `Write the plan to \`${planPath}\`, this run's own destination for it.`,
     "",
@@ -57,9 +64,10 @@ export const plan = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     designPath: Schema.String,
     discoverPath: Schema.String,
+    recycleMapPath: Schema.String,
     /** A named agent to run the session as, same convention as `brainstorm`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */

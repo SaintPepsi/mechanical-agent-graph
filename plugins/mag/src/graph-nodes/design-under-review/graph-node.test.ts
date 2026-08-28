@@ -15,7 +15,7 @@ const INPUT = inputExamples[0]!
 
 const isBrainstormPrompt = (request: ClaudePrint<unknown>) =>
   request.prompt.includes("Read each vision below") || request.prompt.includes("A reviewer examined this design")
-const isPlanPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Read the design below and the discover note")
+const isPlanPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Read the design below")
 const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Review the design at")
 
 /** Extracts the backticked destination a record-writing node spliced into its own prompt. */
@@ -122,10 +122,15 @@ describe("design-under-review", () => {
       expect(agent.requests.map((request) => (isBrainstormPrompt(request) ? "brainstorm" : isPlanPrompt(request) ? "plan" : "review"))).toStrictEqual(["brainstorm", "plan", "review"])
 
       // The plan prompt cites the design the brainstorm wrote; the reviewer is handed both paths
-      // and the plan's headSha, never the brainstorm session's output.
+      // and the plan's headSha, never the brainstorm session's output. Every session cites the
+      // ticket file and the recycle map by path.
       expect(agent.requests[1]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.planPath)
+      for (const request of agent.requests) {
+        expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
+        expect(request.prompt).toContain(INPUT.recycleMapPath)
+      }
       expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.")
     }))
 

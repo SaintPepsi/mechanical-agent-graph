@@ -1,0 +1,38 @@
+[
+  {
+    "case": "pair-limiter-tb",
+    "fixture": "limiter",
+    "A": "terse",
+    "B": "baseline"
+  },
+  {
+    "case": "pair-limiter-bt",
+    "fixture": "limiter",
+    "A": "baseline",
+    "B": "terse"
+  },
+  {
+    "case": "pair-sync-tb",
+    "fixture": "sync",
+    "A": "terse",
+    "B": "baseline"
+  },
+  {
+    "case": "pair-sync-bt",
+    "fixture": "sync",
+    "A": "baseline",
+    "B": "terse"
+  },
+  {
+    "case": "pair-normalize-tb",
+    "fixture": "normalize",
+    "A": "terse",
+    "B": "baseline"
+  },
+  {
+    "case": "pair-normalize-bt",
+    "fixture": "normalize",
+    "A": "baseline",
+    "B": "terse"
+  }
+]

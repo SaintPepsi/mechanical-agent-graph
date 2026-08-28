@@ -1,13 +1,17 @@
-import { Effect, Option, Schema } from "effect"
+import { Effect, FileSystem, Option, Schema } from "effect"
 import {
   EmptyTicket,
   TicketNotAddressable,
   TicketNotMaintainerAuthored,
+  TicketWriteFailed,
   TrackerFailed,
   TrackerUnreachable
 } from "mag/graph-nodes/fetch-ticket/errors"
 import { Issue, renderBody } from "mag/graph-nodes/fetch-ticket/render"
 import { make } from "mag/runtime/graph-node.definition"
+import { platform } from "mag/runtime/platform"
+import { requireRunRoot } from "mag/runtime/records"
+import { RunInfo } from "mag/runtime/run-info"
 import { Shell, type ShellResult } from "mag/runtime/shell"
 
 // The ticket-id convention: the trailing <PREFIX>-<n> segment.
@@ -48,22 +52,53 @@ const fetchIssue = (ticket: string): Effect.Effect<Issue, TicketNotAddressable |
     )
   })
 
-// input.maintainer is caller-supplied, not resolved here: a credential lookup would name whoever runs the pipeline, not the maintainer.
+/**
+ * Fetches the ticket and writes it once to `<runRoot>/ticket.md`, the immutable artifact every
+ * later node reads and every prompt cites by path (`runtime/ticket.ts`). "Once" is mechanical:
+ * the write opens with `wx`, so a second write into the same run root fails at the OS. A resumed
+ * run mints its own run root but replays this node from the journal (`run-layers.ts`), so its
+ * `ticketPath` cites the predecessor's copy rather than writing a second one.
+ *
+ * `input.maintainer` is caller-supplied, not resolved here: a credential lookup would name whoever
+ * runs the pipeline, not the maintainer.
+ */
 export const fetchTicket = make({
   name: "fetch-ticket",
-  description: "Fetch a ticket's maintainer-authored title, body and comments from the tracker.",
+  description: "Fetch a ticket's maintainer-authored title, body and comments from the tracker into the run root.",
   input: Schema.Struct({ ticket: Schema.String, maintainer: Schema.String }),
-  success: Schema.Struct({ ticket: Schema.String, title: Schema.String, body: Schema.String }),
+  success: Schema.Struct({ ticket: Schema.String, title: Schema.String, ticketPath: Schema.String }),
   run: (input) =>
     Effect.gen(function* () {
+      const runInfo = yield* RunInfo
+      const ticketPath = `${runInfo.runRoot}/ticket.md`
+      // Checked before the tracker is asked: a run with no run directory is a wiring bug, not a data problem.
+      yield* requireRunRoot(() => new TicketWriteFailed({ ticket: input.ticket, path: ticketPath, detail: "run root missing" }))
+
       const issue = yield* fetchIssue(input.ticket)
 
       // A foreign-authored issue has no maintainer text to keep, so refuse before rendering.
       if (issue.author.login !== input.maintainer) {
         return yield* Effect.fail(new TicketNotMaintainerAuthored({ ticket: input.ticket }))
       }
-      if (issue.title.trim() === "") return yield* Effect.fail(new EmptyTicket({ ticket: input.ticket }))
+      const title = issue.title.trim()
+      if (title === "") return yield* Effect.fail(new EmptyTicket({ ticket: input.ticket }))
 
-      return { ticket: input.ticket, title: issue.title.trim(), body: renderBody(issue, input.maintainer) }
-    })
+      const fs = yield* FileSystem.FileSystem
+      yield* Effect.gen(function* () {
+        yield* fs.makeDirectory(runInfo.runRoot, { recursive: true })
+        yield* fs.writeFileString(ticketPath, [`# ${title}`, "", renderBody(issue, input.maintainer)].join("\n"), { flag: "wx" })
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.fail(
+            new TicketWriteFailed({
+              ticket: input.ticket,
+              path: ticketPath,
+              detail: error.reason._tag === "AlreadyExists" ? "ticket file already exists" : String(error)
+            })
+          )
+        )
+      )
+
+      return { ticket: input.ticket, title, ticketPath }
+    }).pipe(Effect.provide(platform))
 })

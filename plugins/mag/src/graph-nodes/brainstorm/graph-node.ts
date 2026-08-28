@@ -14,6 +14,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { SKILLS_TOKEN, TICKET_TOKEN } from "mag/skills/design/tokens"
 import { DESIGN_DESTINATION, designDestinationFor } from "mag/skills/design/write-and-confirm"
 import { SKILLS_ROOT } from "mag/skills/installed"
@@ -35,20 +36,23 @@ const sendBackBlock = (findingsPath: string, designPath: string): readonly strin
 ]
 
 /**
- * A first pass frames the ticket, cites every vision and the discover note by path — read-only
- * references, never inlined, since an oversized prompt dies at execve — and appends the
- * already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s own
- * job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>` unfilled by design, and this is the one
- * node in the pipeline that can fill them. A resumed pass drops all of that — the session already
- * holds it, and restating it invites a redesign from scratch — and carries the send-back alone.
+ * A first pass frames the ticket, cites every vision, the discover note and the recycle map by
+ * path — read-only references, never inlined, since an oversized prompt dies at execve — and
+ * appends the already-composed, already-budget-checked brainstorm prompt
+ * (`assemble-brainstorm-prompt`'s own job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>`
+ * unfilled by design, and this is the one node in the pipeline that can fill them. A resumed pass
+ * drops the citations and the compiled skill — the session already holds them, and restating them
+ * invites a redesign from scratch — and carries the ticket reference plus the send-back alone, so
+ * the session can still reopen the ticket the findings are judged against.
  */
 const promptFor = (
   input: {
     readonly ticket: string
     readonly title: string
-    readonly body: string
+    readonly ticketPath: string
     readonly visionPaths: readonly string[]
     readonly discoverPath: string
+    readonly recycleMapPath: string
     readonly prompt: string
     readonly findingsPath?: string | undefined
     readonly resume?: string | undefined
@@ -56,22 +60,26 @@ const promptFor = (
   designPath: string
 ): string =>
   input.resume !== undefined && input.findingsPath !== undefined
-    ? sendBackBlock(input.findingsPath, designPath).join("\n")
+    ? [...ticketReference(input), "", ...sendBackBlock(input.findingsPath, designPath)].join("\n")
     : [
-      `Ticket ${input.ticket}: ${input.title}`,
+      ...ticketReference(input),
       "",
-      input.body,
-      "",
-      "Read each vision below and the discover note as citations. Do not redraw a vision or re-run recon.",
+      "Read each vision below, the discover note and the recycle map as citations. Do not redraw a vision or re-run recon.",
       ...input.visionPaths.map((path) => `- ${path}`),
       `- ${input.discoverPath}`,
+      `- ${input.recycleMapPath}`,
       "",
-      // The structural guarantee that survives whatever `input.prompt` contains (proven by this
-      // node's own token-filling test, which hands in a synthetic prompt carrying no write step).
+      // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
+      // success), not text this node composes itself — unlike `design/graph-node.ts`'s `skillFor`,
+      // which owns its own composition and can rely on `DESIGN_DESTINATION` being exactly what it put
+      // there. This line is the structural guarantee that survives regardless of what `input.prompt`
+      // actually contains (proven by `brainstorm/graph-node.test.ts`'s own token-filling test, which
+      // hands in a synthetic prompt carrying neither `DESIGN_DESTINATION` nor a real write step).
       `Write the design doc to \`${designPath}\`, this run's own destination for it.`,
       "",
-      // When `input.prompt` IS the real compiled skill, this collapses its write step onto the
-      // same absolute path stated above, so the two lines agree.
+      // When `input.prompt` IS the real compiled skill (every live dispatch), this collapses its
+      // write step onto the same absolute path stated above, so the two lines agree instead of
+      // leaving the model to choose between a relative default and an override.
       input.prompt
         .replaceAll(DESIGN_DESTINATION, designPath)
         .replaceAll(TICKET_TOKEN, input.ticket)
@@ -107,14 +115,15 @@ export const brainstorm = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** The already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s success). */
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    recycleMapPath: Schema.String,
     /** The blocking verdict this pass is answering (`review-plan`'s findings). Present means a send-back pass: the prompt names the file, and an unchanged design may end in a dispute. */
     findingsPath: Schema.optional(Schema.String),
-    /** The session this pass resumes, `build`'s convention: the prompt drops the ticket framing and the compiled skill, which the session already holds. */
+    /** The session this pass resumes, `build`'s convention: the prompt drops the citations and the compiled skill, which the session already holds. */
     resume: Schema.optional(Schema.String),
     /** A named agent to run the session as, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),

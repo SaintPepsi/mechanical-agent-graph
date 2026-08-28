@@ -2,12 +2,12 @@ export const inputExamples = [
   {
     ticket: "GH-258",
     title: "Discover: independent mechanical recon of what exists",
-    body: "## Executive Summary\n\nDiscover answers what currently exists in the repo a ticket touches."
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-258/run-1/ticket.md"
   },
   {
     ticket: "GH-258",
     title: "Discover: independent mechanical recon of what exists",
-    body: "## Executive Summary\n\nDiscover answers what currently exists in the repo a ticket touches.",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-258/run-1/ticket.md",
     agent: "effect-expert",
     model: "opus"
   }

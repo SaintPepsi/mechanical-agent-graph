@@ -39,11 +39,13 @@ export const designUnderReview = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** The already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s success). */
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    /** The reuse map every session in the loop cites, and the reviewer checks the plan's tasks against. */
+    recycleMapPath: Schema.String,
     /** Max send-backs: brainstorm runs at most `cap + 1` times. */
     cap: Schema.Natural,
     /** A named agent for every session this node dispatches. */
@@ -66,7 +68,7 @@ export const designUnderReview = make({
     Effect.gen(function* () {
       const agentField = input.agent === undefined ? {} : { agent: input.agent }
       const modelField = input.model === undefined ? {} : { model: input.model }
-      const ticketFields = { ticket: input.ticket, title: input.title, body: input.body }
+      const ticketFields = { ticket: input.ticket, title: input.title, ticketPath: input.ticketPath }
 
       let prior = Option.none<PlanBlocked>()
       let spent: Spend = { costUsd: 0, sessions: [] }
@@ -79,6 +81,7 @@ export const designUnderReview = make({
           prompt: input.prompt,
           visionPaths: input.visionPaths,
           discoverPath: input.discoverPath,
+          recycleMapPath: input.recycleMapPath,
           ...agentField,
           ...modelField,
           ...Option.match(prior, {
@@ -94,6 +97,7 @@ export const designUnderReview = make({
             ...ticketFields,
             designPath: designed.designPath,
             discoverPath: input.discoverPath,
+            recycleMapPath: input.recycleMapPath,
             ...agentField,
             ...modelField
           })
@@ -110,6 +114,7 @@ export const designUnderReview = make({
             ...ticketFields,
             designPath: designed.designPath,
             planPath: planned.planPath,
+            recycleMapPath: input.recycleMapPath,
             headSha: planned.headSha,
             ...adjudication,
             ...agentField,

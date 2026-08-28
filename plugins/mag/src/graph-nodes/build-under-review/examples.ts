@@ -2,7 +2,7 @@ export const inputExamples = [
   {
     ticket: "GH-98",
     title: "Fix the NUL-byte crash",
-    body: "NUL bytes abort the run.",
+    ticketPath: "/repo/.claude/graph/run-1/ticket.md",
     branch: "feat/GH-98-fix-the-nul-byte-crash",
     command: "bun run typecheck && bun run test",
     base: "main",
@@ -18,7 +18,7 @@ export const inputExamples = [
     // No design step ran, no agent named — both fields simply absent.
     ticket: "GH-98",
     title: "Fix the NUL-byte crash",
-    body: "NUL bytes abort the run.",
+    ticketPath: "/repo/.claude/graph/run-1/ticket.md",
     branch: "feat/GH-98-fix-the-nul-byte-crash",
     command: "bun run typecheck && bun run test",
     base: "main",

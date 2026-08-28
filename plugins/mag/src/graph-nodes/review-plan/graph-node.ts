@@ -15,6 +15,7 @@ import { gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
 import { nulPaths, RULINGS_PATHSPEC } from "mag/runtime/rulings"
 import { RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 
 /** Blocking findings, an empty list a pass — `review-diff`'s own verdict. */
 const VERDICT = verdictSchema(Schema.Struct({ blocking: Schema.Array(Schema.String) }))
@@ -28,13 +29,13 @@ const renderFindings = (headSha: string, blocking: readonly string[]): string =>
   ].join("\n")
 
 /** The altitude, stated as what a blocking finding is; the diff is not named because this node never reads one. */
-const reviewBlock = (designPath: string, planPath: string): readonly string[] => [
+const reviewBlock = (designPath: string, planPath: string, recycleMapPath: string): readonly string[] => [
   "",
   `Review the design at ${designPath} and the plan at ${planPath} against the ticket, before any code exists. Read both whole. Reply with only the blocking findings, each specific enough to act on; an empty list means both pass. A blocking finding is any of:`,
   "- an acceptance criterion no task in the plan proves, named by id;",
   "- an entry under the design's Open Questions, quoted: a design that leaves a question open is not ready to build;",
   "- a task or design section asking for what a rulings file below forbids, quoting the ruling;",
-  "- a task that rebuilds what the discover note's reuse map says exists.",
+  `- a task that rebuilds what the recycle map at ${recycleMapPath} says exists.`,
   "Change nothing."
 ]
 
@@ -62,18 +63,17 @@ const promptFor = (
   input: {
     readonly ticket: string
     readonly title: string
-    readonly body: string
+    readonly ticketPath: string
     readonly designPath: string
     readonly planPath: string
+    readonly recycleMapPath: string
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
   },
   rulings: readonly string[]
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
-    "",
-    input.body,
-    ...reviewBlock(input.designPath, input.planPath),
+    ...ticketReference(input),
+    ...reviewBlock(input.designPath, input.planPath, input.recycleMapPath),
     ...rulingsBlock(rulings),
     ...(input.dispute === undefined ? [] : disputeBlock(input.dispute.findingsPath, input.dispute.disputePath))
   ].join("\n")
@@ -95,9 +95,11 @@ export const reviewPlan = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     designPath: Schema.String,
     planPath: Schema.String,
+    /** The reuse map the plan's tasks are checked against: a task that rebuilds a listed thing is a finding. */
+    recycleMapPath: Schema.String,
     /** The tree the plan was written against (`plan`'s own `headSha`), stamped on the findings and any failure. */
     headSha: Schema.String,
     /** The findings a disputed design pass was answering, present alongside `disputePath` — `review-diff`'s pair, same reasoning. */

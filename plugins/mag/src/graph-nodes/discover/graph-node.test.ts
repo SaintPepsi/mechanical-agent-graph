@@ -11,7 +11,7 @@ import { type ClaudeAgentService, claudeAgentLayer, type ClaudePrint, type Claud
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { compileRecon, RECON_PARAMS } from "mag/skills/recon"
+import { compileRecon } from "mag/skills/recon"
 import { removeDir, testRunInfo, withForeignRepo } from "mag/test/node-fixture"
 
 /** In-order scripted shell, `simplify/graph-node.test.ts`'s idiom. */
@@ -116,7 +116,7 @@ describe("discover", () => {
 
   // The prompt carries the ticket alone, never a vision or design field, there is none in the
   // input schema to carry, so this checks the bytes the dispatch actually received.
-  test("the prompt carries the ticket, body, computed destination, and the compiled standard — no vision or design text", async () => {
+  test("the prompt carries the ticket reference, computed destination, and the compiled standard, no vision or design text", async () => {
     const agent = stubAgent()
     // RUN's repoRoot is a fake path, so the post-session file check fails cleanly after dispatch,
     // this test only cares about what was sent.
@@ -126,10 +126,10 @@ describe("discover", () => {
     const request = agent.requests[0]!
     expect(request.cwd).toBe("/repo")
     expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-    expect(request.prompt).toContain(INPUT.body)
+    expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
     expect(request.prompt).toContain("Read only.")
     expect(request.prompt).toContain(`docs/graph/${INPUT.ticket}/discover.md`)
-    expect(request.prompt).toContain(compileRecon(RECON_PARAMS))
+    expect(request.prompt).toContain(compileRecon())
     expect(request.prompt).not.toContain("vision")
     expect(request.prompt).not.toContain("design.md")
   })
@@ -336,22 +336,19 @@ describe("discover", () => {
       expect(failure.argv).toContain("git commit")
     }))
 
-  // The compiled standard opens with the reuse map and carries the empty-search rule, a
-  // pure-function assertion, no dispatch.
-  test("the compiled standard opens with the reuse map and carries the empty-search rule", () => {
-    const compiled = compileRecon(RECON_PARAMS)
-    expect(compiled.indexOf("Reuse map")).toBeGreaterThanOrEqual(0)
-    expect(compiled.indexOf("Reuse map")).toBeLessThan(compiled.indexOf("Relevant files"))
-    expect(compiled).toContain("names the searches that came up empty")
+  // The compiled standard is the maintainer's phase text: the learning question, then what
+  // exists and what's notable, a pure-function assertion, no dispatch.
+  test("the compiled standard is the learning-question phase, its load-bearing line verbatim", () => {
+    const compiled = compileRecon()
+    expect(compiled.startsWith("# Discover\n")).toBe(true)
+    expect(compiled).toContain("No problem-solving. Just learning.")
+    expect(compiled).toContain("Reframe the request as a learning question")
+    expect(compiled.indexOf("the learning question first")).toBeLessThan(compiled.indexOf("what's notable"))
   })
 
-  // The standard names no generated index, and every committed-policy git call names the note
-  // itself, never a bare directory.
-  test("the standard names no generated index, and every committed-policy git call names the note itself, never a bare directory", () =>
+  // Every committed-policy git call names the note itself, never a bare directory.
+  test("every committed-policy git call names the note itself, never a bare directory", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
-      const compiled = compileRecon(RECON_PARAMS)
-      expect(compiled).toContain("Read no generated index and write none")
-
       const agent = stubAgent({}, () => writeNote(repoRoot))
       const { calls, service } = commitsCleanly()
       await runWith(discover.run(INPUT), agent.service, service, { ...run, records: "committed" })

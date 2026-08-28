@@ -509,7 +509,7 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
     keep: Keep<A, B>
   ) => Construct<Seed, Ctx & Partial<B>, E | E2, R | R2>
   /** A total helper between nodes — the compose-pr-body case, ruled a `runtime/` helper rather than a
-   *  node: a node needs a tagged error, and `prBody` has no failure mode to name. `name`
+   *  node: a node needs a tagged error, and `prBody` carries its own. `name`
    *  is the stage's own declared handle: with no node behind it, a `.via` stage would otherwise have
    *  none to draw in the shape. */
   readonly via: <B extends object, E2, R2>(

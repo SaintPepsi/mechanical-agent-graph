@@ -42,7 +42,7 @@ const stubAgent = (reply: Partial<ClaudeReply<unknown>> = {}) => {
     prompt: <A>(request: ClaudePrint<A>) => {
       requests.push(request as ClaudePrint<unknown>)
       return Effect.succeed({
-        verdict: { rewritten: 1, note: "collapsed one prompt" } as A,
+        verdict: { rewritten: 1 } as A,
         result: {},
         sessions: ["stub-session"],
         costUsd: 0.31,

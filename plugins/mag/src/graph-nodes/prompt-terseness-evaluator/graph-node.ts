@@ -15,8 +15,8 @@ import { RunInfo, workdir } from "mag/runtime/run-info"
 import { Shell } from "mag/runtime/shell"
 import { compilePromptTerseness, EVALUATOR_PARAMS } from "mag/skills/prompt-terseness"
 
-/** What the session must return: a count and one line about it. Nothing that duplicates the diff. */
-const VERDICT = verdictSchema(Schema.Struct({ rewritten: Schema.Int, note: Schema.String }))
+/** What the session must return: a count. The commit is the artifact; nothing here duplicates the diff. */
+const VERDICT = verdictSchema(Schema.Struct({ rewritten: Schema.Int }))
 
 /** Compiled fresh at dispatch, inside this node's own runtime: never at module load, never materialized as a file. */
 const personaFor = (): string => compilePromptTerseness(EVALUATOR_PARAMS)

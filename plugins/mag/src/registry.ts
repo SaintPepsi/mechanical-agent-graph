@@ -29,6 +29,7 @@ import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-n
 import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
 import { publish } from "mag/graph-nodes/publish/graph-node"
 import { pushBranch } from "mag/graph-nodes/push-branch/graph-node"
+import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { resolveBase } from "mag/graph-nodes/resolve-base/graph-node"
 import { resolveConflicts } from "mag/graph-nodes/resolve-conflicts/graph-node"
@@ -73,6 +74,7 @@ export const registry: Registry = [
   { kind: "command", node: branch },
   { kind: "command", node: design },
   { kind: "command", node: discover },
+  { kind: "command", node: recycleMap },
   { kind: "command", node: promptTersenessEvaluator },
   { kind: "command", node: assembleBrainstormPrompt },
   { kind: "command", node: envisionNotation },
