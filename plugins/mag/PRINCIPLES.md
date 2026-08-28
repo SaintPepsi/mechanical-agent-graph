@@ -136,8 +136,9 @@ maintainer rules otherwise.
   spliced into a prompt lasts exactly one context window, while a file is a cited baseline every
   later session reopens on the same terms, and the journal records a path instead of a copy per
   node. The ticket is the first instance: `fetch-ticket` writes `<runRoot>/ticket.md` once, no
-  node changes it afterwards, no input schema carries its body, and every prompt says `Read the
-  ticket at <path>` (`runtime/ticket.ts`) and nothing more about it. Precedent: v1's ingest step
+  node changes it afterwards, no input schema carries its body, and every prompt carries the id
+  and title as its header line, then `Read the ticket at <path>` (`runtime/ticket.ts`), and
+  nothing else from the ticket. Precedent: v1's ingest step
   wrote the immutable ticket doc once and every later step read it as the fixed baseline.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one

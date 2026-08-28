@@ -14,10 +14,12 @@ import { inputExamples as notationInputs } from "mag/graph-nodes/envision-notati
 import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
 import { inputExamples as reviewInputs } from "mag/graph-nodes/review-diff/examples"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
+import { registry } from "mag/registry"
 import { type ClaudeAgentService, claudeAgentLayer } from "mag/runtime/claude/service"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { RunInfo } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
+import type { Registry } from "mag/runtime/types"
 import { recordingAgent, scriptedShell, testRunInfo, withRunRoot } from "mag/test/node-fixture"
 
 /**
@@ -51,6 +53,21 @@ const NODES: ReadonlyArray<{
   { node: reviewDiff, input: reviewInputs[0]!, shell: () => reviewShell(reviewInputs[0]!.headSha) }
 ]
 
+/** Registered nodes that carry `ticketPath` without composing a prompt of their own: composites handing it to a node in NODES, and the mechanical readers (`github-ticket-create`'s is ticket-writer's JSON draft, read into a `gh` call). */
+const NON_DISPATCHING: ReadonlyArray<string> = ["envision-visions", "build-under-review", "design-graph", "require-acs", "github-ticket-create"]
+
+/** Every command node in the registry, groups walked. */
+const commandNodes = (entries: Registry): ReadonlyArray<GraphNode<any, any, any, any>> =>
+  entries.flatMap((entry) =>
+    entry.kind === "command" ? [entry.node] : entry.kind === "group" ? commandNodes(entry.children) : []
+  )
+
+/** The input schema's own field names, read off its AST the way `schema-flags.ts` walks it. */
+const inputFields = (node: GraphNode<any, any, any, any>): ReadonlyArray<PropertyKey> => {
+  const ast = node.input.ast
+  return ast._tag === "Objects" ? ast.propertySignatures.map((signature) => signature.name) : []
+}
+
 const dispatch = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService, runRoot: string) =>
   Effect.runPromise(
     Effect.result(
@@ -62,6 +79,13 @@ const dispatch = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentSe
   )
 
 describe("the ticket is never injected", () => {
+  test("every registered node whose input carries ticketPath is dispatched here, or is named as non-dispatching", () => {
+    const covered = new Set([...NODES.map(({ node }) => node.name), ...NON_DISPATCHING])
+    const carriers = commandNodes(registry).filter((node) => inputFields(node).includes("ticketPath")).map((node) => node.name)
+    expect(carriers.length).toBeGreaterThan(0)
+    for (const name of carriers) expect(covered).toContain(name)
+  })
+
   for (const { node, input, shell } of NODES) {
     test(`${node.name}'s prompt cites the ticket file and carries none of its text`, () =>
       withRunRoot("ticket-never-injected", async (runRoot) => {

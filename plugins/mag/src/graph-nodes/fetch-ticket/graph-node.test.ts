@@ -15,8 +15,8 @@ import type { Issue } from "mag/graph-nodes/fetch-ticket/render"
 import { renderBody } from "mag/graph-nodes/fetch-ticket/render"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
-import { Shell, type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { testRunInfo, withRunRoot as withRunRootIn } from "mag/test/node-fixture"
+import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
+import { testRunInfo, withRunRoot } from "mag/test/node-fixture"
 
 const ok = (stdout: string): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
 
@@ -48,10 +48,7 @@ const stubShell = (issueReply: ShellResult) => {
   return { calls, service }
 }
 
-/** No FS ever reached from this: only for the paths that fail before the write (a fake run root is fine). */
-const RUN = testRunInfo()
-
-const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService, run: RunInfoService = RUN) =>
+const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService, run: RunInfoService = testRunInfo()) =>
   Effect.runPromise(
     Effect.result(effect.pipe(Effect.provide(shellLayer(service)), Effect.provideService(RunInfo, run)))
   )
@@ -62,8 +59,6 @@ const failureOf = async <A, E>(effect: Effect.Effect<A, E, never>, service: Shel
   return result.failure
 }
 
-/** The success path writes `ticket.md` into a real run root. */
-const withRunRoot = <T>(fn: (runRoot: string) => Promise<T>): Promise<T> => withRunRootIn("fetch-ticket", fn)
 
 describe("fetch-ticket", () => {
   test("the fixtures decode against fetch-ticket's own schemas", () => {
@@ -158,7 +153,7 @@ describe("fetch-ticket", () => {
 
   describe("the node", () => {
     test("the recorded argv is exactly the one gh call — no sh anywhere", () =>
-      withRunRoot(async (runRoot) => {
+      withRunRoot("fetch-ticket", async (runRoot) => {
         const { calls, service } = stubShell(okIssue({ title: "Fix it", body: "body", author: "maintainer" }))
         await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service, testRunInfo({ runRoot }))
         expect(calls).toStrictEqual([["gh", "issue", "view", "98", "--json", "title,body,author,comments"]])
@@ -166,7 +161,7 @@ describe("fetch-ticket", () => {
       }))
 
     test("writes `<runRoot>/ticket.md` holding the title, body and maintainer comments, and succeeds with its path beside the id and title, never the text", () =>
-      withRunRoot(async (runRoot) => {
+      withRunRoot("fetch-ticket", async (runRoot) => {
         const { service } = stubShell(
           okIssue({
             title: "Fix the parser",
@@ -185,7 +180,7 @@ describe("fetch-ticket", () => {
       }))
 
     test("the maintainer is an ordinary input, not a credential this node resolves — the same issue reply succeeds or fails purely on which maintainer the caller passes, and no gh api user call ever fires (the stub throws if one does)", () =>
-      withRunRoot(async (runRoot) => {
+      withRunRoot("fetch-ticket", async (runRoot) => {
         const issueReply = okIssue({
           title: "T",
           body: "b",
@@ -250,10 +245,18 @@ describe("fetch-ticket", () => {
       expect(await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(EmptyTicket)
     })
 
-    test("resolves the live Shell by default, so nothing has to be provided to run it", () => {
-      // Not an assertion about the subprocess: only that `Shell` is a Reference with a default, which
-      // is what keeps this node's R at `never` and therefore CLI-reachable (`runtime/types.ts`).
-      expect(Effect.runSync(Effect.map(Shell, (shell) => typeof shell.run))).toBe("function")
-    })
+    test("a second write into the same run root fails TicketWriteFailed at the OS, the first file untouched", () =>
+      withRunRoot("fetch-ticket", async (runRoot) => {
+        const first = stubShell(okIssue({ title: "First", body: "one", author: "maintainer" }))
+        await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), first.service, testRunInfo({ runRoot }))
+
+        const second = stubShell(okIssue({ title: "Second", body: "two", author: "maintainer" }))
+        const result = await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), second.service, testRunInfo({ runRoot }))
+        expect(Result.isFailure(result)).toBe(true)
+        if (!Result.isFailure(result)) return
+        expect(result.failure).toBeInstanceOf(TicketWriteFailed)
+        expect((result.failure as TicketWriteFailed).detail).toBe("ticket file already exists")
+        expect(readFileSync(`${runRoot}/ticket.md`, "utf8")).toBe("# First\n\none")
+      }))
   })
 })

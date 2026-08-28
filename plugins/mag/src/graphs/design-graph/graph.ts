@@ -7,6 +7,7 @@ import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
 import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
+import { DesignGraphTicketUnreadable } from "mag/graphs/design-graph/errors"
 import { graph } from "mag/runtime/graph"
 import { platform } from "mag/runtime/platform"
 
@@ -55,11 +56,13 @@ const pipeline = (input: {
   readonly model?: string
 }) =>
   Effect.gen(function* () {
-    // The probes match manifests against the ticket's own words, read here from the run root's
-    // ticket file: a file is a trust boundary, and the graph's error union already carries a raw
-    // `PlatformError` (`runScopedLayers`'s own), so the read wears no tag of its own.
+    // The probes match manifests against the ticket's own words, read here from the ticket file:
+    // a file is a trust boundary, tagged the way `require-acs` tags the same read.
     const fs = yield* FileSystem.FileSystem
-    const verdicts = yield* probeVerdicts(yield* fs.readFileString(input.ticketPath))
+    const text = yield* fs.readFileString(input.ticketPath).pipe(
+      Effect.mapError((error) => new DesignGraphTicketUnreadable({ ticket: input.ticket, path: input.ticketPath, detail: String(error) }))
+    )
+    const verdicts = yield* probeVerdicts(text)
     const resolved = yield* resolveNotations.run({ verdicts })
 
     const [visions, discovered, assembled] = yield* Effect.all(

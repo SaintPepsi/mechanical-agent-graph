@@ -95,8 +95,9 @@ One run emits four things:
   own `Runtime.defaultTeardown` exits it).
 - **on disk**: `journal.jsonl` in the run root
   (`<CLAUDE_CONFIG_DIR>/graph/<project-key>/<ticket>/<run-id>/`), its artifacts beside it
-  (`ticket.md` first, the fetched ticket every session read by path), and on failure the run's
-  worktree, kept. Its end row is written on all four outcomes (`journal/row.ts`).
+  (`ticket.md` first, the fetched ticket every session read by path; a resumed run cites the
+  predecessor run's copy), and on failure the run's worktree, kept. Its end row is written on all
+  four outcomes (`journal/row.ts`).
 
 **Success**: exit 0 and the stdout JSON line. Its `prUrl` is the PR — `create-pr` schema-encodes
 it from `gh`'s own output, so there is nothing to re-confirm with a second `gh` call. That is the

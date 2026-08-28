@@ -51,8 +51,8 @@ bun install
 A run works on the repository it is *started in*: the repo root is `git rev-parse --show-toplevel`
 from the process's directory, `fetch-ticket` shells `gh issue view` there and writes the ticket
 once to the run root as `ticket.md` (every later session reads it from that path, never from its
-prompt), and every agent session runs there. So launch it from a checkout of the target
-repository, naming the CLI by path:
+prompt; a resumed run cites the predecessor run's copy), and every agent session runs there. So
+launch it from a checkout of the target repository, naming the CLI by path:
 
 ```sh
 cd /path/to/your-repo

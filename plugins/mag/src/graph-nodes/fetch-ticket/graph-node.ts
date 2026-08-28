@@ -54,8 +54,10 @@ const fetchIssue = (ticket: string): Effect.Effect<Issue, TicketNotAddressable |
 
 /**
  * Fetches the ticket and writes it once to `<runRoot>/ticket.md`, the immutable artifact every
- * later node reads and every prompt cites by path (`runtime/ticket.ts`). No node changes the file
- * afterwards, and a resumed run replays this node from the journal, so the file it wrote stands.
+ * later node reads and every prompt cites by path (`runtime/ticket.ts`). "Once" is mechanical:
+ * the write opens with `wx`, so a second write into the same run root fails at the OS. A resumed
+ * run mints its own run root but replays this node from the journal (`run-layers.ts`), so its
+ * `ticketPath` cites the predecessor's copy rather than writing a second one.
  *
  * `input.maintainer` is caller-supplied, not resolved here: a credential lookup would name whoever
  * runs the pipeline, not the maintainer.
@@ -84,10 +86,16 @@ export const fetchTicket = make({
       const fs = yield* FileSystem.FileSystem
       yield* Effect.gen(function* () {
         yield* fs.makeDirectory(runInfo.runRoot, { recursive: true })
-        yield* fs.writeFileString(ticketPath, [`# ${title}`, "", renderBody(issue, input.maintainer)].join("\n"))
+        yield* fs.writeFileString(ticketPath, [`# ${title}`, "", renderBody(issue, input.maintainer)].join("\n"), { flag: "wx" })
       }).pipe(
         Effect.catch((error) =>
-          Effect.fail(new TicketWriteFailed({ ticket: input.ticket, path: ticketPath, detail: String(error) }))
+          Effect.fail(
+            new TicketWriteFailed({
+              ticket: input.ticket,
+              path: ticketPath,
+              detail: error.reason._tag === "AlreadyExists" ? "ticket file already exists" : String(error)
+            })
+          )
         )
       )
 
