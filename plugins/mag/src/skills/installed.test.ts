@@ -5,6 +5,7 @@ import { composeDesignPrompt } from "mag/skills/design/compose"
 import type { CitationRoot } from "mag/skills/design/concern"
 import { INSTALLED_DESIGN } from "mag/skills/design/variants"
 import { INSTALLED_SKILLS, installedPath, renderInstalled, SKILLS_ROOT } from "mag/skills/installed"
+import { compileRecon, RECON_PARAMS } from "mag/skills/recon"
 
 /**
  * The drift gate: proves every installed row hasn't drifted from what a fresh render produces.
@@ -18,6 +19,21 @@ describe("every installed row matches a fresh render", () => {
       expect(onDisk).toBe(renderInstalled(skill))
     })
   }
+})
+
+describe("the installed discover skill renders the step's own standard", () => {
+  const discover = INSTALLED_SKILLS.find((skill) => skill.name === "discover")!
+
+  test("the row's body carries compileRecon(RECON_PARAMS) whole, under its interactive opening", () => {
+    expect(discover.body()).toContain(compileRecon(RECON_PARAMS))
+    expect(discover.body().startsWith("# Discover\n")).toBe(true)
+  })
+
+  test("a perturbed standard drifts the installed bytes off disk", () => {
+    const perturbed = { ...RECON_PARAMS, rules: [...RECON_PARAMS.rules, "†PERTURBED†"] }
+    const perturbedSkill = { ...discover, body: () => discover.body().replace(compileRecon(RECON_PARAMS), compileRecon(perturbed)) }
+    expect(renderInstalled(perturbedSkill)).not.toBe(readFileSync(installedPath(SKILLS_ROOT, "discover"), "utf8"))
+  })
 })
 
 const brainstorming = INSTALLED_SKILLS.find((skill) => skill.name === "brainstorming")!

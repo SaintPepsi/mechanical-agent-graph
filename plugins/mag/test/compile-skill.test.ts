@@ -26,7 +26,7 @@ describe("compile-skill — the real CLI end to end", () => {
       expect(lines.length).toBe(1)
       const parsed = JSON.parse(lines[0])
       expect(parsed.root).toBe(root)
-      expect(parsed.written).toEqual([installedPath(root, "brainstorming")])
+      expect(parsed.written).toEqual([installedPath(root, "brainstorming"), installedPath(root, "discover")])
 
       for (const skill of INSTALLED_SKILLS) {
         expect(readFileSync(installedPath(root, skill.name), "utf8")).toBe(renderInstalled(skill))

@@ -336,13 +336,20 @@ describe("discover", () => {
       expect(failure.argv).toContain("git commit")
     }))
 
-  // The compiled standard opens with the reuse map and carries the empty-search rule, a
-  // pure-function assertion, no dispatch.
-  test("the compiled standard opens with the reuse map and carries the empty-search rule", () => {
+  // The compiled standard opens with the learning question, reports the reuse map first, and
+  // carries the empty-search and size rules, a pure-function assertion, no dispatch.
+  test("the compiled standard opens with the learning question, then the reuse map, and carries the empty-search and size rules", () => {
     const compiled = compileRecon(RECON_PARAMS)
-    expect(compiled.indexOf("Reuse map")).toBeGreaterThanOrEqual(0)
+    expect(compiled.startsWith("Reframe the ticket as one learning question")).toBe(true)
+    expect(compiled).toContain("Report what exists; the design decides what changes.")
     expect(compiled.indexOf("Reuse map")).toBeLessThan(compiled.indexOf("Relevant files"))
+    expect(compiled.indexOf("Relevant files")).toBeLessThan(compiled.indexOf("Constraints"))
+    expect(compiled.indexOf("Constraints")).toBeLessThan(compiled.indexOf("Open unknowns"))
     expect(compiled).toContain("names the searches that came up empty")
+    expect(compiled).toContain("a path and one line per entry")
+    // The sections whose copied text made a 30 KB note are gone; their content is one line per file above.
+    expect(compiled).not.toContain("Types and data shapes")
+    expect(compiled).not.toContain("Integration points")
   })
 
   // The standard names no generated index, and every committed-policy git call names the note

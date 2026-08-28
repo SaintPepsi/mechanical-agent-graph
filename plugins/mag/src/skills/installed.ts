@@ -1,6 +1,7 @@
 import { join } from "node:path"
 import { composeDesignPrompt } from "mag/skills/design/compose"
 import { INSTALLED_DESIGN } from "mag/skills/design/variants"
+import { compileRecon, RECON_PARAMS } from "mag/skills/recon"
 
 /**
  * The single home for "where do this checkout's installed skills live, and which variants are
@@ -33,6 +34,22 @@ export const INSTALLED_SKILLS: readonly InstalledSkill[] = [
     description:
       "Engineering brainstorming mode for software work — a feature, component, refactor, or architecture decision. USE WHEN brainstorming or designing a feature/component/refactor, choosing between approaches, or thinking through architecture before writing implementation code.",
     body: () => composeDesignPrompt(INSTALLED_DESIGN)
+  },
+  {
+    name: "discover",
+    description:
+      "Recon what a request touches in the repository you are in, as a cited note: one learning question answered by reading the code, a reuse map, relevant files, constraints and open unknowns. USE WHEN asked to discover, recon, or map what already exists for a feature, bug or refactor before designing or planning it, or before building in an unfamiliar area.",
+    // The step's own standard (`discover/graph-node.ts` compiles the same `RECON_PARAMS`) under an
+    // interactive opening: the request stands in for the ticket, and the destination is the user's.
+    body: () =>
+      [
+        "# Discover",
+        "",
+        "Take the request you were given as the ticket. Recon this repository for what it touches. Read only.",
+        "Write your findings to the path the request names, else `docs/graph/discover.md`. Change nothing else.",
+        "",
+        compileRecon(RECON_PARAMS)
+      ].join("\n")
   }
 ]
 

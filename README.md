@@ -29,8 +29,8 @@ publish-tail                PR body from the merge-base diff, push, open the PR
 
 ## Install the skills
 
-The plugin ships this repository's skills (brainstorming, envision, writing-plans, …) into Claude
-Code:
+The plugin ships this repository's skills (brainstorming, discover, envision, writing-plans, …)
+into Claude Code:
 
 ```sh
 /plugin marketplace add SaintPepsi/mechanical-agent-graph
