@@ -81,7 +81,7 @@ Pick the notation the change actually deserves — prose, a diagram, pseudo-code
 
 ## What You May Decide vs What the User Sees
 
-Pragmatic calls cover **how it's built** — structure, seams, placement, data flow. They never cover **what the user sees relative to what already exists**. If a choice would make an existing concept look or behave differently from how it renders today — dropping a label, changing an affordance, restyling a shared element — that is a product decision, not a design decision: ask the user, or when running autonomously, record it in Open Questions and **default to the existing behavior**. "The requirements don't mention it" argues **for** the status quo, never against it (principle: Same Concept, Same Rendering — silence in the ACs is not permission to diverge).
+Pragmatic calls cover **how it's built** — structure, seams, placement, data flow. They never cover **what the user sees relative to what already exists**. If a choice would make an existing concept look or behave differently from how it renders today — dropping a label, changing an affordance, restyling a shared element — that is a product decision, not a design decision: ask the user, or when running autonomously, **keep the existing behavior** and record it under Interpretation Rulings with that as its basis. "The requirements don't mention it" argues **for** the status quo, never against it (principle: Same Concept, Same Rendering — silence in the ACs is not permission to diverge).
 
 ## Presenting the Design
 
@@ -91,7 +91,7 @@ Ask after each section whether it looks right, and be ready to revise. Cap dialo
 
 ## Interpretation Rulings
 
-Every AC ambiguity you resolve is a recorded ruling, never a silent choice. Where the design commits to a reading of an AC whose wording allows more than one, the design doc's **Interpretation Rulings** section records the AC id, the chosen reading, and its basis. A ruling about user-visible behaviour with no basis in the ticket or its attachments is not yours to make — it goes under Open Questions instead.
+Every AC ambiguity you resolve is a recorded ruling, never a silent choice. Where the design commits to a reading of an AC whose wording allows more than one, the design doc's **Interpretation Rulings** section records the AC id, the chosen reading, and its basis. A ruling about user-visible behaviour with no basis in the ticket or its attachments keeps the existing behaviour and names that as its basis.
 
 ## Convention Rulings
 
@@ -171,7 +171,7 @@ What gets tested at which layer (unit / integration / e2e).
 
 ## Interpretation Rulings
 
-Present when an AC's wording allows more than one reading. One row per ruling: the AC id, the chosen reading, and its basis.
+Present when an AC's wording allows more than one reading. One row per ruling: the AC id, the chosen reading, and its basis: a ticket line, a rulings file, the code as it stands, or the existing behaviour kept.
 
 | AC | Reading | Basis |
 | --- | --- | --- |
@@ -182,9 +182,5 @@ Present when the design creates a new surface. One row per convention settled: t
 
 | Topic | Ruling | Precedent |
 | --- | --- | --- |
-
-## Open Questions
-
-Anything unresolved.
 ```
 

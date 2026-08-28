@@ -11,9 +11,8 @@ import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
 import { verdictSchema } from "mag/runtime/claude/verdict-schema"
 import { make } from "mag/runtime/graph-node.definition"
-import { gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
-import { nulPaths, RULINGS_PATHSPEC } from "mag/runtime/rulings"
+import { declaredRulings, rulingsBlock } from "mag/runtime/rulings"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 
@@ -33,19 +32,11 @@ const reviewBlock = (designPath: string, planPath: string, recycleMapPath: strin
   "",
   `Review the design at ${designPath} and the plan at ${planPath} against the ticket, before any code exists. Read both whole. Reply with only the blocking findings, each specific enough to act on; an empty list means both pass. A blocking finding is any of:`,
   "- an acceptance criterion no task in the plan proves, named by id;",
-  "- an entry under the design's Open Questions, quoted: a design that leaves a question open is not ready to build;",
+  "- a ruling in the design stated as a choice still open, or with no basis named, quoted: the design decides, the plan builds what it decided;",
   "- a task or design section asking for what a rulings file below forbids, quoting the ruling;",
   `- a task that rebuilds what the recycle map at ${recycleMapPath} says exists.`,
   "Change nothing."
 ]
-
-/** The rulings files git says exist, or none. Paths are repo-root-relative, what git returned and what resolves from the session's cwd. */
-const rulingsBlock = (rulings: readonly string[]): readonly string[] =>
-  rulings.length === 0 ? [] : [
-    "",
-    "This repository states rulings of its own, in the files below:",
-    ...rulings.map((file) => `- ${file}`)
-  ]
 
 /** `review-diff`'s `disputeBlock`, addressed to the design's author rather than the build's. */
 const disputeBlock = (findingsPath: string, disputePath: string): readonly string[] => [
@@ -80,7 +71,7 @@ const promptFor = (
 
 /**
  * Reviews the design record and the plan against the ticket, at plan altitude: acceptance-criteria
- * coverage, open questions, and collisions with the repository's own rulings. Read-only by
+ * coverage, undecided or baseless rulings, and collisions with the repository's own rulings. Read-only by
  * contract, `review-diff`'s precedent: it reports findings and changes nothing, so a blocking
  * finding routes to the producer (`brainstorm`), never back here.
  *
@@ -132,12 +123,7 @@ export const reviewPlan = make({
       if (runInfo.runRoot === "") return yield* Effect.fail(new PlanReviewRunRootMissing())
       const cwd = workdir(runInfo)
 
-      const declared = yield* gitReadRaw(
-        ["git", "ls-files", "-z", "--full-name", "--", ...RULINGS_PATHSPEC],
-        cwd,
-        (fields) => new PlanReviewGitFailed(fields)
-      )
-      const rulings = nulPaths(declared)
+      const rulings = yield* declaredRulings(cwd, (fields) => new PlanReviewGitFailed(fields))
 
       const reply = yield* agent.prompt({
         prompt: promptFor({ ...input, dispute }, rulings),

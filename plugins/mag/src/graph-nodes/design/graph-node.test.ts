@@ -168,7 +168,7 @@ describe("design", () => {
     await runWith(design.run(INPUT), agent.service)
 
     const prompt = agent.requests[0]!.prompt
-    expect(prompt).toContain("Do not wait for an approval nobody will give.")
+    expect(prompt).toContain("Every choice is made in this pass.")
     expect(prompt).not.toContain("<HARD-GATE>")
     expect(prompt).not.toContain("Ask clarifying questions")
     expect(prompt).not.toContain("Present design")

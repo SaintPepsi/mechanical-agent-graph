@@ -65,7 +65,8 @@ describe("review-plan", () => {
       expect(prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(prompt).toContain(`Review the design at ${INPUT.designPath} and the plan at ${INPUT.planPath}`)
       expect(prompt).toContain("an acceptance criterion no task in the plan proves")
-      expect(prompt).toContain("an entry under the design's Open Questions")
+      expect(prompt).toContain("a ruling in the design stated as a choice still open, or with no basis named")
+      expect(prompt).not.toContain("Open Questions")
       expect(prompt).toContain("what a rulings file below forbids")
       expect(prompt).toContain(`rebuilds what the recycle map at ${INPUT.recycleMapPath} says exists`)
       expect(prompt).toContain("Change nothing.")
@@ -107,7 +108,7 @@ describe("review-plan", () => {
       const result = await runWith(
         reviewPlan.run(INPUT),
         rulingsShell().service,
-        reviewAgent(["AC.02 has no task", "Open Questions: which cap?"]).service,
+        reviewAgent(["AC.02 has no task", "Interpretation Rulings AC.04: no basis named"]).service,
         run
       )
 
@@ -116,7 +117,7 @@ describe("review-plan", () => {
       expect(result.failure).toBeInstanceOf(PlanBlocked)
       const blocked = result.failure as PlanBlocked
       expect(blocked).toMatchObject({ findingsPath: `${runRoot}/review-plan-1.md`, headSha: INPUT.headSha, sessions: ["review-session"], costUsd: 0.31 })
-      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- AC.02 has no task\n- Open Questions: which cap?`)
+      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- AC.02 has no task\n- Interpretation Rulings AC.04: no basis named`)
     }))
 
   test("an adjudicating pass names both files in the prompt, and a blocking verdict is PlanDisputeRejected carrying disputePath", () =>

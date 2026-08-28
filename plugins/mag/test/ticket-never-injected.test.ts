@@ -55,7 +55,8 @@ const NODES: ReadonlyArray<{
 }> = [
   { node: discover, input: discoverInputs[0]!, shell: () => scriptedShell([]).service },
   { node: recycleMap, input: recycleInputs[0]!, shell: () => scriptedShell([]).service },
-  { node: brainstorm, input: brainstormInputs[0]!, shell: () => scriptedShell([]).service },
+  // The rulings `ls-files` read, empty: a first brainstorm pass's one git call before its dispatch.
+  { node: brainstorm, input: brainstormInputs[0]!, shell: () => scriptedShell([out("")]).service },
   { node: plan, input: planInputs[0]!, shell: () => scriptedShell([]).service },
   // The rulings `ls-files` read, empty: `review-plan`'s one git call before its dispatch.
   { node: reviewPlan, input: reviewPlanInputs[0]!, shell: () => scriptedShell([out("")]).service },

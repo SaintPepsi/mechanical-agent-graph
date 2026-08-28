@@ -16,6 +16,6 @@ export const autonomy: Concern<"headless"> = {
   section: {
     heading: "## Autonomy",
     body: () =>
-      "No user is watching this run and there is no channel to ask one. Take the broadest reasonable interpretation of any ambiguity rather than stalling on it. Anything genuinely unresolved goes under **Open Questions**, phrased so it can be settled in one line. Do not wait for an approval nobody will give.\n\n"
+      "No user is watching this run and there is no channel to ask one. Take the broadest reasonable interpretation of any ambiguity and record the reading under **Interpretation Rulings** with its basis. Where the ticket gives none, the basis is the existing behaviour, kept. Every choice is made in this pass.\n\n"
   }
 }

@@ -13,6 +13,7 @@ import { gitRead } from "mag/runtime/git"
 import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
+import { declaredRulings, rulingsBlock } from "mag/runtime/rulings"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 import { SKILLS_TOKEN, TICKET_TOKEN } from "mag/skills/design/tokens"
@@ -32,12 +33,14 @@ const sendBackBlock = (findingsPath: string, designPath: string): readonly strin
   `${findingsPath}. Read that file and address every finding: rewrite the design at \`${designPath}\``,
   "in place for each one that needs a change, and for any that need none — already answered, or",
   "wrong — say why in your reply's `dispute` field instead of inventing a change to satisfy it. A",
-  "single pass may change the design and dispute the rest."
+  "single pass may change the design and dispute the rest.",
+  "A finding that quotes a rulings file the ticket itself contradicts is disputed, not fixed."
 ]
 
 /**
  * A first pass frames the ticket, cites every vision, the discover note and the recycle map by
- * path — read-only references, never inlined, since an oversized prompt dies at execve — and
+ * path — read-only references, never inlined, since an oversized prompt dies at execve — names
+ * the repository's own rulings files, the same list `review-plan` will hold the design to, and
  * appends the already-composed, already-budget-checked brainstorm prompt
  * (`assemble-brainstorm-prompt`'s own job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>`
  * unfilled by design, and this is the one node in the pipeline that can fill them. A resumed pass
@@ -57,7 +60,8 @@ const promptFor = (
     readonly findingsPath?: string | undefined
     readonly resume?: string | undefined
   },
-  designPath: string
+  designPath: string,
+  rulings: readonly string[]
 ): string =>
   input.resume !== undefined && input.findingsPath !== undefined
     ? [...ticketReference(input), "", ...sendBackBlock(input.findingsPath, designPath)].join("\n")
@@ -68,6 +72,7 @@ const promptFor = (
       ...input.visionPaths.map((path) => `- ${path}`),
       `- ${input.discoverPath}`,
       `- ${input.recycleMapPath}`,
+      ...rulingsBlock(rulings),
       "",
       // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
       // success), not text this node composes itself — unlike `design/graph-node.ts`'s `skillFor`,
@@ -163,8 +168,13 @@ export const brainstorm = make({
       const fs = yield* FileSystem.FileSystem
       const before = yield* fs.readFileString(designPath).pipe(Effect.catch(() => Effect.succeed("")))
 
+      // A resumed session already holds the list; reading it again would only cost a git call.
+      const rulings = input.resume === undefined
+        ? yield* declaredRulings(cwd, (fields) => new BrainstormGitFailed(fields))
+        : []
+
       const reply = yield* agent.prompt({
-        prompt: promptFor(input, designPath),
+        prompt: promptFor(input, designPath, rulings),
         jsonSchema: VERDICT,
         cwd,
         ...(input.resume === undefined ? {} : { resume: input.resume }),

@@ -128,7 +128,7 @@ describe("BRAINSTORM_DESIGN", () => {
 })
 
 describe("HEADLESS_DESIGN.templateSections — an authored order, pinned", () => {
-  test("matches its own doc comment's order: Problem/Constraints open it, Open Questions closes it", () => {
+  test("matches its own doc comment's order: Problem/Constraints open it, the rulings sections close it", () => {
     const headings = HEADLESS_DESIGN.templateSections.map((section) => section.heading)
     expect(headings).toEqual([
       "## Problem",
@@ -144,9 +144,15 @@ describe("HEADLESS_DESIGN.templateSections — an authored order, pinned", () =>
       "## Testing Strategy",
       "## Principles Applied",
       "## Interpretation Rulings",
-      "## Convention Rulings",
-      "## Open Questions"
+      "## Convention Rulings"
     ])
+  })
+
+  test("carries no Open Questions section: an autonomous design decides, so the template has no slot for a hedge", () => {
+    for (const variant of [HEADLESS_DESIGN, BRAINSTORM_DESIGN, INSTALLED_DESIGN]) {
+      expect(variant.templateSections.map((section) => section.heading)).not.toContain("## Open Questions")
+      expect(composeDesignPrompt(variant)).not.toContain("Open Questions")
+    }
   })
 
   test("is exactly the template sections HEADLESS_DESIGN's own concerns own — no more, no fewer, so the authored order can't drift from the concern list", () => {

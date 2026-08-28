@@ -5,12 +5,7 @@ import type { Concern } from "mag/skills/design/concern"
 import type { Variant } from "mag/skills/design/compose"
 import { clarifyingQuestions } from "mag/skills/design/clarifying-questions"
 import { conventionRulings } from "mag/skills/design/convention-rulings"
-import {
-  designDocTemplate,
-  TEMPLATE_OPEN_QUESTIONS,
-  TEMPLATE_OPEN_SECTIONS,
-  TEMPLATE_TAIL_SECTIONS
-} from "mag/skills/design/design-doc-template"
+import { designDocTemplate, TEMPLATE_OPEN_SECTIONS, TEMPLATE_TAIL_SECTIONS } from "mag/skills/design/design-doc-template"
 import { dialogueNorms } from "mag/skills/design/dialogue-norms"
 import { envisionGeneric } from "mag/skills/design/envision-generic"
 import { exploreContext } from "mag/skills/design/explore-context"
@@ -37,9 +32,9 @@ const SKILL_DIR = "brainstorming"
  * The design node's dispatch: the 13 core concerns, in the order the ticket names them, citations
  * re-rooted under `<SKILLS>/brainstorming`. `templateSections` is authored separately (`Variant`'s
  * own doc comment): Problem/Constraints open the fence, the approaches/shell/sweep concerns record
- * what was decided, the technical sections and Principles Applied follow, the two rulings concerns
- * take the slot `## The Process`'s retirement freed, and Open Questions closes it, same as the
- * installed skill's fence closes today.
+ * what was decided, the technical sections and Principles Applied follow, and the two rulings
+ * concerns take the slot `## The Process`'s retirement freed and close the fence: every choice is
+ * a ruling with a basis, so nothing sits after them.
  *
  * `envisioning` slices in after `reference-sweep` and before `product-decisions` — the shell
  * is drawn (`seams-ownership`), the codebase is swept (`reference-sweep`), then this slot's concerns
@@ -79,8 +74,7 @@ export const headlessDesign = (envisioning: readonly Concern<"any">[]): Variant 
     ...TEMPLATE_TAIL_SECTIONS,
     ...principlesStack.templateSections!,
     ...interpretationRulings.templateSections!,
-    ...conventionRulings.templateSections!,
-    TEMPLATE_OPEN_QUESTIONS
+    ...conventionRulings.templateSections!
   ]
 })
 

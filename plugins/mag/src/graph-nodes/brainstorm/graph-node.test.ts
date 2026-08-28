@@ -17,10 +17,14 @@ const INPUT = inputExamples[0]!
 
 const ok = (): ShellResult => ({ exitCode: 0, stdout: "", stderr: "" })
 const HEAD_SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-/** `rev-parse HEAD` alone: under the default `run-root` policy, `brainstorm` still reads `headSha`. */
-const readsHeadOnly = () => scriptedShell([{ exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" }])
-/** `git add` ok, `git diff --cached --quiet` exit 1 (staged), `git commit` ok, `git rev-parse HEAD` ok. */
-const commitsCleanly = () => scriptedShell([ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), { exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" }])
+const LS_FILES = ["git", "ls-files", "-z", "--full-name", "--", ":/CLAUDE.md", ":/*/CLAUDE.md", ":/**/CLAUDE.md", ":/PRINCIPLES.md", ":/*/PRINCIPLES.md"]
+const headSha = (): ShellResult => ({ exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" })
+/** A first pass: the rulings `ls-files` (none declared), then `rev-parse HEAD`, which under the default `run-root` policy `brainstorm` still reads. */
+const readsHeadOnly = (declared = "") => scriptedShell([{ exitCode: 0, stdout: declared, stderr: "" }, headSha()])
+/** A resumed pass skips the rulings read: `rev-parse HEAD` alone. */
+const resumesHeadOnly = () => scriptedShell([headSha()])
+/** `ls-files` (none), `git add` ok, `git diff --cached --quiet` exit 1 (staged), `git commit` ok, `git rev-parse HEAD` ok. */
+const commitsCleanly = () => scriptedShell([ok(), ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), headSha()])
 
 /** The verdict echoes a path the node never trusts — the success carries the path the node computed. */
 const stubAgent = (reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) =>
@@ -65,6 +69,36 @@ describe("brainstorm", () => {
       expect(request.prompt).toContain(`- ${INPUT.discoverPath}`)
       expect(request.prompt).toContain(`- ${INPUT.recycleMapPath}`)
       expect(request.prompt).toContain(INPUT.prompt)
+    }))
+
+  test("a first pass reads the rulings files once and names every one after the citations, so the design rules against what the reviewer will hold it to", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      const agent = stubAgent({}, () => writeDesign(repoRoot))
+      const { calls, service: shell } = readsHeadOnly("CLAUDE.md\0plugins/mag/PRINCIPLES.md\0")
+      await runWith(brainstorm.run(INPUT), agent.service, shell, run)
+
+      expect(calls).toStrictEqual([LS_FILES, ["git", "rev-parse", "HEAD"]])
+      const prompt = agent.requests[0]!.prompt
+      expect(prompt).toContain(
+        `- ${INPUT.recycleMapPath}\n\nThis repository states rulings of its own, in the files below:\n- CLAUDE.md\n- plugins/mag/PRINCIPLES.md\n`
+      )
+    }))
+
+  test("a repository with no rulings files gets no rulings block", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      const agent = stubAgent({}, () => writeDesign(repoRoot))
+      await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
+      expect(agent.requests[0]!.prompt).not.toContain("rulings of its own")
+    }))
+
+  test("a failed rulings read fails BrainstormGitFailed before any dispatch", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      const agent = stubAgent({}, () => writeDesign(repoRoot))
+      const failing = scriptedShell([{ exitCode: 128, stdout: "", stderr: "fatal: not a git repository\n" }])
+      const result = await runWith(brainstorm.run(INPUT), agent.service, failing.service, run)
+
+      expect(Result.isFailure(result) && result.failure instanceof BrainstormGitFailed).toBe(true)
+      expect(agent.requests).toHaveLength(0)
     }))
 
   // The prompt must name the node's own computed destination — the compiled skill's write step
@@ -125,24 +159,24 @@ describe("brainstorm", () => {
       expect(request.prompt.split(path).length - 1).toBe(2)
     }))
 
-  test("a missing design fails DesignMissing, and no git call is made", () =>
+  test("a missing design fails DesignMissing, and no git call follows the rulings read", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent()
-      const { calls, service: shell } = scriptedShell([])
+      const { calls, service: shell } = scriptedShell([ok()])
       const result = await runWith(brainstorm.run(INPUT), agent.service, shell, run)
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(DesignMissing)
       expect((result.failure as DesignMissing).path).toBe(designIn(repoRoot))
-      expect(calls).toHaveLength(0)
+      expect(calls).toStrictEqual([LS_FILES])
       expect(existsSync(designIn(repoRoot))).toBe(false)
     }))
 
   test("a blank design is DesignMissing too", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot, "  \n"))
-      const result = await runWith(brainstorm.run(INPUT), agent.service, scriptedShell([]).service, run)
+      const result = await runWith(brainstorm.run(INPUT), agent.service, scriptedShell([ok()]).service, run)
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
@@ -152,16 +186,16 @@ describe("brainstorm", () => {
   test("a stale design, unchanged from its pre-dispatch snapshot, is DesignMissing", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       writeDesign(repoRoot)
-      const { calls, service: shell } = scriptedShell([])
+      const { calls, service: shell } = scriptedShell([ok()])
       const result = await runWith(brainstorm.run(INPUT), stubAgent().service, shell, run)
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(DesignMissing)
-      expect(calls).toHaveLength(0)
+      expect(calls).toStrictEqual([LS_FILES])
     }))
 
-  test("under the default run-root policy, a written design is copied into the run root, and only rev-parse is called", () =>
+  test("under the default run-root policy, a written design is copied into the run root, and only the rulings read and rev-parse are called", () =>
     withRepo(async (repoRoot, runRoot, run) => {
       const path = designIn(repoRoot)
       const agent = stubAgent({}, () => writeDesign(repoRoot))
@@ -172,7 +206,7 @@ describe("brainstorm", () => {
       if (!Result.isSuccess(result)) return
       expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42, sessionRef: "stub-session", changed: true })
       expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nSomething.\n")
-      expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
+      expect(calls).toStrictEqual([LS_FILES, ["git", "rev-parse", "HEAD"]])
     }))
 
   test("under records: \"committed\", a written design commits under a pathspec limited to design.md, and headSha comes from rev-parse after the commit", () =>
@@ -186,8 +220,8 @@ describe("brainstorm", () => {
       if (!Result.isSuccess(result)) return
       expect(result.success).toStrictEqual({ designPath: path, headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42, sessionRef: "stub-session", changed: true })
       expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nSomething.\n")
-      expect(calls[0]).toStrictEqual(["git", "add", "--", path])
-      expect(calls[2]).toStrictEqual([
+      expect(calls[1]).toStrictEqual(["git", "add", "--", path])
+      expect(calls[3]).toStrictEqual([
         "git",
         "commit",
         "-m",
@@ -195,15 +229,15 @@ describe("brainstorm", () => {
         "--",
         path
       ])
-      expect(calls[3]).toStrictEqual(["git", "rev-parse", "HEAD"])
+      expect(calls[4]).toStrictEqual(["git", "rev-parse", "HEAD"])
     }))
 
   // Under the default `run-root` policy, `recordsRoot` is a plain OS temp directory with no git
   // repository of its own (`run-layers.ts`) — a real `git rev-parse HEAD` there fails `fatal: not a
   // git repository`, three paid sessions in. `headSha` reads at `workRoot` instead, the tree the
   // session actually worked in, meaningful under every policy — and `record`'s commit half never
-  // fires under this policy, so no `git add` runs either.
-  test("a foreign run under the default run-root policy composes the design under recordsRoot but reads headSha at workRoot, no git add", () =>
+  // fires under this policy, so no `git add` runs either. The rulings read is the target's too.
+  test("a foreign run under the default run-root policy composes the design under recordsRoot but reads rulings and headSha at workRoot, no git add", () =>
     withForeignRepo("brainstorm", async (workRoot, recordsRoot, run) => {
       const path = designIn(recordsRoot)
       const agent = stubAgent({}, () => writeDesign(recordsRoot))
@@ -218,8 +252,8 @@ describe("brainstorm", () => {
       expect(readFileSync(`${run.runRoot}/design.md`, "utf8")).toBe("# Design\n\nSomething.\n")
 
       expect(agent.requests[0]!.cwd).toBe(workRoot)
-      expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
-      expect(cwds).toStrictEqual([workRoot])
+      expect(calls).toStrictEqual([LS_FILES, ["git", "rev-parse", "HEAD"]])
+      expect(cwds).toStrictEqual([workRoot, workRoot])
     }))
 
   test("an empty run root fails BrainstormCopyFailed with 'run root missing', before any prompt", () =>
@@ -238,7 +272,7 @@ describe("brainstorm", () => {
   test("under records: \"committed\", a failed add fails BrainstormGitFailed", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
-      const failing = scriptedShell([{ exitCode: 128, stdout: "", stderr: "fatal: bad pathspec\n" }])
+      const failing = scriptedShell([ok(), { exitCode: 128, stdout: "", stderr: "fatal: bad pathspec\n" }])
       const result = await runWith(brainstorm.run(INPUT), agent.service, failing.service, { ...run, records: "committed" })
 
       expect(Result.isFailure(result)).toBe(true)
@@ -249,7 +283,7 @@ describe("brainstorm", () => {
   test("under records: \"committed\", a failed commit fails BrainstormCommitFailed, sessions attached", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
-      const failing = scriptedShell([ok(), { exitCode: 1, stdout: "", stderr: "" }, { exitCode: 1, stdout: "", stderr: "fatal: empty ident name\n" }])
+      const failing = scriptedShell([ok(), ok(), { exitCode: 1, stdout: "", stderr: "" }, { exitCode: 1, stdout: "", stderr: "fatal: empty ident name\n" }])
       const result = await runWith(brainstorm.run(INPUT), agent.service, failing.service, { ...run, records: "committed" })
 
       expect(Result.isFailure(result)).toBe(true)
@@ -261,7 +295,7 @@ describe("brainstorm", () => {
   test("under records: \"committed\", a failed rev-parse after a good commit fails BrainstormGitFailed", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
-      const failing = scriptedShell([ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), { exitCode: 128, stdout: "", stderr: "fatal: bad revision\n" }])
+      const failing = scriptedShell([ok(), ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), { exitCode: 128, stdout: "", stderr: "fatal: bad revision\n" }])
       const result = await runWith(brainstorm.run(INPUT), agent.service, failing.service, { ...run, records: "committed" })
 
       expect(Result.isFailure(result)).toBe(true)
@@ -269,21 +303,25 @@ describe("brainstorm", () => {
       expect(result.failure).toBeInstanceOf(BrainstormGitFailed)
     }))
 
-  test("a send-back pass resumes the session, keeps the ticket reference, drops the citations and the compiled skill, and names the findings file", () =>
+  test("a send-back pass resumes the session, keeps the ticket reference, drops the citations, the rulings read and the compiled skill, and names the findings file", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const sendBack = inputExamples[2]!
       const agent = stubAgent({}, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
-      const result = await runWith(brainstorm.run(sendBack), agent.service, readsHeadOnly().service, run)
+      const { calls, service: shell } = resumesHeadOnly()
+      const result = await runWith(brainstorm.run(sendBack), agent.service, shell, run)
 
       expect(Result.isSuccess(result)).toBe(true)
+      expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
       const request = agent.requests[0]!
       expect(request.resume).toBe("a1b2c3")
       expect(request.prompt).toContain(`Read the ticket at \`${sendBack.ticketPath}\`.`)
       expect(request.prompt).toContain(sendBack.findingsPath!)
       expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
+      expect(request.prompt).toContain("A finding that quotes a rulings file the ticket itself contradicts is disputed, not fixed.")
       expect(request.prompt).not.toContain(sendBack.prompt)
       expect(request.prompt).not.toContain(sendBack.recycleMapPath)
       expect(request.prompt).not.toContain("Read each vision below")
+      expect(request.prompt).not.toContain("rulings of its own")
     }))
 
   test("a send-back pass with an unchanged design and a dispute succeeds, files dispute-N.md, and carries both paths; no record is re-copied", () =>
@@ -291,7 +329,7 @@ describe("brainstorm", () => {
       writeDesign(repoRoot)
       const sendBack = inputExamples[2]!
       const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "AC.02 is proved by task 3 already" } })
-      const { calls, service: shell } = readsHeadOnly()
+      const { calls, service: shell } = resumesHeadOnly()
       const result = await runWith(brainstorm.run(sendBack), agent.service, shell, run)
 
       expect(Result.isSuccess(result)).toBe(true)
@@ -313,7 +351,7 @@ describe("brainstorm", () => {
     withRepo(async (repoRoot, runRoot, run) => {
       writeDesign(repoRoot)
       const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "finding 2 is wrong" } }, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
-      const result = await runWith(brainstorm.run(inputExamples[2]!), agent.service, readsHeadOnly().service, run)
+      const result = await runWith(brainstorm.run(inputExamples[2]!), agent.service, resumesHeadOnly().service, run)
 
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
@@ -343,7 +381,7 @@ describe("brainstorm", () => {
   test("under the default run-root policy, a failed rev-parse fails BrainstormGitFailed, the copy itself untouched", () =>
     withRepo(async (repoRoot, runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
-      const failing = scriptedShell([{ exitCode: 128, stdout: "", stderr: "fatal: not a git repository\n" }])
+      const failing = scriptedShell([ok(), { exitCode: 128, stdout: "", stderr: "fatal: not a git repository\n" }])
       const result = await runWith(brainstorm.run(INPUT), agent.service, failing.service, run)
 
       expect(Result.isFailure(result)).toBe(true)

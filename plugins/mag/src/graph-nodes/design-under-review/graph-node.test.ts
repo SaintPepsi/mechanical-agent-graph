@@ -62,21 +62,24 @@ const loopAgent = (reviews: readonly (readonly string[])[] = [], disputing: Read
       const path = request.resume === undefined
         ? destinationOf(request.prompt, "Write the design doc to")
         : destinationOf(request.prompt, "rewrite the design at")
-      writeAt(path, `# Design ${brainstorms}\n\n## Open Questions\n\nNone.\n`)
+      writeAt(path, `# Design ${brainstorms}\n\n## Interpretation Rulings\n\nNone.\n`)
       return reply<A>({ designPath: "ignored" }, `session-brainstorm-${brainstorms}`, 0.5)
     }
   }
   return { requests, service }
 }
 
-/** `rev-parse HEAD` for the two record writers, `ls-files` (no rulings files) for the reviewer; nothing commits under the default policy. */
-const loopShell = (lsFiles: { exitCode: number; stdout: string; stderr: string } = { exitCode: 0, stdout: "", stderr: "" }) => {
+/** `rev-parse HEAD` for the two record writers, `ls-files` (no rulings files) for a first brainstorm pass and every review; nothing commits under the default policy. */
+const loopShell = (reviewLsFiles: { exitCode: number; stdout: string; stderr: string } = { exitCode: 0, stdout: "", stderr: "" }) => {
   const calls: string[][] = []
+  let lsFilesCalls = 0
   const service: ShellService = {
     run: (argv) => {
       calls.push([...argv])
       if (argv[1] === "rev-parse") return Effect.succeed({ exitCode: 0, stdout: "abc123\n", stderr: "" })
-      if (argv[1] === "ls-files") return Effect.succeed(lsFiles)
+      // The first `ls-files` is the brainstorm's, before any review; `reviewLsFiles` scripts the
+      // reviewer's own, so a failing reply lands on the review step and not on the design pass.
+      if (argv[1] === "ls-files") return Effect.succeed(++lsFilesCalls === 1 ? { exitCode: 0, stdout: "", stderr: "" } : reviewLsFiles)
       throw new Error(`loopShell: unexpected argv: ${argv.join(" ")}`)
     }
   }

@@ -143,6 +143,10 @@ maintainer rules otherwise.
   budget-checked by `assemble-brainstorm-prompt`) and the caller-authored addenda
   (`build.addendum`, `review-diff.addendum`). Precedent: v1's ingest step
   wrote the immutable ticket doc once and every later step read it as the fixed baseline.
+- **An autonomous design decides.** Every ambiguity becomes a ruling with a basis; a user-visible
+  choice the ticket does not settle keeps existing behaviour and says so. A run that cannot decide
+  has failed, not asked. Reason: the two trial runs' open questions were hedges already answered in
+  the same document, each costing a design, plan and review pass.
 - **One concern per session.** A node's prompt asks one question and the session writes one
   artifact; a second question is a second node. A session given two concerns degrades on both, in
   the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) and
