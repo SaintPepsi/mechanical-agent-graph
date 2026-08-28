@@ -25,16 +25,21 @@ import { SKILLS_ROOT } from "mag/skills/installed"
  * back as a path, never trusted. `dispute` is `optionalKey`, `build`'s reasoning: `optional` would
  * show the model a nullable union on every ordinary pass, inviting an explicit null.
  */
-const VERDICT = verdictSchema(Schema.Struct({ designPath: Schema.String, dispute: Schema.optionalKey(Schema.String) }))
+const VERDICT = verdictSchema(Schema.Struct({ designPath: Schema.String, dispute: Schema.optionalKey(Schema.Array(Schema.String)) }))
 
 /** `build`'s `sendBackBlock`, addressed to the design's author: findings are claims to answer, never to accept on faith. */
 const sendBackBlock = (findingsPath: string, designPath: string): readonly string[] => [
   "A reviewer examined this design and its plan and found blocking problems, recorded at",
-  `${findingsPath}. Read that file and address every finding: rewrite the design at \`${designPath}\``,
-  "in place for each one that needs a change, and for any that need none (already answered, or",
-  "wrong) say why in your reply's `dispute` field instead of inventing a change to satisfy it. A",
-  "single pass may change the design and dispute the rest."
+  `${findingsPath}. Read that file and address every finding tagged \`design:\` (a finding tagged`,
+  `\`plan:\` is the plan session's to answer): rewrite the design at \`${designPath}\` in place for`,
+  "each one that needs a change, and for any that need none (already answered, or wrong) quote the",
+  "finding in your reply's `dispute` list with the reason, instead of inventing a change to satisfy",
+  "it. An empty list means nothing is disputed. A single pass may change the design and dispute the rest."
 ]
+
+/** The dispute artifact: the findings file it answers on the first line, then one bullet per disputed finding. */
+const disputeContentFor = (findingsPath: string, dispute: readonly string[]): string =>
+  [`Disputes ${findingsPath}`, "", ...dispute.map((line) => `- ${line}`)].join("\n")
 
 /**
  * A first pass frames the ticket, cites every vision, the discover note and the recycle map by
@@ -181,7 +186,10 @@ export const brainstorm = make({
         ...(input.model === undefined ? {} : { model: input.model })
       })
 
-      const disputed = input.findingsPath !== undefined && reply.verdict.dispute !== undefined && reply.verdict.dispute.trim() !== ""
+      // A dispute is a list of quoted findings; blank entries are silence, and a pass that disputes
+      // nothing is judged on what it changed.
+      const dispute = (reply.verdict.dispute ?? []).filter((line) => line.trim() !== "")
+      const disputed = input.findingsPath !== undefined && dispute.length > 0
       const written = yield* fs.readFileString(designPath).pipe(Effect.catch(() => Effect.succeed("")))
       // A disputing pass that changed nothing is answered, not missing: the previous pass's record
       // stands, on disk and in the run root, so nothing is re-verified or re-copied.
@@ -197,9 +205,9 @@ export const brainstorm = make({
         })
       }
 
-      const dispute = !disputed || input.findingsPath === undefined ? {} : {
+      const disputeFields = !disputed || input.findingsPath === undefined ? {} : {
         findingsPath: input.findingsPath,
-        disputePath: yield* writeArtifact(fs, runInfo.runRoot, "dispute", [`Disputes ${input.findingsPath}`, "", reply.verdict.dispute].join("\n")).pipe(
+        disputePath: yield* writeArtifact(fs, runInfo.runRoot, "dispute", disputeContentFor(input.findingsPath, dispute)).pipe(
           Effect.catch((error) =>
             Effect.fail(new BrainstormCopyFailed({ path: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
           )
@@ -207,6 +215,6 @@ export const brainstorm = make({
       }
 
       const headSha = yield* gitRead(["git", "rev-parse", "HEAD"], cwd, (fields) => new BrainstormGitFailed(fields))
-      return { designPath, headSha, sessions: reply.sessions, costUsd: reply.costUsd, sessionRef: reply.sessions[0]!, changed: written !== before, ...dispute }
+      return { designPath, headSha, sessions: reply.sessions, costUsd: reply.costUsd, sessionRef: reply.sessions[0]!, changed: written !== before, ...disputeFields }
     }).pipe(Effect.provide(platform))
 })

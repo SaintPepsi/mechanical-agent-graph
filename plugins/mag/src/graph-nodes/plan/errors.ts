@@ -26,6 +26,9 @@ export class PlanCommitFailed extends Data.TaggedError("PLAN_COMMIT_FAILED")<{
   readonly sessions: readonly string[]
 }> {}
 
+/** `resume` was given with no `findingsPath`: a resumed pass carries only the send-back, so there is nothing to say to the session. `BrainstormResumeEmpty`'s shape. */
+export class PlanResumeEmpty extends Data.TaggedError("PLAN_RESUME_EMPTY")<{}> {}
+
 /** The mechanical copy of `plan.md` into the run root failed, or the run has no run root. `BrainstormCopyFailed`'s shape. */
 export class PlanCopyFailed extends Data.TaggedError("PLAN_COPY_FAILED")<{
   readonly path: string

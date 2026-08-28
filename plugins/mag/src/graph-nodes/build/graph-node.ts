@@ -27,7 +27,7 @@ import { ticketReference } from "mag/runtime/ticket"
  * output: `optional` would show the model `anyOf: [string, null]` on every ordinary pass, inviting
  * an explicit null where there is nothing to say.
  */
-const SUMMARY = verdictSchema(Schema.Struct({ summary: Schema.String, dispute: Schema.optionalKey(Schema.String) }))
+const SUMMARY = verdictSchema(Schema.Struct({ summary: Schema.String, dispute: Schema.optionalKey(Schema.Array(Schema.String)) }))
 
 /**
  * Build stays design-ignorant: no design diff belongs here regardless of caller. The framing treats
@@ -37,9 +37,9 @@ const sendBackBlock = (findingsPath: string): readonly string[] => [
   "",
   "A reviewer examined this branch's previous attempt and found blocking problems, recorded at",
   `${findingsPath}. Read that file and address every finding: commit a fix for each one that needs`,
-  "a change, and for any that need none — already fixed, or wrong — say why in your reply's",
-  "`dispute` field instead of inventing a change to satisfy it. A single pass may commit fixes and",
-  "dispute the rest.",
+  "a change, and for any that need none — already fixed, or wrong — quote the finding in your",
+  "reply's `dispute` list with the reason, instead of inventing a change to satisfy it. An empty",
+  "list means nothing is disputed. A single pass may commit fixes and dispute the rest.",
   "When addressing a finding adds an input or a failure condition, re-derive the contract in the",
   "same commit — the declared inputs and failure modes the change widens, and the documents that",
   "record them — and say so in your reply."
@@ -87,8 +87,8 @@ const promptFor = (input: {
  * document is self-describing to whoever reads it next — the adjudicating review pass, or a human
  * — without having to infer which verdict this is a reply to.
  */
-const disputeContentFor = (findingsPath: string, dispute: string): string =>
-  [`Disputes ${findingsPath}`, "", dispute].join("\n")
+const disputeContentFor = (findingsPath: string, dispute: readonly string[]): string =>
+  [`Disputes ${findingsPath}`, "", ...dispute.map((line) => `- ${line}`)].join("\n")
 
 /**
  * The dispute gate and write, shared by both of `build`'s endings; `commits === 0` is not this
@@ -99,7 +99,7 @@ const disputeContentFor = (findingsPath: string, dispute: string): string =>
 const recordDispute = (
   runRoot: string,
   findingsPath: string | undefined,
-  dispute: string | undefined,
+  dispute: readonly string[] | undefined,
   sessions: readonly string[]
 ): Effect.Effect<
   { readonly findingsPath: string; readonly disputePath: string } | undefined,
@@ -107,9 +107,11 @@ const recordDispute = (
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (findingsPath === undefined || dispute === undefined || dispute.trim() === "") return undefined
+    // Blank entries are silence, not an argument: only a quoted finding counts as disputed.
+    const quoted = (dispute ?? []).filter((line) => line.trim() !== "")
+    if (findingsPath === undefined || quoted.length === 0) return undefined
     const fs = yield* FileSystem.FileSystem
-    const disputePath = yield* writeArtifact(fs, runRoot, "dispute", disputeContentFor(findingsPath, dispute)).pipe(
+    const disputePath = yield* writeArtifact(fs, runRoot, "dispute", disputeContentFor(findingsPath, quoted)).pipe(
       Effect.catch((error) => Effect.fail(new BuildSummaryWriteFailed({ runRoot, detail: String(error), sessions })))
     )
     return { findingsPath, disputePath }

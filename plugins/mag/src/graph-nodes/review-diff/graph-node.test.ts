@@ -241,7 +241,7 @@ describe("review-diff", () => {
       await runWith(reviewDiff.run(delta), gitStub({ head: delta.headSha }).service, agent.service, testRunInfo({ runRoot }))
 
       const prompt = agent.requests[0]!.prompt
-      expect(prompt).toContain(`A prior pass raised blocking findings, recorded at ${delta.priorFindingsPath}.`)
+      expect(prompt).toContain(`A prior pass raised blocking findings, recorded at ${delta.priorFindingsPath},`)
       expect(prompt).toContain("Judge whether each prior blocking finding is fixed and whether the change introduced a new blocker.")
       expect(prompt).not.toContain("Find where the target fails to meet the ticket.")
       // The rest of the charter still applies: the re-review only swaps the framing.

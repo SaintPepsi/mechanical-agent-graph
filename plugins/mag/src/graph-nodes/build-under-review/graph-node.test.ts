@@ -257,7 +257,7 @@ const disputeAgent = (secondReviewBlocks: boolean) => {
       builds += 1
       const verdict = builds === 1
         ? { summary: "build 1 summary" }
-        : { summary: "investigated, nothing to change", dispute: "both findings were already fixed at HEAD" }
+        : { summary: "investigated, nothing to change", dispute: ["both findings were already fixed at HEAD"] }
       return Effect.succeed({
         verdict: verdict as A,
         result: {},
@@ -335,7 +335,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
       const verdict = builds === 1
         ? { summary: "build 1 summary" }
         : builds === 2
-        ? { summary: "fixed one finding", dispute: "the other finding was already fixed at HEAD" }
+        ? { summary: "fixed one finding", dispute: ["the other finding was already fixed at HEAD"] }
         : { summary: "fixed the re-raised finding" }
       return Effect.succeed({
         verdict: verdict as A,
@@ -501,7 +501,7 @@ describe("build-under-review", () => {
     expect(reviewRequests[0]!.resume).toBeUndefined()
     expect(reviewRequests[1]!.resume).toBeUndefined()
     expect(reviewRequests[0]!.prompt).not.toContain("re-review")
-    expect(reviewRequests[1]!.prompt).toContain(`A prior pass raised blocking findings, recorded at ${join(runInfo.runRoot, "review-diff-1.md")}.`)
+    expect(reviewRequests[1]!.prompt).toContain(`A prior pass raised blocking findings, recorded at ${join(runInfo.runRoot, "review-diff-1.md")},`)
 
     // Each pass's review is stamped with that pass's own build headSha — pass 1 and pass 2
     // differ. Simplify no-ops here (the default fixture), so that sha is still build's own; the

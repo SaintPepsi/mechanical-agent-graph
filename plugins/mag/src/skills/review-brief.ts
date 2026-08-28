@@ -14,6 +14,11 @@ import { verdictSchema } from "mag/runtime/claude/verdict-schema"
  */
 export type ReviewTarget = "plan" | "diff"
 
+/** The artifact a plan-altitude finding says must change: the loop resumes that artifact's own session. */
+export const FINDING_TARGETS = ["design", "plan"] as const
+export type FindingTarget = (typeof FINDING_TARGETS)[number]
+
+/** The diff target has one artifact, so its blocking findings are lines. */
 export const REVIEW_VERDICT = verdictSchema(
   Schema.Struct({
     blocking: Schema.Array(Schema.String),
@@ -21,6 +26,18 @@ export const REVIEW_VERDICT = verdictSchema(
     questions: Schema.Array(Schema.String)
   })
 )
+
+/** The plan target has two artifacts, so every blocking finding names the one that must change. */
+export const PLAN_REVIEW_VERDICT = verdictSchema(
+  Schema.Struct({
+    blocking: Schema.Array(Schema.Struct({ target: Schema.Literals(FINDING_TARGETS), finding: Schema.String })),
+    notes: Schema.Array(Schema.String),
+    questions: Schema.Array(Schema.String)
+  })
+)
+
+/** One findings line, the target first so a resumed session can pick out its own. */
+export const targetedFinding = (target: FindingTarget, finding: string): string => `${target}: ${finding}`
 
 export interface ReviewVerdict {
   readonly blocking: readonly string[]
@@ -57,7 +74,9 @@ const OUTPUT = (target: ReviewTarget): readonly string[] => [
   "",
   "Output, three lists, each finding on one line (path:line, summary, why):",
   `- blocking: shipped as-is, an acceptance criterion is unmet or behaviour is wrong; cite the criterion or concrete evidence.${
-    target === "plan" ? " For a plan: the approach cannot satisfy a criterion, a task as written would produce wrong behaviour, or a required task is missing." : ""
+    target === "plan"
+      ? " For a plan: the approach cannot satisfy a criterion, a task as written would produce wrong behaviour, or a required task is missing. Tag each blocking finding with the artifact that must change: design when the design decided wrongly or left it undecided, plan when the design is right and the plan departs from it."
+      : ""
   }`,
   "- notes: everything else: cosmetic, style, documented deferrals, optional improvements, anything the toolchain will catch.",
   "- questions: a context-free \"is X intentional?\". Answer it from the record where the record settles it; a question never blocks on its own."
@@ -67,7 +86,7 @@ const OUTPUT = (target: ReviewTarget): readonly string[] => [
 const framing = (priorFindingsPath: string | undefined): string =>
   priorFindingsPath === undefined
     ? "You are an adversarial reviewer. Find where the target fails to meet the ticket. Read only what this brief names and judge only against the baseline."
-    : `You are an adversarial reviewer on a re-review. A prior pass raised blocking findings, recorded at ${priorFindingsPath}. Judge whether each prior blocking finding is fixed and whether the change introduced a new blocker. A finding the first pass did not make is not raised now unless it is blocking. Settled items stay settled.`
+    : `You are an adversarial reviewer on a re-review. A prior pass raised blocking findings, recorded at ${priorFindingsPath}, and the session that owns each finding's artifact was resumed over it. Judge whether each prior blocking finding is fixed and whether the change introduced a new blocker. A finding the first pass did not make is not raised now unless it is blocking. Settled items stay settled.`
 
 /**
  * The charter's lines, ready to splice after the node's own target lines. Pure: the node names the

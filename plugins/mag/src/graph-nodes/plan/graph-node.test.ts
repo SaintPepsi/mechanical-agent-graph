@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { Effect, Layer, Result, Schema } from "effect"
-import { PlanCommitFailed, PlanCopyFailed, PlanGitFailed, PlanMissing } from "mag/graph-nodes/plan/errors"
+import { PlanCommitFailed, PlanCopyFailed, PlanGitFailed, PlanMissing, PlanResumeEmpty } from "mag/graph-nodes/plan/errors"
 import { inputExamples, successExamples } from "mag/graph-nodes/plan/examples"
 import { plan } from "mag/graph-nodes/plan/graph-node"
 import { type ClaudeAgentService, claudeAgentLayer, type ClaudeReply } from "mag/runtime/claude/service"
@@ -110,7 +110,7 @@ describe("plan", () => {
       const result = await runWith(plan.run(INPUT), agent.service, shell, run)
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
-      expect(result.success).toStrictEqual({ planPath: planIn(repoRoot), headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42 })
+      expect(result.success).toStrictEqual({ planPath: planIn(repoRoot), headSha: HEAD_SHA, sessions: ["stub-session"], costUsd: 0.42, sessionRef: "stub-session" })
       expect(readFileSync(`${runRoot}/plan.md`, "utf8")).toBe("# Plan\n\n### Task 1\n")
       expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
     }))
@@ -180,6 +180,40 @@ describe("plan", () => {
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(PlanCommitFailed)
       expect((result.failure as PlanCommitFailed).sessions).toStrictEqual(["stub-session"])
+    }))
+
+  test("a send-back pass resumes the session, keeps the ticket reference, drops the citations and the standard, and asks for the plan-tagged findings", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      const sendBack = inputExamples[2]!
+      const agent = planAgent(() => writePlan(repoRoot, "# Plan\n\n### Task 1 revised\n"))
+      const result = await runWith(plan.run(sendBack), agent.service, readsHeadOnly().service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.sessionRef).toBe("stub-session")
+      const request = agent.requests[0]!
+      expect(request.resume).toBe("a1b2c3")
+      expect(request.prompt).toContain(`Read the ticket at \`${sendBack.ticketPath}\`.`)
+      expect(request.prompt).toContain(sendBack.findingsPath!)
+      expect(request.prompt).toContain("address every finding tagged `plan:`")
+      expect(request.prompt).toContain(`the plan at \`${planIn(repoRoot)}\` in place.`)
+      expect(request.prompt).not.toContain("Read the design below")
+      expect(request.prompt).not.toContain(compilePlan(PLAN_PARAMS))
+    }))
+
+  test("a send-back pass that leaves the plan unchanged is PlanMissing: a plan session has no dispute, it rewrites or it failed", () =>
+    withRepo(async (repoRoot, _runRoot, run) => {
+      writePlan(repoRoot)
+      const result = await runWith(plan.run(inputExamples[2]!), planAgent().service, scriptedShell([]).service, run)
+      expect(Result.isFailure(result) && result.failure instanceof PlanMissing).toBe(true)
+    }))
+
+  test("resume without findingsPath is PlanResumeEmpty, before any dispatch", () =>
+    withRepo(async (_repoRoot, _runRoot, run) => {
+      const agent = planAgent()
+      const result = await runWith(plan.run({ ...INPUT, resume: "a1b2c3" }), agent.service, scriptedShell([]).service, run)
+      expect(Result.isFailure(result) && result.failure instanceof PlanResumeEmpty).toBe(true)
+      expect(agent.requests).toHaveLength(0)
     }))
 
   test("under the default run-root policy, a failed rev-parse fails PlanGitFailed, the copy itself untouched", () =>

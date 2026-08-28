@@ -14,7 +14,7 @@ import { platform } from "mag/runtime/platform"
 import { declaredRulings, rulingsBlock } from "mag/runtime/rulings"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
-import { compileReviewBrief, renderFindings, REVIEW_VERDICT } from "mag/skills/review-brief"
+import { compileReviewBrief, PLAN_REVIEW_VERDICT, renderFindings, targetedFinding } from "mag/skills/review-brief"
 
 /** The target, then the charter; the diff is not named because this node never reads one. */
 const targetBlock = (designPath: string, planPath: string, priorFindingsPath: string | undefined): readonly string[] => [
@@ -127,22 +127,29 @@ export const reviewPlan = make({
 
       const reply = yield* agent.prompt({
         prompt: promptFor({ ...input, dispute }, rulings),
-        jsonSchema: REVIEW_VERDICT,
+        jsonSchema: PLAN_REVIEW_VERDICT,
         cwd,
         ...(input.agent === undefined ? {} : { agent: input.agent }),
         ...(input.model === undefined ? {} : { model: input.model })
       })
 
-      const findingsPath = yield* writeArtifact(fs, runInfo.runRoot, "review-plan", renderFindings(input.headSha, reply.verdict)).pipe(
+      const rendered = {
+        ...reply.verdict,
+        blocking: reply.verdict.blocking.map(({ target, finding }) => targetedFinding(target, finding))
+      }
+      const findingsPath = yield* writeArtifact(fs, runInfo.runRoot, "review-plan", renderFindings(input.headSha, rendered)).pipe(
         Effect.catch((error) =>
           Effect.fail(new PlanFindingsWriteFailed({ runRoot: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
         )
       )
 
       if (reply.verdict.blocking.length > 0) {
+        // The targets ride the failure so the loop can resume the session that owns the artifact,
+        // without re-reading the findings file it just wrote.
+        const targets = reply.verdict.blocking.map(({ target }) => target)
         return yield* Effect.fail(
           dispute === undefined
-            ? new PlanBlocked({ findingsPath, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
+            ? new PlanBlocked({ findingsPath, targets, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
             : new PlanDisputeRejected({ findingsPath, disputePath: dispute.disputePath, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
         )
       }

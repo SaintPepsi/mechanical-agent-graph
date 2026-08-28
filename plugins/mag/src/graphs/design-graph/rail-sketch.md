@@ -55,7 +55,8 @@ const DesignGraph = Graph.construct("design")
     // { discoverPath } → { recycleMapPath } !RecycleMapMissing
   .borrow(DesignUnderReview)
     // { visionPaths[], discoverPath, recycleMapPath } → { designPath, planPath, headSha }
-    //   brainstorm → plan → review-plan; a blocking review sends its findings back into brainstorm, at most cap times
+    //   brainstorm → plan → review-plan; a blocking finding resumes the session that owns the artifact it names
+    //   (design → brainstorm, then plan fresh if the design changed; plan only → the plan session), at most cap times per producer
     //   !DesignMissing !PlanMissing !PlanBlocked (cap spent) !PlanDisputeRejected
   .finalise()
     // outside: { ticket, title, body } → { designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }

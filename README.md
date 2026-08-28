@@ -20,7 +20,8 @@ prepare                     fetch the ticket, refuse it without acceptance crite
                             base branch
 checkout                    a detached worktree per run, setup command run inside it
 design-graph                envision ∥ discover → recycle-map → design-under-review (brainstorm →
-                            plan → review-plan, findings sent back into the design): a reviewed
+                            plan → review-plan, each finding sent back to the session that owns
+                            the artifact it names, design or plan): a reviewed
                             design and plan before any code
 build-under-review          build → verification → simplify → review-diff, findings sent back into
                             the same session until the diff is clean or the cap is spent

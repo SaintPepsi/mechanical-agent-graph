@@ -75,7 +75,7 @@ describe("run-outcome section — summaryPath is not a develop-graph failure fie
   test("SKILL.md's path-field bullet names review-plan's two tags beside review-diff's, and both carry findingsPath", () => {
     expect(SKILL).toContain("`PLAN_BLOCKED`")
     expect(SKILL).toContain("`PLAN_DISPUTE_REJECTED`")
-    const blocked = new PlanBlocked({ findingsPath: "/run/review-plan-1.md", headSha: "abc", sessions: [], costUsd: null })
+    const blocked = new PlanBlocked({ findingsPath: "/run/review-plan-1.md", targets: ["design"], headSha: "abc", sessions: [], costUsd: null })
     const rejected = new PlanDisputeRejected({ findingsPath: "/run/review-plan-2.md", disputePath: "/run/dispute-1.md", headSha: "abc", sessions: [], costUsd: null })
     expect("findingsPath" in blocked && "findingsPath" in rejected && "disputePath" in rejected).toBe(true)
     expect("PlanBlocked" in designUnderReviewErrors && "PlanDisputeRejected" in designUnderReviewErrors).toBe(true)

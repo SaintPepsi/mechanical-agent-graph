@@ -1,4 +1,5 @@
 import { Data } from "effect"
+import type { FindingTarget } from "mag/skills/review-brief"
 
 /**
  * The review found defects in the design or the plan that must be settled before any build. The
@@ -9,6 +10,8 @@ import { Data } from "effect"
  */
 export class PlanBlocked extends Data.TaggedError("PLAN_BLOCKED")<{
   readonly findingsPath: string
+  /** One per blocking finding, in the file's order: which artifact each says must change, so the loop resumes that session. */
+  readonly targets: readonly FindingTarget[]
   readonly headSha: string
   readonly sessions: readonly string[]
   readonly costUsd: number | null

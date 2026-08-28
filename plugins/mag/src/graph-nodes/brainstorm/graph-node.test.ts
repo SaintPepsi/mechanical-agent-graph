@@ -327,14 +327,14 @@ describe("brainstorm", () => {
     withRepo(async (repoRoot, runRoot, run) => {
       writeDesign(repoRoot)
       const sendBack = inputExamples[2]!
-      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "AC.02 is proved by task 3 already" } })
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: ["AC.02 is proved by task 3 already"] } })
       const { calls, service: shell } = resumesHeadOnly()
       const result = await runWith(brainstorm.run(sendBack), agent.service, shell, run)
 
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
       expect(result.success).toMatchObject({ findingsPath: sendBack.findingsPath, disputePath: `${runRoot}/dispute-1.md`, sessionRef: "stub-session" })
-      expect(readFileSync(`${runRoot}/dispute-1.md`, "utf8")).toBe(`Disputes ${sendBack.findingsPath}\n\nAC.02 is proved by task 3 already`)
+      expect(readFileSync(`${runRoot}/dispute-1.md`, "utf8")).toBe(`Disputes ${sendBack.findingsPath}\n\n- AC.02 is proved by task 3 already`)
       expect(existsSync(`${runRoot}/design.md`)).toBe(false)
       expect(calls).toStrictEqual([["git", "rev-parse", "HEAD"]])
     }))
@@ -349,7 +349,7 @@ describe("brainstorm", () => {
   test("a send-back pass that changes the design and disputes too records the design and files the dispute", () =>
     withRepo(async (repoRoot, runRoot, run) => {
       writeDesign(repoRoot)
-      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "finding 2 is wrong" } }, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: ["finding 2 is wrong"] } }, () => writeDesign(repoRoot, "# Design\n\nrevised\n"))
       const result = await runWith(brainstorm.run(inputExamples[2]!), agent.service, resumesHeadOnly().service, run)
 
       expect(Result.isSuccess(result)).toBe(true)
@@ -360,7 +360,7 @@ describe("brainstorm", () => {
 
   test("a first pass ignores a dispute in the reply: no findings to answer, so no dispute file", () =>
     withRepo(async (repoRoot, runRoot, run) => {
-      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: "nothing to dispute" } }, () => writeDesign(repoRoot))
+      const agent = stubAgent({ verdict: { designPath: "ignored", dispute: ["nothing to dispute"] } }, () => writeDesign(repoRoot))
       const result = await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
 
       expect(Result.isSuccess(result)).toBe(true)

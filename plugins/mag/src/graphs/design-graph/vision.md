@@ -46,9 +46,9 @@ graph TD
   DISC -- "discoverPath → discoverPath" --> RM
   RM -. "map missing or empty: recycleMapPath → recycleMapPath" .-> DEADRM[/"die: RecycleMapMissing<br/>kept: worktree, nothing committed"/]
 
-  subgraph Loop["design-under-review · loop, cap send-backs"]
-    BS["brainstorm · Model<br/>reconcile the visions against discover's recon; every ambiguity a ruling with a basis, or answer the standing findings"]
-    PL["plan · Model<br/>the build as small ordered tasks over the design, rerun only when the design changed"]
+  subgraph Loop["design-under-review · loop, cap send-backs per producer"]
+    BS["brainstorm · Model<br/>reconcile the visions against discover's recon; every ambiguity a ruling with a basis, or answer the design-tagged findings"]
+    PL["plan · Model<br/>the build as small ordered tasks over the design; fresh when the design changed, resumed over plan-tagged findings otherwise"]
     RP["review-plan · Model<br/>adversarial read of design and plan against the ticket, no code; or adjudicate the design's own dispute"]
   end
   CMT -- "designPath, visionPaths → designPath, visionPaths" --> BS
@@ -58,7 +58,8 @@ graph TD
   RM -- "recycleMapPath → recycleMapPath" --> PL
   PL -- "planPath, headSha → planPath, headSha" --> RP
   RM -- "recycleMapPath → recycleMapPath" --> RP
-  RP -. "verdict = blocked, sendbacks < cap: findingsPath → findingsPath" .-> BS
+  RP -. "verdict = blocked, a finding targets design, design sendbacks < cap: findingsPath → findingsPath" .-> BS
+  RP -. "verdict = blocked, every finding targets plan, plan sendbacks < cap: findingsPath → findingsPath" .-> PL
   BS -. "verdict = disputed: findingsPath, disputePath → findingsPath, disputePath" .-> RP
   BS -. "design missing or unchanged and silent: designPath → designPath" .-> DEADLOOP[/"die: DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected<br/>kept: worktree, the records so far"/]
   RP -. "verdict = blocked, cap exhausted: findingsPath → (escalates)" .-> DEADLOOP

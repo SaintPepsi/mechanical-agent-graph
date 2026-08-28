@@ -17,8 +17,9 @@ import { platform } from "mag/runtime/platform"
 // `schema-flags.ts` still derive a CLI flag for it (that graph's own comment on the same line).
 const RECORDS_POLICIES = ["run-root", "committed"] as const
 type RecordsPolicy = (typeof RECORDS_POLICIES)[number]
-// Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning: one design round after
-// the first, then the findings escalate, a design still blocked after a full round is a ticket problem.
+// Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning: one round per producer
+// after the first (one design fix and one plan fix), then the findings escalate, a design still
+// blocked after a full round is a ticket problem.
 const PLAN_CAP = 1
 
 const isRecordsPolicyCheck = Schema.makeFilter<string>(
@@ -53,7 +54,8 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
  * even though nothing upstream feeds it: it has no dependency on the probes or the visions, so
  * waiting for them first would only cost wall-clock for no reason. `recycleMap` follows discovery
  * alone, since it reads the discover note; `designUnderReview` is the only node that reads every
- * half: brainstorm → plan → review-plan, findings sent back into the design until clean.
+ * half: brainstorm → plan → review-plan, each finding sent back to the session that owns the
+ * artifact it names until clean.
  */
 const pipeline = (input: {
   readonly ticket: string

@@ -51,7 +51,8 @@ describe("readShape", () => {
     )
     expect(loop).toEqual([
       "recycle-map -> RecycleMapMissing when map missing or empty",
-      "review-plan -> brainstorm when verdict = blocked, sendbacks < cap",
+      "review-plan -> brainstorm when verdict = blocked, a finding targets design, design sendbacks < cap",
+      "review-plan -> plan when verdict = blocked, every finding targets plan, plan sendbacks < cap",
       "brainstorm -> review-plan when verdict = disputed",
       "brainstorm -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when design missing or unchanged and silent",
       "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when verdict = blocked, cap exhausted",

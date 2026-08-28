@@ -4,6 +4,7 @@ import { plan } from "mag/graph-nodes/plan/graph-node"
 import type { PlanBlocked } from "mag/graph-nodes/review-plan/errors"
 import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { make } from "mag/runtime/graph-node.definition"
+import type { FindingTarget } from "mag/skills/review-brief"
 
 /** The loop's whole spend, folded pass by pass, `build-under-review`'s own reduction; `null` poisons the total. */
 interface Spend {
@@ -17,15 +18,40 @@ const charge = (spend: Spend, sessions: readonly string[], costUsd: number | nul
 })
 
 /**
+ * Which producer a blocked verdict resumes: the plan session alone when every finding is the
+ * plan's, the design session otherwise. A design-bound pass may still carry plan findings; those
+ * reach the plan session afterwards, resumed over the same findings file.
+ */
+const producerOf = (targets: readonly FindingTarget[]): FindingTarget => targets.every((target) => target === "plan") ? "plan" : "design"
+
+/** The design as the loop last saw it; the dispute pair rides along only on the pass that filed it. */
+interface DesignState {
+  readonly designPath: string
+  readonly sessionRef: string
+  readonly findingsPath?: string
+  readonly disputePath?: string
+}
+
+interface PlanState {
+  readonly planPath: string
+  readonly headSha: string
+  readonly sessionRef: string
+}
+
+/**
  * The design lane's backward edge as a composite GraphNode, `build-under-review`'s shape:
- * brainstorm → plan → review-plan, a blocking review sending its findings back into brainstorm, at
- * most `cap` times. The loop is one generator over the error channel, `PLAN_BLOCKED` IS the
- * failure track, and its state lives in loop locals, so nothing about the loop escapes this node.
+ * brainstorm → plan → review-plan, a blocking review sending its findings back to the session
+ * that owns the artifact each finding names, at most `cap` times per producer. The loop is one
+ * generator over the error channel, `PLAN_BLOCKED` IS the failure track, and its state lives in
+ * loop locals, so nothing about the loop escapes this node.
  *
- * A send-back resumes the brainstorm session that wrote the reviewed design (`sessionRef`), so a
- * fix keeps the context that made the design; a fresh session would re-derive it. `plan` runs
- * again only when the design changed: a dispute-only pass leaves the design and therefore the
- * plan as they were, so the previous plan stands and the adjudicating review reads it.
+ * A finding names its target (`review-plan`'s verdict). Every finding on the plan resumes the plan
+ * session over the findings and leaves the design and its session untouched. Any finding on the
+ * design resumes the brainstorm session; the plan then runs fresh when the design changed, is
+ * resumed over the same findings when the design stood but a plan finding remains, and stands as
+ * it was when the design disputed and nothing was the plan's. Two caps, one number: design
+ * send-backs and plan send-backs each count against `cap` on their own, so one fix of each fits
+ * under `cap: 1`, and `reviewPasses` stays the total.
  *
  * The reviewer is blind to code by the schema of `review-plan` itself (no `base`, no diff), and
  * fresh every pass; the one exception is an adjudicating pass, handed the design's own dispute of
@@ -35,7 +61,7 @@ const charge = (spend: Spend, sessions: readonly string[], costUsd: number | nul
  */
 export const designUnderReview = make({
   name: "design-under-review",
-  description: "Design, plan, and review both before any build; findings sent back into the design until clean or the cap is spent.",
+  description: "Design, plan, and review both before any build; findings sent back to the session they name until clean or the cap is spent.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -46,7 +72,7 @@ export const designUnderReview = make({
     discoverPath: Schema.String,
     /** The reuse map every session in the loop cites, and the reviewer checks the plan's tasks against. */
     recycleMapPath: Schema.String,
-    /** Max send-backs: brainstorm runs at most `cap + 1` times. */
+    /** Max send-backs per producer: brainstorm and plan are each resumed at most `cap` times. */
     cap: Schema.Natural,
     /** A named agent for every session this node dispatches. */
     agent: Schema.optional(Schema.String),
@@ -69,55 +95,79 @@ export const designUnderReview = make({
       const agentField = input.agent === undefined ? {} : { agent: input.agent }
       const modelField = input.model === undefined ? {} : { model: input.model }
       const ticketFields = { ticket: input.ticket, title: input.title, ticketPath: input.ticketPath }
+      const citations = { discoverPath: input.discoverPath, recycleMapPath: input.recycleMapPath }
 
       let prior = Option.none<PlanBlocked>()
       let spent: Spend = { costUsd: 0, sessions: [] }
-      let lastSessionRef: string | undefined = undefined
-      let planned: { readonly planPath: string; readonly headSha: string } | undefined = undefined
+      const sendbacks = { design: 0, plan: 0 }
+      let designed: DesignState | undefined = undefined
+      let planned: PlanState | undefined = undefined
 
-      for (let sendbacks = 0; ; sendbacks += 1) {
-        const designed = yield* brainstorm.run({
-          ...ticketFields,
-          prompt: input.prompt,
-          visionPaths: input.visionPaths,
-          discoverPath: input.discoverPath,
-          recycleMapPath: input.recycleMapPath,
-          ...agentField,
-          ...modelField,
-          ...Option.match(prior, {
-            onNone: () => ({}),
-            onSome: (blocked) => ({ findingsPath: blocked.findingsPath, resume: lastSessionRef })
-          })
-        })
-        spent = charge(spent, designed.sessions, designed.costUsd)
-        lastSessionRef = designed.sessionRef
+      for (let passes = 1; ; passes += 1) {
+        const producer = Option.map(prior, (blocked) => producerOf(blocked.targets))
+        const findings = Option.map(prior, (blocked) => blocked.findingsPath)
 
-        if (designed.changed || planned === undefined) {
-          const fresh = yield* plan.run({
+        // The design pass: first, or resumed over any design finding. A plan-only verdict skips it.
+        let designChanged = false
+        const priorDesign: DesignState | undefined = designed
+        let currentDesign: DesignState
+        if (priorDesign === undefined || Option.contains(producer, "design")) {
+          const pass = yield* brainstorm.run({
             ...ticketFields,
-            designPath: designed.designPath,
-            discoverPath: input.discoverPath,
-            recycleMapPath: input.recycleMapPath,
+            prompt: input.prompt,
+            visionPaths: input.visionPaths,
+            ...citations,
             ...agentField,
-            ...modelField
+            ...modelField,
+            ...(priorDesign === undefined || Option.isNone(findings) ? {} : { findingsPath: findings.value, resume: priorDesign.sessionRef })
           })
-          spent = charge(spent, fresh.sessions, fresh.costUsd)
-          planned = { planPath: fresh.planPath, headSha: fresh.headSha }
+          spent = charge(spent, pass.sessions, pass.costUsd)
+          designChanged = pass.changed
+          currentDesign = { designPath: pass.designPath, sessionRef: pass.sessionRef, ...(pass.disputePath === undefined ? {} : { findingsPath: pass.findingsPath, disputePath: pass.disputePath }) }
+        } else {
+          currentDesign = { designPath: priorDesign.designPath, sessionRef: priorDesign.sessionRef }
         }
+        designed = currentDesign
 
-        // A send-back pass that changed the design hands the reviewer the prior findings, so pass 2
-        // judges the delta; a dispute-only pass is adjudicated under its own block instead.
-        const adjudication = designed.findingsPath === undefined || designed.disputePath === undefined
-          ? Option.match(prior, { onNone: () => ({}), onSome: (blocked) => ({ priorFindingsPath: blocked.findingsPath }) })
-          : { findingsPath: designed.findingsPath, disputePath: designed.disputePath }
+        // The plan pass: fresh over a new or changed design, resumed over the findings when a plan
+        // finding stands on an unchanged design, untouched when the design disputed alone.
+        const planFinding = Option.exists(prior, (blocked) => blocked.targets.includes("plan"))
+        const priorPlan: PlanState | undefined = planned
+        let currentPlan: PlanState
+        if (priorPlan === undefined || designChanged) {
+          const fresh = yield* plan.run({ ...ticketFields, designPath: currentDesign.designPath, ...citations, ...agentField, ...modelField })
+          spent = charge(spent, fresh.sessions, fresh.costUsd)
+          currentPlan = { planPath: fresh.planPath, headSha: fresh.headSha, sessionRef: fresh.sessionRef }
+        } else if (planFinding && Option.isSome(findings)) {
+          const resumed = yield* plan.run({
+            ...ticketFields,
+            designPath: currentDesign.designPath,
+            ...citations,
+            ...agentField,
+            ...modelField,
+            findingsPath: findings.value,
+            resume: priorPlan.sessionRef
+          })
+          spent = charge(spent, resumed.sessions, resumed.costUsd)
+          currentPlan = { planPath: resumed.planPath, headSha: resumed.headSha, sessionRef: resumed.sessionRef }
+        } else {
+          currentPlan = priorPlan
+        }
+        planned = currentPlan
+
+        // A dispute filed this pass makes the review adjudicating; otherwise a send-back hands the
+        // reviewer the prior findings, so pass 2 judges the delta instead of re-hunting.
+        const adjudication = currentDesign.findingsPath === undefined || currentDesign.disputePath === undefined
+          ? Option.match(findings, { onNone: () => ({}), onSome: (findingsPath) => ({ priorFindingsPath: findingsPath }) })
+          : { findingsPath: currentDesign.findingsPath, disputePath: currentDesign.disputePath }
 
         const reviewed = yield* Effect.result(
           reviewPlan.run({
             ...ticketFields,
-            designPath: designed.designPath,
-            planPath: planned.planPath,
+            designPath: currentDesign.designPath,
+            planPath: currentPlan.planPath,
             recycleMapPath: input.recycleMapPath,
-            headSha: planned.headSha,
+            headSha: currentPlan.headSha,
             ...adjudication,
             ...agentField,
             ...modelField
@@ -127,20 +177,21 @@ export const designUnderReview = make({
         if (Result.isSuccess(reviewed)) {
           spent = charge(spent, reviewed.success.sessions, reviewed.success.costUsd)
           return {
-            designPath: designed.designPath,
-            planPath: planned.planPath,
-            headSha: planned.headSha,
-            reviewPasses: sendbacks + 1,
-            ...(designed.disputePath === undefined ? {} : { disputePath: designed.disputePath }),
+            designPath: currentDesign.designPath,
+            planPath: currentPlan.planPath,
+            headSha: currentPlan.headSha,
+            reviewPasses: passes,
+            ...(currentDesign.disputePath === undefined ? {} : { disputePath: currentDesign.disputePath }),
             sessions: spent.sessions,
             costUsd: spent.costUsd
           }
         }
 
         const failure = reviewed.failure
-        if (failure._tag !== "PLAN_BLOCKED" || sendbacks >= input.cap) {
-          return yield* Effect.fail(failure)
-        }
+        if (failure._tag !== "PLAN_BLOCKED") return yield* Effect.fail(failure)
+        const next = producerOf(failure.targets)
+        if (sendbacks[next] >= input.cap) return yield* Effect.fail(failure)
+        sendbacks[next] += 1
         spent = charge(spent, failure.sessions, failure.costUsd)
         prior = Option.some(failure)
       }
