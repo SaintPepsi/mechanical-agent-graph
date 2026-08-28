@@ -17,12 +17,14 @@ import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/she
 import { scriptedShell, stubAgent, testRunInfo, withRunRoot as withNodeRunRoot } from "mag/test/node-fixture"
 
 const INPUT = inputExamples[0]!
-const ADJUDICATING = inputExamples[1]!
+const RE_REVIEW = inputExamples[1]!
+const ADJUDICATING = inputExamples[2]!
 
 /** The one git read this node makes: `ls-files` for the rulings files, NUL-separated. */
 const rulingsShell = (declared = "") => scriptedShell([{ exitCode: 0, stdout: declared, stderr: "" }])
 
-const reviewAgent = (blocking: readonly string[]) => stubAgent({ blocking }, { sessions: ["review-session"], costUsd: 0.31 })
+const reviewAgent = (blocking: readonly string[], notes: readonly string[] = [], questions: readonly string[] = []) =>
+  stubAgent({ blocking, notes, questions }, { sessions: ["review-session"], costUsd: 0.31 })
 
 const runWith = <A, E>(effect: Effect.Effect<A, E, never>, shell: ShellService, agent: ClaudeAgentService, run: RunInfoService) =>
   Effect.runPromise(
@@ -51,7 +53,7 @@ describe("review-plan", () => {
     expect(fields).not.toContain("diffPath")
   })
 
-  test("the prompt names the design and the plan, states the four blocking conditions, and the one git read is the rulings ls-files", () =>
+  test("the prompt names the design and the plan, carries the plan charter, states the four blocking conditions, and the one git read is the rulings ls-files", () =>
     withRunRoot(async (runRoot, run) => {
       const shell = rulingsShell()
       const agent = reviewAgent([])
@@ -64,6 +66,15 @@ describe("review-plan", () => {
       expect(prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
       expect(prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(prompt).toContain(`Review the design at ${INPUT.designPath} and the plan at ${INPUT.planPath}`)
+      expect(prompt).toContain("You are an adversarial reviewer. Find where the target fails to meet the ticket.")
+      expect(prompt).toContain("The target does not get to define what done means.")
+      expect(prompt).toContain("does the plan, built exactly as written, satisfy every acceptance criterion?")
+      expect(prompt).toContain("Prior-art hunt:")
+      expect(prompt).toContain("Principles audit:")
+      expect(prompt).toContain("- notes: everything else")
+      expect(prompt).toContain("- questions: a context-free")
+      expect(prompt).not.toContain("fresh-eyes skim")
+      expect(prompt).not.toContain("re-review")
       expect(prompt).toContain("an acceptance criterion no task in the plan proves")
       expect(prompt).toContain("a ruling in the design stated as a choice still open, or with no basis named")
       expect(prompt).not.toContain("Open Questions")
@@ -73,6 +84,18 @@ describe("review-plan", () => {
       expect(prompt).not.toContain("diff")
       expect(prompt).not.toContain("rulings of its own")
       expect(existsSync(`${runRoot}/review-plan-1.md`)).toBe(true)
+    }))
+
+  test("a re-review names the prior findings and judges the delta, the fresh hunt framing gone", () =>
+    withRunRoot(async (_runRoot, run) => {
+      const agent = reviewAgent([])
+      await runWith(reviewPlan.run(RE_REVIEW), rulingsShell().service, agent.service, run)
+
+      const prompt = agent.requests[0]!.prompt
+      expect(prompt).toContain(`A prior pass raised blocking findings, recorded at ${RE_REVIEW.priorFindingsPath}.`)
+      expect(prompt).toContain("A finding the first pass did not make is not raised now unless it is blocking.")
+      expect(prompt).not.toContain("Find where the target fails to meet the ticket.")
+      expect(prompt).not.toContain("This session has no memory of either pass")
     }))
 
   test("every rulings file git returns is listed in the prompt", () =>
@@ -100,7 +123,17 @@ describe("review-plan", () => {
         sessions: ["review-session"],
         costUsd: 0.31
       })
-      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.`)
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
+    }))
+
+  test("notes and questions are recorded in the findings file and never gate: a pass with both alone still succeeds", () =>
+    withRunRoot(async (runRoot, run) => {
+      const result = await runWith(reviewPlan.run(INPUT), rulingsShell().service, reviewAgent([], ["plan.md:12 naming drifts from the design"], ["is the cap of 3 intentional?"]).service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(
+        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- plan.md:12 naming drifts from the design\n\nQuestions:\n- is the cap of 3 intentional?`
+      )
     }))
 
   test("a blocking verdict is PlanBlocked, the findings file written and named on the error, spend aboard", () =>
@@ -117,7 +150,7 @@ describe("review-plan", () => {
       expect(result.failure).toBeInstanceOf(PlanBlocked)
       const blocked = result.failure as PlanBlocked
       expect(blocked).toMatchObject({ findingsPath: `${runRoot}/review-plan-1.md`, headSha: INPUT.headSha, sessions: ["review-session"], costUsd: 0.31 })
-      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- AC.02 has no task\n- Interpretation Rulings AC.04: no basis named`)
+      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- AC.02 has no task\n- Interpretation Rulings AC.04: no basis named\n\nNotes:\nNone.\n\nQuestions:\nNone.`)
     }))
 
   test("an adjudicating pass names both files in the prompt, and a blocking verdict is PlanDisputeRejected carrying disputePath", () =>

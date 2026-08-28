@@ -263,9 +263,10 @@ export const buildUnderReview = make({
           ? yield* verified(reduced.headSha, reduced.sessionRef)
           : { headSha: reduced.headSha, commits: 0 }
 
-        // Present only when this pass produced a dispute.
+        // Present only when this pass produced a dispute; otherwise a send-back pass hands the
+        // reviewer the prior findings, so pass 2 judges the delta instead of re-hunting the diff.
         const adjudication = built.success.findingsPath === undefined || built.success.disputePath === undefined
-          ? {}
+          ? Option.match(prior, { onNone: () => ({}), onSome: (blocked) => ({ priorFindingsPath: blocked.findingsPath }) })
           : { findingsPath: built.success.findingsPath, disputePath: built.success.disputePath }
 
         const reviewed = yield* Effect.result(

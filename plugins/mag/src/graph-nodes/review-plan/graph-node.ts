@@ -9,28 +9,24 @@ import {
 } from "mag/graph-nodes/review-plan/errors"
 import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
-import { verdictSchema } from "mag/runtime/claude/verdict-schema"
 import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { declaredRulings, rulingsBlock } from "mag/runtime/rulings"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
+import { compileReviewBrief, renderFindings, REVIEW_VERDICT } from "mag/skills/review-brief"
 
-/** Blocking findings, an empty list a pass — `review-diff`'s own verdict. */
-const VERDICT = verdictSchema(Schema.Struct({ blocking: Schema.Array(Schema.String) }))
-
-/** `review-diff`'s `renderFindings`: the first line names the sha the design and plan stood on. */
-const renderFindings = (headSha: string, blocking: readonly string[]): string =>
-  [
-    `Reviewed at ${headSha}`,
-    "",
-    blocking.length > 0 ? blocking.map((finding) => `- ${finding}`).join("\n") : "No blocking findings."
-  ].join("\n")
-
-/** The altitude, stated as what a blocking finding is; the diff is not named because this node never reads one. */
-const reviewBlock = (designPath: string, planPath: string, recycleMapPath: string): readonly string[] => [
+/** The target, then the charter; the diff is not named because this node never reads one. */
+const targetBlock = (designPath: string, planPath: string, priorFindingsPath: string | undefined): readonly string[] => [
   "",
-  `Review the design at ${designPath} and the plan at ${planPath} against the ticket, before any code exists. Read both whole. Reply with only the blocking findings, each specific enough to act on; an empty list means both pass. A blocking finding is any of:`,
+  `Review the design at ${designPath} and the plan at ${planPath}, before any code exists. Read both whole.`,
+  "",
+  ...compileReviewBrief("plan", priorFindingsPath)
+]
+
+/** This altitude's own blocking conditions, on top of the charter's. */
+const blockingBlock = (recycleMapPath: string): readonly string[] => [
+  "At this altitude a blocking finding is also any of:",
   "- an acceptance criterion no task in the plan proves, named by id;",
   "- a ruling in the design stated as a choice still open, or with no basis named, quoted: the design decides, the plan builds what it decided;",
   "- a task or design section asking for what a rulings file below forbids, quoting the ruling;",
@@ -58,13 +54,15 @@ const promptFor = (
     readonly designPath: string
     readonly planPath: string
     readonly recycleMapPath: string
+    readonly priorFindingsPath?: string | undefined
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
   },
   rulings: readonly string[]
 ): string =>
   [
     ...ticketReference(input),
-    ...reviewBlock(input.designPath, input.planPath, input.recycleMapPath),
+    ...targetBlock(input.designPath, input.planPath, input.priorFindingsPath),
+    ...blockingBlock(input.recycleMapPath),
     ...rulingsBlock(rulings),
     ...(input.dispute === undefined ? [] : disputeBlock(input.dispute.findingsPath, input.dispute.disputePath))
   ].join("\n")
@@ -93,6 +91,8 @@ export const reviewPlan = make({
     recycleMapPath: Schema.String,
     /** The tree the plan was written against (`plan`'s own `headSha`), stamped on the findings and any failure. */
     headSha: Schema.String,
+    /** The previous pass's findings on a send-back that changed the design: this pass judges the delta against them rather than hunting afresh. Never alongside `disputePath`, whose own block governs an adjudicating pass. */
+    priorFindingsPath: Schema.optional(Schema.String),
     /** The findings a disputed design pass was answering, present alongside `disputePath` — `review-diff`'s pair, same reasoning. */
     findingsPath: Schema.optional(Schema.String),
     /** The design pass's dispute of the previous verdict. Present makes this pass the decider: a blocking verdict is {@link PlanDisputeRejected}, which ends the run. */
@@ -127,13 +127,13 @@ export const reviewPlan = make({
 
       const reply = yield* agent.prompt({
         prompt: promptFor({ ...input, dispute }, rulings),
-        jsonSchema: VERDICT,
+        jsonSchema: REVIEW_VERDICT,
         cwd,
         ...(input.agent === undefined ? {} : { agent: input.agent }),
         ...(input.model === undefined ? {} : { model: input.model })
       })
 
-      const findingsPath = yield* writeArtifact(fs, runInfo.runRoot, "review-plan", renderFindings(input.headSha, reply.verdict.blocking)).pipe(
+      const findingsPath = yield* writeArtifact(fs, runInfo.runRoot, "review-plan", renderFindings(input.headSha, reply.verdict)).pipe(
         Effect.catch((error) =>
           Effect.fail(new PlanFindingsWriteFailed({ runRoot: runInfo.runRoot, detail: String(error), sessions: reply.sessions }))
         )

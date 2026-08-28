@@ -39,7 +39,7 @@ const suiteResult = (red: boolean) =>
   red ? Effect.succeed({ exitCode: 1, stdout: "", stderr: "FAIL: 1 test failed\n" }) : ok("42 pass\n")
 
 /** Routing predicates shared by every fixture below — review and simplify are each keyed on their own dispatch's distinctive prompt text, build is whatever's left. */
-const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("reply with only the blocking findings")
+const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Review the diff at")
 const isSimplifyPrompt = (request: ClaudePrint<unknown>) =>
   request.prompt.includes("Reduce this diff to the same behaviour in less code")
 const isBuildPrompt = (request: ClaudePrint<unknown>) => !isReviewPrompt(request) && !isSimplifyPrompt(request)
@@ -153,7 +153,7 @@ const loopAgent = (blockingByReview: readonly (readonly string[])[] = []) => {
       if (isReviewPrompt(request as ClaudePrint<unknown>)) {
         reviews += 1
         return Effect.succeed({
-          verdict: { blocking: blockingByReview[reviews - 1] ?? [] } as A,
+          verdict: { blocking: blockingByReview[reviews - 1] ?? [], notes: [], questions: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -237,7 +237,7 @@ const disputeAgent = (secondReviewBlocks: boolean) => {
           ? ["the fix misses the second NUL"]
           : (secondReviewBlocks ? ["still not fixed"] : [])
         return Effect.succeed({
-          verdict: { blocking } as A,
+          verdict: { blocking, notes: [], questions: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -306,7 +306,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
   const service: ClaudeAgentService = {
     prompt: <A>(request: ClaudePrint<A>) => {
       requests.push(request as ClaudePrint<unknown>)
-      if (request.prompt.includes("reply with only the blocking findings")) {
+      if (request.prompt.includes("Review the diff at")) {
         reviews += 1
         const blocking = reviews === 1
           ? ["the fix misses the second NUL"]
@@ -314,7 +314,7 @@ const committedDisputeAgent = (secondReviewBlocks: boolean, thirdReviewBlocks = 
           ? (secondReviewBlocks ? ["still not fixed"] : [])
           : (thirdReviewBlocks ? ["still not fixed"] : [])
         return Effect.succeed({
-          verdict: { blocking } as A,
+          verdict: { blocking, notes: [], questions: [] } as A,
           result: {},
           sessions: [`session-review-${reviews}`],
           costUsd: 0.1,
@@ -487,7 +487,7 @@ describe("build-under-review", () => {
     expect(buildRequests[0]!.prompt).not.toContain("recorded at")
     expect(buildRequests[1]!.prompt).toContain(join(runInfo.runRoot, "review-diff-1.md"))
     expect(readFileSync(join(runInfo.runRoot, "review-diff-1.md"), "utf8")).toBe(
-      "Reviewed at bbb222\n\n- the fix misses the second NUL"
+      "Reviewed at bbb222\n\n- the fix misses the second NUL\n\nNotes:\nNone.\n\nQuestions:\nNone."
     )
 
     // The send-back's next build pass resumes the session that produced the reviewed
@@ -496,10 +496,12 @@ describe("build-under-review", () => {
     expect(buildRequests[1]!.resume).toBe("session-build-1")
 
     // No session is resumed across passes — each review is a fresh session over the
-    // current diff, so there is no delta brief and no `resume` field to carry.
+    // current diff, so there is no `resume` field to carry. Pass 2 is a re-review instead: it is
+    // handed pass 1's findings file and judges the delta against it; pass 1 hunts afresh.
     expect(reviewRequests[0]!.resume).toBeUndefined()
     expect(reviewRequests[1]!.resume).toBeUndefined()
-    expect(reviewRequests[1]!.prompt).not.toContain("Delta pass")
+    expect(reviewRequests[0]!.prompt).not.toContain("re-review")
+    expect(reviewRequests[1]!.prompt).toContain(`A prior pass raised blocking findings, recorded at ${join(runInfo.runRoot, "review-diff-1.md")}.`)
 
     // Each pass's review is stamped with that pass's own build headSha — pass 1 and pass 2
     // differ. Simplify no-ops here (the default fixture), so that sha is still build's own; the
@@ -589,6 +591,8 @@ describe("build-under-review", () => {
     expect(buildRequests[1]!.prompt).toContain(join(runInfo.runRoot, "review-diff-1.md"))
     expect(reviewRequests[1]!.prompt).toContain(join(runInfo.runRoot, "review-diff-1.md"))
     expect(reviewRequests[1]!.prompt).toContain(join(runInfo.runRoot, "dispute-1.md"))
+    // The dispute block governs an adjudicating pass; the re-review framing is the send-back's alone.
+    expect(reviewRequests[1]!.prompt).not.toContain("re-review")
 
     // Simplify dispatched exactly once — pass 1's own; the dispute edge (pass 2) never reaches it.
     expect(agent.requests.filter(isSimplifyPrompt)).toHaveLength(1)

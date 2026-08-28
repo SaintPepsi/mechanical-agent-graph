@@ -12,31 +12,13 @@ import {
 import { governingPrinciples, nulPaths, PRINCIPLES_PATHSPEC } from "mag/graph-nodes/review-diff/principles"
 import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
-import { verdictSchema } from "mag/runtime/claude/verdict-schema"
 import { make } from "mag/runtime/graph-node.definition"
 import { gitRead, gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
 import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 import { SWEEP_LABEL, SWEEP_TRIGGER } from "mag/skills/design/reference-sweep"
-
-/** Blocking findings, an empty list a pass. */
-const VERDICT = verdictSchema(Schema.Struct({ blocking: Schema.Array(Schema.String) }))
-
-/**
- * The findings document's content: a pass still gets a file — "passing or
- * blocking" — because the run directory staying a complete per-pass record is worth one short file
- * even when there's nothing to flag. The first line names the sha this pass reviewed:
- * the artifact then states which tree its verdict is about, instead of a reader having to
- * infer it, and the build agent reading this file through its own `findingsPath` sees the
- * commit its findings were raised against stated, not inferred.
- */
-const renderFindings = (headSha: string, blocking: readonly string[]): string =>
-  [
-    `Reviewed at ${headSha}`,
-    "",
-    blocking.length > 0 ? blocking.map((finding) => `- ${finding}`).join("\n") : "No blocking findings."
-  ].join("\n")
+import { compileReviewBrief, renderFindings, REVIEW_VERDICT } from "mag/skills/review-brief"
 
 /**
  * Where this pass's diff was written, the range it was taken from, and its line count:
@@ -51,13 +33,15 @@ interface DiffRef {
 }
 
 /**
- * One line naming the diff file, replacing the inline `--- diff ---` section: prompt size
- * must not scale with diff size — E2BIG at `posix_spawn`. Kept terse: prompts are
+ * One line naming the diff file, then the charter, replacing the inline `--- diff ---` section:
+ * prompt size must not scale with diff size — E2BIG at `posix_spawn`. Kept terse: prompts are
  * model-authored and model-specific; only terse, concise instructions survive model change.
  */
-const diffBlock = (diffRef: DiffRef): readonly string[] => [
+const diffBlock = (diffRef: DiffRef, priorFindingsPath: string | undefined): readonly string[] => [
   "",
-  `Review the diff at ${diffRef.path} (${diffRef.lines} lines, \`git diff ${diffRef.range}\`) against the ticket: read every line, paging past any truncation notice, then reply with only the blocking findings, each specific enough to act on. Change nothing. An empty list means the diff passes.`
+  `Review the diff at ${diffRef.path} (${diffRef.lines} lines, \`git diff ${diffRef.range}\`): read every line, paging past any truncation notice. Change nothing.`,
+  "",
+  ...compileReviewBrief("diff", priorFindingsPath)
 ]
 
 /** Unconditional splice, conditional in its own wording: the obligation only exists for a design record the diff already carries. */
@@ -123,6 +107,7 @@ const promptFor = (
     readonly ticket: string
     readonly title: string
     readonly ticketPath: string
+    readonly priorFindingsPath?: string | undefined
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
     readonly addendum?: string | undefined
   },
@@ -131,7 +116,7 @@ const promptFor = (
 ): string =>
   [
     ...ticketReference(input),
-    ...diffBlock(diffRef),
+    ...diffBlock(diffRef, input.priorFindingsPath),
     ...SWEEP_GATE,
     ...principlesBlock(governing),
     ...(input.dispute === undefined ? [] : disputeBlock(input.dispute.findingsPath, input.dispute.disputePath)),
@@ -164,6 +149,12 @@ export const reviewDiff = make({
      * checkout's own `HEAD` before any dispatch; a mismatch is {@link ReviewHeadMoved}, not a review.
      */
     headSha: Schema.String,
+    /**
+     * The previous pass's findings on a send-back that moved the tree: this pass judges the delta
+     * against them rather than hunting the whole diff afresh. Never alongside `disputePath`, whose
+     * own block governs an adjudicating pass.
+     */
+    priorFindingsPath: Schema.optional(Schema.String),
     /**
      * The findings a disputed build pass was answering, present alongside
      * `disputePath` on the adjudicating call. A single `dispute: { findingsPath, disputePath }`
@@ -282,8 +273,12 @@ export const reviewDiff = make({
       }
 
       const reply = yield* agent.prompt({
-        prompt: promptFor({ ticket: input.ticket, title: input.title, ticketPath: input.ticketPath, dispute, addendum: input.addendum }, diffRef, governing),
-        jsonSchema: VERDICT,
+        prompt: promptFor(
+          { ticket: input.ticket, title: input.title, ticketPath: input.ticketPath, priorFindingsPath: input.priorFindingsPath, dispute, addendum: input.addendum },
+          diffRef,
+          governing
+        ),
+        jsonSchema: REVIEW_VERDICT,
         cwd,
         ...(input.agent === undefined ? {} : { agent: input.agent }),
         ...(input.model === undefined ? {} : { model: input.model })
@@ -293,7 +288,7 @@ export const reviewDiff = make({
         fs,
         runInfo.runRoot,
         "review-diff",
-        renderFindings(input.headSha, reply.verdict.blocking)
+        renderFindings(input.headSha, reply.verdict)
       ).pipe(
         Effect.catch((error) =>
           Effect.fail(

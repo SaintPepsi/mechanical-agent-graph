@@ -48,7 +48,7 @@ const loopAgent = (reviews: readonly (readonly string[])[] = [], disputing: Read
       requests.push(request as ClaudePrint<unknown>)
       if (isReviewPrompt(request as ClaudePrint<unknown>)) {
         reviewsRun += 1
-        return reply<A>({ blocking: reviews[reviewsRun - 1] ?? [] }, `session-review-plan-${reviewsRun}`, 0.1)
+        return reply<A>({ blocking: reviews[reviewsRun - 1] ?? [], notes: [], questions: [] }, `session-review-plan-${reviewsRun}`, 0.1)
       }
       if (isPlanPrompt(request as ClaudePrint<unknown>)) {
         plans += 1
@@ -134,7 +134,7 @@ describe("design-under-review", () => {
         expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
         expect(request.prompt).toContain(INPUT.recycleMapPath)
       }
-      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.")
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.\n\nNotes:\nNone.\n\nQuestions:\nNone.")
     }))
 
   test("a send-back: findings resume the brainstorm session, plan re-runs over the changed design, a fresh review reads both", () =>
@@ -157,13 +157,16 @@ describe("design-under-review", () => {
       expect(brainstorms[1]!.resume).toBe("session-brainstorm-1")
       expect(brainstorms[1]!.prompt).toContain(join(runRoot, "review-plan-1.md"))
       expect(brainstorms[1]!.prompt).not.toContain(INPUT.prompt)
-      expect(readFileSync(join(runRoot, "review-plan-1.md"), "utf8")).toBe("Reviewed at abc123\n\n- AC.02 has no task")
+      expect(readFileSync(join(runRoot, "review-plan-1.md"), "utf8")).toBe("Reviewed at abc123\n\n- AC.02 has no task\n\nNotes:\nNone.\n\nQuestions:\nNone.")
 
       expect(agent.requests.filter(isPlanPrompt)).toHaveLength(2)
       const reviews = agent.requests.filter(isReviewPrompt)
       expect(reviews).toHaveLength(2)
       expect(reviews[1]!.resume).toBeUndefined()
       expect(reviews[1]!.prompt).not.toContain("dispute")
+      // Pass 2 is a re-review over the rewritten design: handed pass 1's findings, judging the delta.
+      expect(reviews[0]!.prompt).not.toContain("re-review")
+      expect(reviews[1]!.prompt).toContain(`A prior pass raised blocking findings, recorded at ${join(runRoot, "review-plan-1.md")}.`)
     }))
 
   test("a cap-spent loop refails the reviewer's own PLAN_BLOCKED, findings still aboard, and dispatches nothing further", () =>

@@ -105,8 +105,10 @@ export const designUnderReview = make({
           planned = { planPath: fresh.planPath, headSha: fresh.headSha }
         }
 
+        // A send-back pass that changed the design hands the reviewer the prior findings, so pass 2
+        // judges the delta; a dispute-only pass is adjudicated under its own block instead.
         const adjudication = designed.findingsPath === undefined || designed.disputePath === undefined
-          ? {}
+          ? Option.match(prior, { onNone: () => ({}), onSome: (blocked) => ({ priorFindingsPath: blocked.findingsPath }) })
           : { findingsPath: designed.findingsPath, disputePath: designed.disputePath }
 
         const reviewed = yield* Effect.result(
