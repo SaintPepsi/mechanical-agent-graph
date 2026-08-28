@@ -77,7 +77,7 @@ const OUTPUT = (target: ReviewTarget): readonly string[] => [
       : ""
   }`,
   "- notes: everything else: cosmetic, style, documented deferrals, optional improvements, anything the toolchain will catch.",
-  "No questions. Nobody answers one in this run. Where the record settles \"is X intentional\", it is settled; where it does not, judge it yourself: blocking if the omission breaks a criterion, a note otherwise, with the ruling you would have wanted stated."
+  "No questions. Nobody answers one in this run. Where the record settles \"is X intentional\", it is settled; where it does not, judge it yourself: take the ideal reading, the best one where none is clearly ideal, the pragmatic one where you cannot tell; blocking if the omission breaks a criterion, a note otherwise, stating the reading you took."
 ]
 
 /** A first pass hunts the whole target; a re-review judges the delta against the prior findings and stops there. */
