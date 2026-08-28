@@ -2,7 +2,7 @@ export const inputExamples = [
   {
     ticket: "GH-288",
     title: "Envision and build the design graph",
-    body: "## Executive Summary\n\nOne node per notation, dispatched, checked and committed alone.",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-svelte.md", "docs/graph/GH-288/vision-generic.md"],
     discoverPath: "docs/graph/GH-288/discover.md"
@@ -10,7 +10,7 @@ export const inputExamples = [
   {
     ticket: "GH-288",
     title: "Envision and build the design graph",
-    body: "## Executive Summary\n\nOne node per notation, dispatched, checked and committed alone.",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-generic.md"],
     discoverPath: "docs/graph/GH-288/discover.md",

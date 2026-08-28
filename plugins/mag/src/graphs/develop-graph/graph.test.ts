@@ -336,8 +336,9 @@ describe("develop-graph", () => {
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
+      // The ticket file opens with the title as its own heading, so the inventory names it first.
       expect(result.failure).toStrictEqual(
-        new AcceptanceCriteriaMissing({ ticket: TICKET, title: TICKET_TITLE, headings: "Summary" })
+        new AcceptanceCriteriaMissing({ ticket: TICKET, title: TICKET_TITLE, headings: `${TICKET_TITLE}, Summary` })
       )
 
       // Refused before spend: no worktree, no branch, no dispatch — the gate is `prepare`'s door.

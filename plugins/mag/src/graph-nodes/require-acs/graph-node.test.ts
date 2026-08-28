@@ -1,16 +1,27 @@
 import { describe, expect, test } from "bun:test"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { Effect, Result, Schema } from "effect"
-import { AcceptanceCriteriaMissing } from "mag/graph-nodes/require-acs/errors"
+import { AcceptanceCriteriaMissing, TicketUnreadable } from "mag/graph-nodes/require-acs/errors"
 import { inputExamples, successExamples } from "mag/graph-nodes/require-acs/examples"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { recognizeAcceptanceCriteria } from "mag/graph-nodes/require-acs/recognizer"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
+import { withRunRoot } from "mag/test/node-fixture"
 
-const failure = <A, E>(effect: Effect.Effect<A, E>): E => {
-  const result = Effect.runSync(Effect.result(effect))
+const failure = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
+  const result = await Effect.runPromise(Effect.result(effect))
   if (!Result.isFailure(result)) throw new Error("expected a failure")
   return result.failure
 }
+
+/** Stands in for `fetch-ticket`'s own write: the node reads the ticket from disk, never from its input. */
+const withTicket = <T>(body: string, fn: (ticketPath: string) => Promise<T>): Promise<T> =>
+  withRunRoot("require-acs", (runRoot) => {
+    const ticketPath = join(runRoot, "ticket.md")
+    writeFileSync(ticketPath, body)
+    return fn(ticketPath)
+  })
 
 describe("require-acs", () => {
   test("the fixtures decode against require-acs's own schemas", () => {
@@ -80,27 +91,27 @@ describe("require-acs", () => {
   })
 
   describe("the node", () => {
-    test("an AC-less body fails with the exact error value, naming the ticket, title and headings carried", () => {
-      const error = failure(requireAcs.run({
-        ticket: "GH-98",
-        title: "Fix the parser",
-        body: "## Summary\n\nNo ACs here.\n"
+    test("an AC-less ticket file fails with the exact error value, naming the ticket, title and headings carried", () =>
+      withTicket("## Summary\n\nNo ACs here.\n", async (ticketPath) => {
+        const error = await failure(requireAcs.run({ ticket: "GH-98", title: "Fix the parser", ticketPath }))
+        expect(error).toBeInstanceOf(AcceptanceCriteriaMissing)
+        expect(error).toStrictEqual(new AcceptanceCriteriaMissing({ ticket: "GH-98", title: "Fix the parser", headings: "Summary" }))
+        expect(error.message).toContain("GH-98")
+        expect(error.message).toContain("maintainer")
       }))
-      expect(error).toBeInstanceOf(AcceptanceCriteriaMissing)
-      expect(error).toStrictEqual(new AcceptanceCriteriaMissing({ ticket: "GH-98", title: "Fix the parser", headings: "Summary" }))
-      expect(error.message).toContain("GH-98")
-      expect(error.message).toContain("maintainer")
-    })
 
-    // `Effect.runSync` typechecks only against a `never` requirement, so it also proves the node is
-    // pure: no `Shell`, no agent, nothing that could draft the criteria it is refusing over.
-    test("a body with criteria succeeds with the count", () => {
-      const value = Effect.runSync(requireAcs.run({
-        ticket: "GH-98",
-        title: "Fix the parser",
-        body: "## Acceptance Criteria\n\n**AC.01 - First**\n\n**AC.02 - Second**\n"
+    // `Effect.runPromise` typechecks only against a `never` requirement, so it also proves the node
+    // reaches nothing but the file: no `Shell`, no agent, nothing that could draft the criteria it is refusing over.
+    test("a ticket file with criteria succeeds with the count", () =>
+      withTicket("## Acceptance Criteria\n\n**AC.01 - First**\n\n**AC.02 - Second**\n", async (ticketPath) => {
+        const value = await Effect.runPromise(requireAcs.run({ ticket: "GH-98", title: "Fix the parser", ticketPath }))
+        expect(value).toStrictEqual({ ticket: "GH-98", criteria: 2 })
       }))
-      expect(value).toStrictEqual({ ticket: "GH-98", criteria: 2 })
+
+    test("a missing ticket file is TicketUnreadable, naming the path", async () => {
+      const error = await failure(requireAcs.run({ ticket: "GH-98", title: "Fix the parser", ticketPath: "/nowhere/ticket.md" }))
+      expect(error).toBeInstanceOf(TicketUnreadable)
+      expect((error as TicketUnreadable).path).toBe("/nowhere/ticket.md")
     })
   })
 })

@@ -3,13 +3,13 @@ export const inputExamples = [
     notation: "svelte",
     ticket: "GH-288",
     title: "Envision and build the design graph",
-    body: "## Executive Summary\n\nOne node per notation, dispatched, checked and committed alone."
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md"
   },
   {
     notation: "generic",
     ticket: "GH-288",
     title: "Envision and build the design graph",
-    body: "## Executive Summary\n\nOne node per notation, dispatched, checked and committed alone.",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     agent: "effect-expert",
     model: "opus"
   }

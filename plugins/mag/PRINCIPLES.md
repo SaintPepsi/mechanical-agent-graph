@@ -131,6 +131,14 @@ maintainer rules otherwise.
 - **Skill text is cold-startable and repo-agnostic.** Compiled skill content states its rules as
   terse imperatives a session in any repo can follow: no ticket numbers, no repo file references,
   no decision archeology, no argued rationale.
+- **Anything a session consumes or produces is an artifact on disk in the run root; a node passes
+  paths between sessions, never text.** Agents can't remember, they can only reference: text
+  spliced into a prompt lasts exactly one context window, while a file is a cited baseline every
+  later session reopens on the same terms, and the journal records a path instead of a copy per
+  node. The ticket is the first instance: `fetch-ticket` writes `<runRoot>/ticket.md` once, no
+  node changes it afterwards, no input schema carries its body, and every prompt says `Read the
+  ticket at <path>` (`runtime/ticket.ts`) and nothing more about it. Precedent: v1's ingest step
+  wrote the immutable ticket doc once and every later step read it as the fixed baseline.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one
   line, scope stated exactly. Enforced before build by `prompt-terseness-evaluator`.

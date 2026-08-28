@@ -116,7 +116,7 @@ describe("discover", () => {
 
   // The prompt carries the ticket alone, never a vision or design field, there is none in the
   // input schema to carry, so this checks the bytes the dispatch actually received.
-  test("the prompt carries the ticket, body, computed destination, and the compiled standard — no vision or design text", async () => {
+  test("the prompt carries the ticket reference, computed destination, and the compiled standard, no vision or design text", async () => {
     const agent = stubAgent()
     // RUN's repoRoot is a fake path, so the post-session file check fails cleanly after dispatch,
     // this test only cares about what was sent.
@@ -126,7 +126,7 @@ describe("discover", () => {
     const request = agent.requests[0]!
     expect(request.cwd).toBe("/repo")
     expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-    expect(request.prompt).toContain(INPUT.body)
+    expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
     expect(request.prompt).toContain("Read only.")
     expect(request.prompt).toContain(`docs/graph/${INPUT.ticket}/discover.md`)
     expect(request.prompt).toContain(compileRecon(RECON_PARAMS))

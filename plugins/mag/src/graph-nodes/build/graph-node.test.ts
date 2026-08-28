@@ -115,7 +115,7 @@ describe("build", () => {
       const request = agent.requests[0]!
       expect(request.cwd).toBe("/repo")
       expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-      expect(request.prompt).toContain(INPUT.body)
+      expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(request.prompt).toContain(INPUT.branch)
       // Every dispatch is charged to prove acceptance criteria through the shipped symbol.
       expect(request.prompt).toContain("executes the exported symbol that ships")
@@ -732,7 +732,7 @@ describe("build", () => {
       const request = agent.requests[0]!
       expect(request.resume).toBe(resumed.resume)
       expect(request.prompt).toContain(resumed.addendum!)
-      expect(request.prompt).not.toContain(resumed.body)
+      expect(request.prompt).not.toContain(resumed.ticketPath)
       expect(request.prompt).not.toContain(resumed.branch)
       expect(request.prompt).not.toContain(`Ticket ${resumed.ticket}`)
       // The acceptance-criterion proof sentence and the artifact-write sentence are discipline, not

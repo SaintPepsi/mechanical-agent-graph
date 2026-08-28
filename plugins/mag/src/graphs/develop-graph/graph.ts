@@ -88,14 +88,14 @@ export const resolvePolicy = (input: Input) => ({
  * with nothing kept — and before any model session, so a base that doesn't resolve still costs no
  * agent spend. The gate refuses before anything downstream spends: a missing-ACs ticket is a
  * conversation to have with the maintainer, not a gap this pipeline fills. Its success is
- * discarded — downstream reads `body` straight off `fetch-ticket`'s own success.
+ * discarded: downstream reads `ticketPath` straight off `fetch-ticket`'s own success.
  */
 const prepare = Graph.construct<{ ticket: string; base: string; remote: string; maintainer: string }>("prepare")
   .fork(
     resolveBase, (s) => ({ base: s.base, remote: s.remote }),
     fetchTicket, (s) => ({ ticket: s.ticket, maintainer: s.maintainer })
   )
-  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, body: s.body }), () => ({}))
+  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath }), () => ({}))
   .join(formatBranchNameNode, (s) => ({ ticket: s.ticket, title: s.title, labels: [] }))
   .finalise({
     description: "Resolve the base and fetch the ticket in parallel, then compute the branch name.",
@@ -109,12 +109,12 @@ const prepare = Graph.construct<{ ticket: string; base: string; remote: string; 
       base: Schema.String,
       ticket: Schema.String,
       title: Schema.String,
-      body: Schema.String,
+      ticketPath: Schema.String,
       branch: Schema.String
     }),
     scope: (input) => ({ ticket: input.ticket, graph: "prepare", worktree: false }),
     seed: (input) => input,
-    out: (s) => ({ base: s.base, ticket: s.ticket, title: s.title, body: s.body, branch: s.branch })
+    out: (s) => ({ base: s.base, ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, branch: s.branch })
   })
 
 /**
@@ -261,7 +261,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
   }))
   .borrowKeep(
     designGraph,
-    (s) => ({ ticket: s.ticket, title: s.title, body: s.body, agent: s.agent, model: MODEL_DESIGN }),
+    (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, agent: s.agent, model: MODEL_DESIGN }),
     (designed) => ({ designPath: designed.designPath, designSessions: designed.sessions, designCost: designed.costUsd })
   )
   .borrowKeep(
@@ -269,7 +269,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
     (s) => ({
       ticket: s.ticket,
       title: s.title,
-      body: s.body,
+      ticketPath: s.ticketPath,
       branch: s.branch,
       command: s.verification,
       base: s.base,

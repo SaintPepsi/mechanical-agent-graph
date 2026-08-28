@@ -7,6 +7,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { SKILLS_TOKEN, TICKET_TOKEN } from "mag/skills/design/tokens"
 import { DESIGN_DESTINATION, designDestinationFor } from "mag/skills/design/write-and-confirm"
 import { SKILLS_ROOT } from "mag/skills/installed"
@@ -30,7 +31,7 @@ const promptFor = (
   input: {
     readonly ticket: string
     readonly title: string
-    readonly body: string
+    readonly ticketPath: string
     readonly visionPaths: readonly string[]
     readonly discoverPath: string
     readonly prompt: string
@@ -38,9 +39,7 @@ const promptFor = (
   designPath: string
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
-    "",
-    input.body,
+    ...ticketReference(input),
     "",
     "Read each vision below and the discover note as citations. Do not redraw a vision or re-run recon.",
     ...input.visionPaths.map((path) => `- ${path}`),
@@ -88,7 +87,7 @@ export const brainstorm = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** The already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s success). */
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),

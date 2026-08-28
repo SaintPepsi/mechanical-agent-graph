@@ -81,7 +81,7 @@ export const buildUnderReview = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     branch: Schema.String,
     command: Schema.String,
     base: Schema.String,
@@ -170,7 +170,7 @@ export const buildUnderReview = make({
             const repaired = yield* build.run({
               ticket: input.ticket,
               title: input.title,
-              body: input.body,
+              ticketPath: input.ticketPath,
               branch: input.branch,
               resume: currentProducer,
               addendum: verificationAddendum(failure.reportPath),
@@ -189,7 +189,7 @@ export const buildUnderReview = make({
           build.run({
             ticket: input.ticket,
             title: input.title,
-            body: input.body,
+            ticketPath: input.ticketPath,
             branch: input.branch,
             ...agentField,
             ...buildModelField,
@@ -213,7 +213,7 @@ export const buildUnderReview = make({
           const adjudicated = yield* reviewDiff.run({
             ticket: input.ticket,
             title: input.title,
-            body: input.body,
+            ticketPath: input.ticketPath,
             base: input.base,
             headSha: failure.headSha,
             findingsPath: failure.findingsPath,
@@ -267,7 +267,7 @@ export const buildUnderReview = make({
           reviewDiff.run({
             ticket: input.ticket,
             title: input.title,
-            body: input.body,
+            ticketPath: input.ticketPath,
             base: input.base,
             headSha: reviewVerified.headSha,
             ...adjudication,

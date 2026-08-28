@@ -119,7 +119,7 @@ describe("envision-notation", () => {
       expect(request.agent).toBeUndefined()
       expect(request.model).toBeUndefined()
       expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-      expect(request.prompt).toContain(INPUT.body)
+      expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(request.prompt).toContain(BLIND_DRAW_RULE)
       expect(request.prompt).toContain(visionIn(repoRoot, INPUT.notation))
     }))

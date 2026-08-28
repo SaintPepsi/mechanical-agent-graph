@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Effect, FileSystem, Schema } from "effect"
 import { assembleBrainstormPrompt } from "mag/graph-nodes/assemble-brainstorm-prompt/graph-node"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
@@ -8,6 +8,7 @@ import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
 import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
 import { graph } from "mag/runtime/graph"
+import { platform } from "mag/runtime/platform"
 
 // `graphs/develop-graph/graph.ts`'s own records-policy check, copied rather than shared: this graph and that one
 // each own their own input schema, and a check hanging off a `Schema.String` is what lets
@@ -29,10 +30,10 @@ const probeVerdicts = (text: string) =>
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
  * assignment — spelled once so `envisionVisions`, `discover` and `brainstorm`'s three calls below
  * cannot drift from each other. */
-const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly body: string }) => ({
+const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }) => ({
   ticket: input.ticket,
   title: input.title,
-  body: input.body
+  ticketPath: input.ticketPath
 })
 const agentFields = (input: { readonly agent?: string; readonly model?: string }) => ({
   ...(input.agent === undefined ? {} : { agent: input.agent }),
@@ -49,12 +50,16 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 const pipeline = (input: {
   readonly ticket: string
   readonly title: string
-  readonly body: string
+  readonly ticketPath: string
   readonly agent?: string
   readonly model?: string
 }) =>
   Effect.gen(function* () {
-    const verdicts = yield* probeVerdicts(`${input.title}\n${input.body}`)
+    // The probes match manifests against the ticket's own words, read here from the run root's
+    // ticket file: a file is a trust boundary, and the graph's error union already carries a raw
+    // `PlatformError` (`runScopedLayers`'s own), so the read wears no tag of its own.
+    const fs = yield* FileSystem.FileSystem
+    const verdicts = yield* probeVerdicts(yield* fs.readFileString(input.ticketPath))
     const resolved = yield* resolveNotations.run({ verdicts })
 
     const [visions, discovered, assembled] = yield* Effect.all(
@@ -83,7 +88,7 @@ const pipeline = (input: {
       // One unpriced session makes the run's figure unpriced, never silently zero — `graphs/develop-graph/graph.ts`'s own reduction.
       costUsd: [visions.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
     }
-  })
+  }).pipe(Effect.provide(platform))
 
 /**
  * design-graph: one GraphNode for the design lane, in the slot `develop-graph`'s host graph
@@ -105,7 +110,7 @@ export const designGraph = graph({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent for every session this graph dispatches, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model` for every session this graph dispatches, same convention as `agent`. */

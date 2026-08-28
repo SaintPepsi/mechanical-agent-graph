@@ -13,6 +13,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record, requireRunRoot } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { NOTATIONS } from "mag/skills/design/envisioning"
 import { compileEnvisionNotation, visionDestination } from "mag/skills/envision/notation"
 
@@ -28,8 +29,8 @@ const VISION = verdictSchema(Schema.Struct({ visionPath: Schema.String, blocked:
 
 /** `discover`'s own `promptFor` shape: ticket framing, then the compiled discipline — no vision or
  * design text in the input schema to leak in. */
-const promptFor = (input: { readonly ticket: string; readonly title: string; readonly body: string }, compiled: string): string =>
-  [`Ticket ${input.ticket}: ${input.title}`, "", input.body, "", compiled].join("\n")
+const promptFor = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }, compiled: string): string =>
+  [...ticketReference(input), "", compiled].join("\n")
 
 const messageFor = (ticket: string, notation: string, sessions: readonly string[]): string =>
   [
@@ -60,7 +61,7 @@ export const envisionNotation = make({
     notation: Schema.String,
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent to run the session as, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */

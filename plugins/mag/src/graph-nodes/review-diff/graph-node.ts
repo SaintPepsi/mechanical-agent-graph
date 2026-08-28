@@ -17,6 +17,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { gitRead, gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
 import { RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { SWEEP_LABEL, SWEEP_TRIGGER } from "mag/skills/design/reference-sweep"
 
 /** Blocking findings, an empty list a pass. */
@@ -121,7 +122,7 @@ const promptFor = (
   input: {
     readonly ticket: string
     readonly title: string
-    readonly body: string
+    readonly ticketPath: string
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
     readonly addendum?: string | undefined
   },
@@ -129,9 +130,7 @@ const promptFor = (
   governing: readonly string[]
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
-    "",
-    input.body,
+    ...ticketReference(input),
     ...diffBlock(diffRef),
     ...SWEEP_GATE,
     ...principlesBlock(governing),
@@ -156,7 +155,7 @@ export const reviewDiff = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     base: Schema.String,
     /**
      * The head the caller is gating: required, because a caller with no sha to
@@ -283,7 +282,7 @@ export const reviewDiff = make({
       }
 
       const reply = yield* agent.prompt({
-        prompt: promptFor({ ticket: input.ticket, title: input.title, body: input.body, dispute, addendum: input.addendum }, diffRef, governing),
+        prompt: promptFor({ ticket: input.ticket, title: input.title, ticketPath: input.ticketPath, dispute, addendum: input.addendum }, diffRef, governing),
         jsonSchema: VERDICT,
         cwd,
         ...(input.agent === undefined ? {} : { agent: input.agent }),
