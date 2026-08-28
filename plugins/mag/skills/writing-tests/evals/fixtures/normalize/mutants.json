@@ -1,0 +1,114 @@
+[
+  {
+    "id": "keeps-first-name",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "    existing.name = name",
+    "replace": "    existing.name = existing.name",
+    "describes": "a later row no longer updates the name \u2014 the first spelling wins instead of the last"
+  },
+  {
+    "id": "tags-not-unioned",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "    existing.tags = dedupe([...existing.tags, ...tags])",
+    "replace": "    existing.tags = dedupe(tags)",
+    "describes": "a duplicate row replaces the tag list instead of merging into it, silently dropping earlier tags"
+  },
+  {
+    "id": "output-order-last-seen",
+    "category": "ordering",
+    "file": "src/normalize.ts",
+    "find": "      order.push(email)\n      byEmail.set(email",
+    "replace": "      order.unshift(email)\n      byEmail.set(email",
+    "describes": "output comes back in reverse order of first appearance"
+  },
+  {
+    "id": "email-case-identity",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "const email = (row.email ?? \"\").trim().toLowerCase()",
+    "replace": "const email = (row.email ?? \"\").trim()",
+    "describes": "Ian@x.com and ian@x.com become two separate contacts"
+  },
+  {
+    "id": "email-not-trimmed",
+    "category": "boundary",
+    "file": "src/normalize.ts",
+    "find": "const email = (row.email ?? \"\").trim().toLowerCase()",
+    "replace": "const email = (row.email ?? \"\").toLowerCase()",
+    "describes": "a padded email is neither trimmed nor recognised as a duplicate, and \"   \" is accepted instead of rejected"
+  },
+  {
+    "id": "empty-tags-kept",
+    "category": "boundary",
+    "file": "src/normalize.ts",
+    "find": "      .filter((t) => t !== \"\")",
+    "replace": "      .filter((t) => t !== undefined)",
+    "describes": "\"a,,b\" yields an empty-string tag between a and b"
+  },
+  {
+    "id": "tag-dedupe-case-folded",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "    if (seen.has(v)) continue\n    seen.add(v)",
+    "replace": "    if (seen.has(v.toLowerCase())) continue\n    seen.add(v.toLowerCase())",
+    "describes": "tags differing only in case collapse into one, losing a distinct tag"
+  },
+  {
+    "id": "rejects-not-counted",
+    "category": "error-path",
+    "file": "src/normalize.ts",
+    "find": "    if (email === \"\") {\n      rejected += 1",
+    "replace": "    if (email === \"\") {\n      rejected += 0",
+    "describes": "rejected rows are dropped but never counted, so the report claims a clean import"
+  },
+  {
+    "id": "mutates-input",
+    "category": "purity",
+    "file": "src/normalize.ts",
+    "find": "    const name = (row.name ?? \"\").trim()",
+    "replace": "    ;(row as { email?: string }).email = email\n    const name = (row.name ?? \"\").trim()",
+    "describes": "the caller's own row objects are rewritten in place"
+  },
+  {
+    "id": "name-not-trimmed",
+    "category": "boundary",
+    "file": "src/normalize.ts",
+    "find": "const name = (row.name ?? \"\").trim()",
+    "replace": "const name = (row.name ?? \"\")",
+    "describes": "a padded name keeps its whitespace"
+  },
+  {
+    "id": "missing-name-undefined",
+    "category": "boundary",
+    "file": "src/normalize.ts",
+    "find": "const name = (row.name ?? \"\").trim()",
+    "replace": "const name = (row.name as string)?.trim()",
+    "describes": "a row with no name yields undefined rather than an empty string"
+  },
+  {
+    "id": "tags-reversed",
+    "category": "ordering",
+    "file": "src/normalize.ts",
+    "find": "    out.push(v)\n  }\n  return out",
+    "replace": "    out.unshift(v)\n  }\n  return out",
+    "describes": "tags come back in reverse order of first appearance"
+  },
+  {
+    "id": "tag-separator-widened",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "      .split(\",\")",
+    "replace": "      .split(/[,;]/)",
+    "describes": "semicolons are treated as separators too, so a tag legitimately containing one is split in half"
+  },
+  {
+    "id": "dedupe-drops-later",
+    "category": "contract",
+    "file": "src/normalize.ts",
+    "find": "    const existing = byEmail.get(email)\n    if (existing === undefined) {",
+    "replace": "    const existing = undefined as { name: string; tags: string[] } | undefined\n    if (existing === undefined) {",
+    "describes": "every row is treated as new, so duplicates are never merged and the same email appears twice"
+  }
+]

@@ -7,7 +7,7 @@
     "mag": "bun plugins/mag/src/cli.ts",
     "usage-report": "bun plugins/mag/src/usage-report.ts",
     "typecheck": "bun run --cwd plugins/mag typecheck && bun run --cwd plugins/mag/projects/graph-viewer check",
-    "test": "bun test --path-ignore-patterns 'plugins/mag/projects/**' && bun run --cwd plugins/mag/projects/graph-viewer test"
+    "test": "bun test --path-ignore-patterns 'plugins/mag/projects/**' --path-ignore-patterns 'plugins/mag/skills/**/evals/**' && bun run --cwd plugins/mag/projects/graph-viewer test"
   },
   "dependencies": {
     "effect": "beta",

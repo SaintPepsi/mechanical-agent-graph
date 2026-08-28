@@ -1,0 +1,122 @@
+{
+  "case-t": {
+    "arm": "terse",
+    "fixture": "limiter",
+    "ratings": [
+      3,
+      3,
+      3
+    ],
+    "median": 3
+  },
+  "case-f": {
+    "arm": "verbose",
+    "fixture": "limiter",
+    "ratings": [
+      1,
+      1,
+      1
+    ],
+    "median": 1
+  },
+  "case-q": {
+    "arm": "v3",
+    "fixture": "limiter",
+    "ratings": [
+      1,
+      1,
+      1
+    ],
+    "median": 1
+  },
+  "case-r": {
+    "arm": "baseline",
+    "fixture": "limiter",
+    "ratings": [
+      1,
+      2,
+      2
+    ],
+    "median": 2
+  },
+  "case-j": {
+    "arm": "terse",
+    "fixture": "sync",
+    "ratings": [
+      3,
+      3,
+      3
+    ],
+    "median": 3
+  },
+  "case-h": {
+    "arm": "verbose",
+    "fixture": "sync",
+    "ratings": [
+      2,
+      2,
+      2
+    ],
+    "median": 2
+  },
+  "case-x": {
+    "arm": "v3",
+    "fixture": "sync",
+    "ratings": [
+      2,
+      3,
+      3
+    ],
+    "median": 3
+  },
+  "case-z": {
+    "arm": "baseline",
+    "fixture": "sync",
+    "ratings": [
+      3,
+      3,
+      3
+    ],
+    "median": 3
+  },
+  "case-m": {
+    "arm": "terse",
+    "fixture": "normalize",
+    "ratings": [
+      2,
+      2,
+      2
+    ],
+    "median": 2
+  },
+  "case-k": {
+    "arm": "verbose",
+    "fixture": "normalize",
+    "ratings": [
+      2,
+      2,
+      2
+    ],
+    "median": 2
+  },
+  "case-w": {
+    "arm": "v3",
+    "fixture": "normalize",
+    "ratings": [
+      2,
+      2,
+      2
+    ],
+    "median": 2
+  },
+  "case-p": {
+    "arm": "baseline",
+    "fixture": "normalize",
+    "ratings": [
+      2,
+      2,
+      2
+    ],
+    "median": 2
+  }
+}
