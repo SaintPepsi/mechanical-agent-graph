@@ -26,14 +26,16 @@ import type { RunScope } from "mag/runtime/run-layers"
  */
 
 type Wire<Ctx, I> = (ctx: Ctx) => I
-type Keep<A, B extends object> = (a: A) => B
+/** One picker per field: what a stage renames its node's success into, and, because the keys are
+ *  data, the list of fields that stage contributes to the context. */
+type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
 
 /** The step list's existential types: the list is heterogeneous, so its element types cannot be
  *  named per-Construct. The public `Construct<Seed, Ctx, E, R>` generics stay exact; these are
  *  confined to `Step`, the fold, and the modifier machinery below. */
 type AnyNode = GraphNode<any, any, any, any>
 type AnyWire = (ctx: any) => any
-type AnyKeep = (a: any) => any
+type AnyKeep = Record<string, (a: any) => any>
 type AnyCondition = (ctx: any) => boolean
 type AnyVia = (ctx: any) => Effect.Effect<any, any, any>
 
@@ -69,12 +71,16 @@ export type Step =
     readonly wire: AnyWire
     readonly keep: AnyKeep
   }
-  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia }
+  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia; readonly keep: AnyKeep }
 
 /** The one `node` step builder: every stage that runs a single node, and the unconditional step
  *  `removeWhen` rewrites a `when` into. */
 const nodeStep = (node: AnyNode, wire: AnyWire, keep?: AnyKeep): Step =>
   ({ kind: "node", node, wire, keep, modifiers: [] })
+
+/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker. */
+const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(keep).map(([field, pick]) => [field, pick(a)]))
 
 /** A finalised construct's published shape: its step list, and how to re-close a possibly-bent
  *  variant of it into a fresh `graph()` without restating any `.finalise` option. Held in a
@@ -287,7 +293,7 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
         return acc.pipe(
           Effect.flatMap((flowed) =>
             step.node.run(step.wire(flowed)).pipe(
-              Effect.map((a) => ({ ...flowed, ...(step.keep ? step.keep(a) : a) }))
+              Effect.map((a) => ({ ...flowed, ...(step.keep ? applyKeep(step.keep, a) : a) }))
             )
           )
         )
@@ -303,14 +309,16 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
         return acc.pipe(
           Effect.flatMap((flowed) =>
             step.condition(flowed)
-              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...step.keep(a) })))
+              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
               : // The skipped branch adds none of `keep`'s fields, matching `.when`'s `Partial<B>` result.
                 Effect.succeed(flowed)
           )
         )
       case "via":
         return acc.pipe(
-          Effect.flatMap((flowed) => step.f(flowed).pipe(Effect.map((b) => ({ ...flowed, ...b }))))
+          Effect.flatMap((flowed) =>
+            step.f(flowed).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
+          )
         )
     }
   }, Effect.succeed(seed))
@@ -509,12 +517,14 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
     keep: Keep<A, B>
   ) => Construct<Seed, Ctx & Partial<B>, E | E2, R | R2>
   /** A total helper between nodes — the compose-pr-body case, ruled a `runtime/` helper rather than a
-   *  node: a node needs a tagged error, and `prBody` has no failure mode to name. `name`
-   *  is the stage's own declared handle: with no node behind it, a `.via` stage would otherwise have
-   *  none to draw in the shape. */
-  readonly via: <B extends object, E2, R2>(
+   *  node: a node needs a tagged error, and `prBody` has no failure mode to name. `name` is the
+   *  stage's own declared handle: with no node behind it, a `.via` stage would otherwise have none to
+   *  draw in the shape, and `keep` is how it declares the fields it contributes, since no schema can
+   *  answer for a plain Effect's success. */
+  readonly via: <A, B extends object, E2, R2>(
     name: string,
-    f: (ctx: Ctx) => Effect.Effect<B, E2, R2>
+    f: (ctx: Ctx) => Effect.Effect<A, E2, R2>,
+    keep: Keep<A, B>
   ) => Construct<Seed, Ctx & B, E | E2, R | R2>
   /** Close the construct into an ordinary `graph()`: schemas, scope, the success picked off the final
    *  context. `seed` turns the graph's input into the first context — resolve per-repo policy here.
@@ -556,7 +566,7 @@ const makeConstruct = <Seed extends object, Ctx extends object, E, R>(
   borrowKeep: (node, wire, keep) => makeBorrowed(name, [...steps, nodeStep(node, wire, keep)]),
   when: (condition, node, wire, keep) =>
     makeConstruct(name, [...steps, { kind: "when", condition, node, wire, keep }]),
-  via: (stageName, f) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f }]),
+  via: (stageName, f, keep) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f, keep }]),
   finalise: (options) => {
     // Tallied on the unresolved steps: resolveBorrows zeroes `modifiers`, so this is the only
     // place the tally is readable.

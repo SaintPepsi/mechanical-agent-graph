@@ -132,7 +132,7 @@ const bendableSub = Graph.construct<{ flag: boolean }>("fixture-bendable")
   .when(
     (s) => s.flag,
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
   .then(notify, () => ({}))
   .finalise(bendableFinalise(
@@ -214,9 +214,9 @@ const sub = Graph.construct<{ ticket: string; flag: boolean; seedVal: string }>(
   .when(
     (s) => s.flag,
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
-  .via("uppercase", (s) => Effect.succeed({ upper: s.joined.toUpperCase() }))
+  .via("uppercase", (s) => Effect.succeed(s.joined.toUpperCase()), { upper: (upper) => upper })
   .finalise({
     description: "Fork, join, a guarded node, a plain-Effect stage.",
     input: Schema.Struct({ ticket: Schema.String, flag: Schema.Boolean, seedVal: Schema.String }),
@@ -506,7 +506,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("a target that matches nothing throws ModifierTargetMissing, naming the real candidates", () => {
     const steps: readonly Step[] = [
-      { kind: "when", condition: () => true, node: guarded, wire: () => ({}), keep: (a) => a }
+      { kind: "when", condition: () => true, node: guarded, wire: () => ({}), keep: {} }
     ]
     const modifiers: readonly Modifier[] = [{ kind: "removeWhen", target: notify }]
 
@@ -538,7 +538,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("removeWhen rewrites a when step into an unconditional node step, keeping its wire and keep", () => {
     const wire = () => ({})
-    const keep = (a: { readonly ran: boolean }) => ({ guardedRan: a.ran })
+    const keep = { guardedRan: (a: { readonly ran: boolean }) => a.ran }
     const steps: readonly Step[] = [{ kind: "when", condition: () => false, node: guarded, wire, keep }]
 
     const result = applyModifiers(blueprintOf(steps), [{ kind: "removeWhen", target: guarded }])
