@@ -213,15 +213,24 @@ export const INPUT_BOUNDARY_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
   ["plan", "the plan resolves names against the repo, v1's Resolution Table position"]
 ])
 
-/** The one field every ticket-driven node carries, the ruling's own baseline; a node without it is not a stage of a ticket's pipeline and is outside the ruling. */
+/** The ticket document, when a stage reads one; it is the ruling's baseline, never one of the stage artifacts counted against it. */
 const TICKET_FIELD = "ticketPath"
 
 /**
- * A ticket-driven node's required inputs are the ticket plus the one artifact of the stage before
- * it: every required `...Path` field beside `ticketPath` is a stage artifact, and a second one is a
- * violation unless the node is in `INPUT_BOUNDARY_EXCEPTIONS` with its ruling. Optional paths are
- * loop state (`findingsPath`, `disputePath`, `priorFindingsPath`), never a stage input, so only
- * required keys count. An unloaded or ambiguous export is `node-export`'s violation, not this one.
+ * The fields that make a node a stage of a ticket's pipeline: the ticket's id, its document, or
+ * both. `build` carries the id alone and reads the plan as its whole contract, so the ruling
+ * reaches it without `ticketPath`; a node naming neither (`compare-vision`) is not a stage and is
+ * outside the ruling whatever it reads.
+ */
+const PIPELINE_FIELDS: readonly string[] = ["ticket", TICKET_FIELD]
+
+/**
+ * A stage's required inputs are the ticket plus the one artifact of the stage before it: every
+ * required `...Path` field beside `ticketPath` is a stage artifact, and a second one is a violation
+ * unless the node is in `INPUT_BOUNDARY_EXCEPTIONS` with its ruling. A stage that reads no ticket
+ * at all is inside the same one-artifact boundary, `build`'s position. Optional paths are loop
+ * state (`findingsPath`, `disputePath`, `priorFindingsPath`), never a stage input, so only required
+ * keys count. An unloaded or ambiguous export is `node-export`'s violation, not this one.
  */
 const inputBoundary = pure("input-boundary", (subject, flag) => {
   const nodeExportOption = Option.flatMap(loaded(subject, "graph-node.ts"), singleObjectExport)
@@ -230,7 +239,7 @@ const inputBoundary = pure("input-boundary", (subject, flag) => {
   if (!isSchemaHandle(input) || !SchemaAST.isObjects(input.ast)) return []
 
   const names = input.ast.propertySignatures.map((signature) => String(signature.name))
-  if (!names.includes(TICKET_FIELD)) return []
+  if (!names.some((name) => PIPELINE_FIELDS.includes(name))) return []
   const artifacts = input.ast.propertySignatures
     .filter((signature) => String(signature.name).endsWith("Path") && String(signature.name) !== TICKET_FIELD && !SchemaAST.isOptional(signature.type))
     .map((signature) => String(signature.name))

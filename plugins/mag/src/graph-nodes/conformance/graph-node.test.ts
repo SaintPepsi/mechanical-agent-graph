@@ -1143,7 +1143,44 @@ describe("rules — input boundary", () => {
     }
   })
 
-  test("a node with no ticketPath is outside the ruling, whatever it reads", async () => {
+  /** `build`'s own shape: the ticket's id, no ticket document, and the stage artifact it works from. */
+  const idOnlyNode = (name: string, paths: readonly string[]) => ({
+    name,
+    files: {
+      ...conformingNodeSpec.files,
+      "graph-node.ts":
+        "import { Schema } from \"effect\"\n" +
+        "import { make } from \"mag/runtime/graph-node.definition\"\n" +
+        `export const graphNode = make({ name: "${name}", description: "d", input: Schema.Struct({ ticket: Schema.String, ${
+          paths.map((path) => `${path}: Schema.String, `).join("")
+        }findingsPath: Schema.optional(Schema.String) }), success: Schema.Struct({}), run: () => { throw new Error("GRAPH_NODE_UNIMPLEMENTED") } })\n`
+    }
+  })
+
+  test("a node carrying the ticket id without the ticket document is inside the ruling: one artifact passes", async () => {
+    const fixture = nodeFixture([idOnlyNode("builder", ["planPath"])])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations)).toEqual([])
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  test("a node carrying the ticket id without the ticket document still fails on a second artifact", async () => {
+    const fixture = nodeFixture([idOnlyNode("two-artifacts", ["planPath", "designPath"])])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations).map((violation) => violation.detail)).toEqual([
+        "reads 2 stage artifacts beside the ticket (planPath, designPath): " +
+        "the ticket plus one artifact is the boundary, a second needs a ruling in INPUT_BOUNDARY_EXCEPTIONS naming why"
+      ])
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  test("a node naming neither the ticket nor its document is outside the ruling, whatever it reads", async () => {
     const fixture = nodeFixture([
       {
         name: "comparer",
