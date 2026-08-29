@@ -2,10 +2,8 @@ import { SchemaAST } from "effect"
 
 /**
  * The one place a schema's own fields are read off its AST, so nobody re-derives what "declares
- * fields" means. Two exports because callers need different slices of that one fact:
- * `schema-flags.ts` needs the property signatures themselves and the index signatures beside them;
- * `construct.ts`'s shape walk needs both, since an index signature makes a field list partial rather
- * than exhaustive; `graph-node.shape.ts` needs only the names.
+ * fields" means. Two exports because a caller that must judge an index signature needs the AST
+ * itself, and one that only lists fields does not.
  *
  * `effect`'s own `AGENTS.md` does not cover AST introspection; the grounding is
  * `effect/src/SchemaAST.ts` (`isObjects`, `Objects`, `PropertySignature`).

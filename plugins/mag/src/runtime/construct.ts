@@ -98,10 +98,9 @@ export type Step =
 const nodeStep = (node: AnyNode, wire: AnyWire, keep?: AnyKeep): Step =>
   ({ kind: "node", node, wire, keep, modifiers: [] })
 
-/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker.
- *  Written over `Object.entries`/`Object.fromEntries` rather than `effect`'s `Record` module: a
- *  value import named `Record` would sit beside `AnyKeep`'s use of the global `Record<K, V>` utility
- *  type in this same file, two different things resolving through one identifier by accident. */
+/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker. Not
+ *  `effect`'s `Record` module: importing that name would shadow the global `Record<K, V>` utility
+ *  type `AnyKeep` uses in this same file. */
 const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
   Object.fromEntries(Object.entries(keep).map(([field, pick]) => [field, pick(a)]))
 
@@ -399,10 +398,9 @@ const projectNode = (
 /** A keep-less stage's contributed fields, or `undefined` when they cannot stand as an exhaustive
  *  list: an index-signature schema (`Schema.Record`, a struct with a rest field) may carry fields at
  *  run time beyond the ones it names, so treating its named set as the whole truth would let a real
- *  field's read silently resolve to the entry instead of refusing. `schemaFieldNames` alone cannot
- *  make this call — `isEmptyStructSchema` (`graph-node.shape.ts`) depends on it answering `[]` for a
- *  bare `Schema.Record`, a different question (does this schema declare fields at all) than the
- *  walk's (can this schema's field list be trusted as complete). */
+ *  field's read silently resolve to the entry instead of refusing. Asked here rather than inside
+ *  `schemaFieldNames`, which answers a different question (does this schema declare fields at all)
+ *  that `isEmptyStructSchema` depends on. */
 const enumeratedFields = (ast: Parameters<typeof objectAstOf>[0]): readonly string[] | undefined =>
   (objectAstOf(ast)?.indexSignatures.length ?? 0) > 0 ? undefined : schemaFieldNames(ast)
 

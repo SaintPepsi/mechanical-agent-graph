@@ -128,6 +128,17 @@ const differentSuccessNotify = make({
   run: () => Effect.succeed({ notified: 1 })
 })
 
+/** The hand-built `when` step every step-list test below writes: one guarded node, and a decision
+ *  differing only in what it is called and reads. `wire`/`keep` are parameters for the one test that
+ *  must prove `removeWhen` carries them across. */
+type WhenStep = Extract<Step, { kind: "when" }>
+const whenStep = (
+  name: string,
+  reads: readonly string[],
+  wire: WhenStep["wire"] = () => ({}),
+  keep: WhenStep["keep"] = {}
+): Step => ({ kind: "when", decision: { name, reads, test: () => true }, node: guarded, wire, keep })
+
 /** Every borrow/modify fixture below finalises the same shape (the bendable sub's schemas, its
  *  flag seed, its success projection) and differs only in name, scope and prose. Shared so each
  *  construct below reads as the bend it declares rather than as another copy of the schemas. */
@@ -561,9 +572,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
   })
 
   test("a target that matches nothing throws ModifierTargetMissing, naming the real candidates", () => {
-    const steps: readonly Step[] = [
-      { kind: "when", decision: { name: "flag is set", reads: ["flag"], test: () => true }, node: guarded, wire: () => ({}), keep: {} }
-    ]
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"])]
     const modifiers: readonly Modifier[] = [{ kind: "removeWhen", target: notify }]
 
     const error = thrown(ModifierTargetMissing, () => applyModifiers(blueprintOf(steps), modifiers))
@@ -595,9 +604,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
   test("removeWhen rewrites a when step into an unconditional node step, keeping its wire and keep", () => {
     const wire = () => ({})
     const keep = { guardedRan: (a: { readonly ran: boolean }) => a.ran }
-    const steps: readonly Step[] = [
-      { kind: "when", decision: { name: "flag is set", reads: ["flag"], test: () => true }, node: guarded, wire, keep }
-    ]
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"], wire, keep)]
 
     const result = applyModifiers(blueprintOf(steps), [{ kind: "removeWhen", target: guarded }])
 
@@ -750,13 +757,7 @@ describe("Graph.shapeOf / projectSteps", () => {
         keep: { tag: (a: { readonly notified: string }) => a.notified },
         modifiers: []
       },
-      {
-        kind: "when",
-        decision: { name: "tag is loud", reads: ["tag"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
+      whenStep("tag is loud", ["tag"])
     ]
 
     const { edges } = projectSteps("fixture-root", steps)
@@ -772,13 +773,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   test("a keep-less stage produces every field of its node's success", () => {
     const steps: readonly Step[] = [
       { kind: "node", node: notify, wire: () => ({}), modifiers: [] },
-      {
-        kind: "when",
-        decision: { name: "notified at all", reads: ["notified"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
+      whenStep("notified at all", ["notified"])
     ]
 
     const { edges } = projectSteps("fixture-root", steps)
@@ -792,15 +787,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   })
 
   test("a seeded read arrives from the container itself, the entry of the graph", () => {
-    const steps: readonly Step[] = [
-      {
-        kind: "when",
-        decision: { name: "flag is set", reads: ["flag"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
-    ]
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"])]
 
     const { edges } = projectSteps("fixture-root", steps)
 
@@ -815,13 +802,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   test("disconfirming: a read below a stage whose fields cannot be enumerated refuses, naming the opaque stage", () => {
     const steps: readonly Step[] = [
       { kind: "node", node: unenumerable, wire: () => ({}), modifiers: [] },
-      {
-        kind: "when",
-        decision: { name: "x is set", reads: ["x"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
+      whenStep("x is set", ["x"])
     ]
 
     const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
@@ -833,13 +814,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   test("disconfirming: an index-signature success is also opaque — its named fields are not an exhaustive list", () => {
     const steps: readonly Step[] = [
       { kind: "node", node: indexSigned, wire: () => ({}), modifiers: [] },
-      {
-        kind: "when",
-        decision: { name: "x is set", reads: ["x"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
+      whenStep("x is set", ["x"])
     ]
 
     const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
@@ -849,11 +824,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   })
 
   test("two decisions sharing a name in one container refuse: a name is an address", () => {
-    const decision = { name: "flag is set", reads: ["flag"], test: () => true }
-    const steps: readonly Step[] = [
-      { kind: "when", decision, node: guarded, wire: () => ({}), keep: {} },
-      { kind: "when", decision, node: guarded, wire: () => ({}), keep: {} }
-    ]
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"]), whenStep("flag is set", ["flag"])]
 
     const error = thrown(DecisionNameCollides, () => projectSteps("fixture-root", steps))
 
@@ -862,15 +833,7 @@ describe("Graph.shapeOf / projectSteps", () => {
   })
 
   test("a decision named with the id grammar's own separators refuses: a name reads as English, not as a path", () => {
-    const steps: readonly Step[] = [
-      {
-        kind: "when",
-        decision: { name: "checkout/0:decision:run wants a worktree", reads: ["flag"], test: () => true },
-        node: guarded,
-        wire: () => ({}),
-        keep: {}
-      }
-    ]
+    const steps: readonly Step[] = [whenStep("checkout/0:decision:run wants a worktree", ["flag"])]
 
     const error = thrown(DecisionNameUnaddressable, () => projectSteps("fixture-root", steps))
 
