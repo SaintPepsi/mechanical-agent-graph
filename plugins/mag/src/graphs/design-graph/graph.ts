@@ -15,10 +15,11 @@ import { platform } from "mag/runtime/platform"
 // `schema-flags.ts` still derive a CLI flag for it (that graph's own comment on the same line).
 const RECORDS_POLICIES = ["run-root", "committed"] as const
 type RecordsPolicy = (typeof RECORDS_POLICIES)[number]
-// Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning: one round per producer
-// after the first (one design fix and one plan fix), then the findings escalate, a design still
-// blocked after a full round is a ticket problem.
-const PLAN_CAP = 1
+// Pipeline policy, `graphs/develop-graph/graph.ts`'s `REVIEW_CAP` reasoning. Three send-backs per
+// producer: a re-review judges the delta and may raise a fresh blocker each pass, and GH-379 hit the
+// wall twice at one plan send-back with every pass finding one new, real, plan defect. A producer
+// still blocked after three fixes is a ticket problem.
+const PLAN_CAP = 3
 
 const isRecordsPolicyCheck = Schema.makeFilter<string>(
   (value) => ((RECORDS_POLICIES as readonly string[]).includes(value) ? undefined : `expected ${RECORDS_POLICIES.join(" or ")}`),
