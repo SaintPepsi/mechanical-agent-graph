@@ -27,8 +27,6 @@ design-graph                envision-shell ∥ discover → design-under-review 
                             design or plan: a reviewed design and plan before any code
 build-under-review          build → verification → simplify → review-diff, findings sent back into
                             the same session until the diff is clean or the cap is spent
-prompt-terseness-evaluator  rewrite any verbose prompt text the build added, re-verify if it
-                            moved HEAD
 publish-tail                PR body from the merge-base diff, push, open the PR
 ```
 

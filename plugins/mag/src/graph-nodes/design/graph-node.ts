@@ -93,8 +93,8 @@ export const design = make({
     designPath: Schema.String,
     /** HEAD of the tree the session worked in (`workdir(runInfo)`), meaningful under every records
      * policy — under the default `run-root` policy `recordsDir(runInfo)` is a plain OS temp
-     * directory with no git repository of its own, so `recordsDir` cannot answer this. For the
-     * terseness evaluator to gate against. */
+     * directory with no git repository of its own, so `recordsDir` cannot answer this. For a later
+     * stage to gate against. */
     headSha: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)

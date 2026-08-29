@@ -5,7 +5,6 @@
 //     | TicketNotAddressable | TicketNotMaintainerAuthored | EmptyTicket | TrackerFailed | TrackerUnreachable
 //     | MissingTicketId | WorktreeAddFailed | WorktreeSetupFailed | BranchCheckoutFailed | BranchCreateFailed
 //     | DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing
-//     | TersenessWorkdirDirty | TersenessHeadMoved | TersenessCommitFailed | TersenessGitFailed
 //     | BuildWorkdirDirty | BuildNoCommits | BuildHeadMoved | BuildGitFailed | BuildCommitFailed | BuildSummaryEmpty
 //     | VerificationFailed | ReviewDisputeRejected | SendbacksExhausted
 //     | PrBodyRunRootMissing | PrBodyGitFailed | PrBodyDiffWriteFailed
@@ -113,10 +112,6 @@ const DevelopGraph = Graph.construct("develop-graph")
     // { ticket, title, body } → { designPath, planPath, discoverPath, headSha }
     //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing
     // gated to start only once CheckoutBranch's path exists: design writes and commits on this checkout, not before
-  .then(PromptTerseness)
-    // { headSha, base, ticket } → { headSha }
-    //   !TersenessWorkdirDirty | TersenessHeadMoved | TersenessCommitFailed | TersenessGitFailed
-    // rewrites verbose prompt text the design step wrote and commits the repair; headSha moves only if it rewrote something
   .borrow(BuildUnderReview)
     // { headSha, ticket, title, body, branch, planPath, command } → { headSha, summaryPath, commits, reviewPasses, sessions, costUsd }
     //   !BuildWorkdirDirty | BuildNoCommits | BuildHeadMoved | BuildGitFailed | BuildCommitFailed | BuildSummaryEmpty
@@ -139,6 +134,5 @@ const DevelopGenericRepo = Graph.construct("develop-generic-repo")
 Gaps flagged, not patched:
 - `resolve-base`'s remote, `fetch-ticket`'s tracker identity, `publish-tail`'s PR host, and the build agent every `Build`/`Simplify`/`ReviewDiff` dispatch are drawn above as fixed behind those nodes, not as fields on `develop-graph`'s input. `DevelopGenericRepo`'s three `.replaceNode` calls are one plausible shape for a second target repo, but whether that's really per-repo policy read some other way, or fields threaded on `IN` alongside `base`/`verification`/`worktreeSetup`, is undecided. A fourth `.replaceNode` at that borrowing site is a refusal, not a signal: the guard fails Finalise, and the generic case needs its own graph instead.
 - The loop's cap-exhausted exit has no name in the vision: the diagram draws `findingsPath → (escalates)` with no tag, next to a dispute-rejected exit that is named (`ReviewDisputeRejected`). `SendbacksExhausted` above is invented for this sketch to keep the error union closed; it is not sourced from the vision and needs a ruling on its real name, or confirmation it should collapse into an existing tag instead.
-- `develop-graph`'s vision draws `design-graph`'s `headSha` flowing into `prompt-terseness-evaluator`; `design-graph`'s own rail-sketch finalises `{ designPath, planPath, headSha, discoverPath }`, the `headSha` being the tree the settling plan was written against, so the two sketches agree on it.
 - `REVIEW_CAP` (the loop's send-back bound), the per-node model assignment (`opus` for `design-graph`/`Simplify`/`ReviewDiff`, `sonnet` for `Build`/`WritePrBody`), and the default `verification`/`worktreeSetup` commands are named above as configuration the relevant nodes read, with no value stated — policy, not shape.
 - `design-graph`'s own internal gaps (single-dispatch-vs-per-notation, `RetryVision`'s scoped-prompt producer, `NotationDeclaredFailure`'s exact death timing) live in that graph's own rail-sketch and are not repeated here; this drawing only borrows the box.

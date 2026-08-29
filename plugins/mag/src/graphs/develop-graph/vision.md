@@ -36,11 +36,6 @@ graph TD
   BR -- "branch → (gate: design writes on this checkout, and commits here too under records = committed)" --> DG
   DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing | DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected" .-> DEADTREE
 
-  PTE["prompt-terseness-evaluator · Model<br/>rewrite verbose prompt text the run wrote — the build's included — and commit the repair; a moved head re-runs the declared suite"]
-  RB -- "base → base" --> PTE
-  FT -- "ticket → ticket" --> PTE
-  PTE -. "fails: TersenessWorkdirDirty | TersenessHeadMoved | TersenessCommitFailed | TersenessGitFailed" .-> DEADTREE
-
   subgraph Loop["build-under-review · loop, cap = REVIEW_CAP send-backs"]
     B["build · Model<br/>implement the plan, or answer the standing findings"]
     V["verification · Mechanical<br/>the repo's declared suite; exit code is the verdict"]
@@ -73,8 +68,7 @@ graph TD
     CPR["create-pr · Mechanical<br/>open the PR, or return the one already open"]
     WR["worktree-remove · Mechanical<br/>retire the worktree, success only"]
   end
-  RD -- "verdict = clean: headSha → headSha" --> PTE
-  PTE -- "headSha → (gate: the description covers the terse tree)" --> WPB
+  RD -- "verdict = clean: headSha → (gate: the description covers the reviewed tree)" --> WPB
   RB -- "base → base" --> WPB
   WPB -- "description → description" --> PRB
   IN -- "ticket → (R channel: ticket, runId)" --> PRB

@@ -2,8 +2,7 @@ import { Data } from "effect"
 
 /**
  * A live run needs a run directory to write its own diff artifact into. Same reasoning
- * and precedent as `review-diff/errors.ts`'s `ReviewRunRootMissing` and
- * `prompt-terseness-evaluator/errors.ts`'s `TersenessRunRootMissing`: a node reached outside
+ * and precedent as `review-diff/errors.ts`'s `ReviewRunRootMissing`: a node reached outside
  * `runScopedLayers` is a wiring bug, not something a write-then-fail-later path should paper over.
  */
 export class PrBodyRunRootMissing extends Data.TaggedError("PR_BODY_RUN_ROOT_MISSING")<{}> {}

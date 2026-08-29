@@ -60,7 +60,7 @@ A `.when` (and a `.loop` exit, FR-12) is declared with a name, an explicit list 
 
 **Acceptance Criteria:**
 - A `.when` without a name or without a field list does not typecheck
-- The shape shows data edges from `prompt-terseness-evaluator` and from `build-under-review` to the decision "terseness changed HEAD", because that decision declares `tersenedHeadSha` and `builtHeadSha`
+- A decision declaring a field a stage produced shows one data edge per declared field, from that stage
 - A decision reading a seeded field shows a data edge from the graph's entry
 
 Decision names are what a future borrow/modify lifecycle change (not in this set) will target with `removeWhen`.
