@@ -34,7 +34,8 @@ const sendBackBlock = (findingsPath: string, designPath: string): readonly strin
   `\`plan:\` is the plan session's to answer): rewrite the design at \`${designPath}\` in place for`,
   "each one that needs a change, and for any that need none (already answered, or wrong) quote the",
   "finding in your reply's `dispute` list with the reason, instead of inventing a change to satisfy",
-  "it. An empty list means nothing is disputed. A single pass may change the design and dispute the rest."
+  "it. An empty list means nothing is disputed. A single pass may change the design and dispute the rest.",
+  "Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested."
 ]
 
 /** The dispute artifact: the findings file it answers on the first line, then one bullet per disputed finding. */

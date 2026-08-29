@@ -76,7 +76,8 @@ const RULES = (target: ReviewTarget): readonly string[] => [
   `3. Hunt what no tool can tell the author: a missed or misread acceptance criterion, a wrong or risky approach, an unhandled input, state or failure mode, a hidden assumption the ticket or code does not guarantee, a data-integrity or security gap.${
     target === "diff" ? " Duplicated logic across sibling files is a note naming the sites and the helper that would absorb them." : ""
   }`,
-  "4. Leave mechanics to the toolchain: exact symbol names, imports, formatting, typecheck predictions, which test file breaks. Spend the pass on what the compiler, linter and test runner cannot see."
+  "4. Leave mechanics to the toolchain: exact symbol names, imports, formatting, typecheck predictions, which test file breaks. Spend the pass on what the compiler, linter and test runner cannot see.",
+  "5. A finding states the defect and its evidence, never a fix or a mechanism: the author owns the remedy, and a suggested one draws the answer onto the suggestion instead of the defect."
 ]
 
 const OUTPUT = (target: ReviewTarget): readonly string[] => [

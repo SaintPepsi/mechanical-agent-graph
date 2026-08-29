@@ -379,6 +379,7 @@ describe("build", () => {
       expect(prompt).not.toContain("make no commit")
       expect(prompt).toContain("A single pass may commit fixes and")
       expect(prompt).toContain("dispute the rest.")
+      expect(prompt).toContain("Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.")
     }))
 
   test("a zero-forward-commit count with a moved HEAD is BuildHeadMoved, not a dispute and not BuildNoCommits", () =>

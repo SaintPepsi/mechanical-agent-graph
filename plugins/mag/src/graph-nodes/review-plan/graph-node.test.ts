@@ -86,6 +86,7 @@ describe("review-plan", () => {
       expect(prompt).toContain("- notes: everything else")
       expect(prompt).toContain("No questions. Nobody answers one in this run.")
       expect(prompt).toContain("Tag each blocking finding with the artifact that must change")
+      expect(prompt).toContain("5. A finding states the defect and its evidence, never a fix or a mechanism")
       expect(prompt).not.toContain("fresh-eyes skim")
       expect(prompt).not.toContain("re-review")
       expect(prompt).toContain("an acceptance criterion no task in the plan proves")

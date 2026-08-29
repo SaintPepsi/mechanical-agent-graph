@@ -153,6 +153,13 @@ maintainer rules otherwise.
   toolchain catches. There is no questions channel: nobody in an autonomous run answers one, so the
   reviewer judges instead. Reason: the GH-332 trial's reviewer asked the same two questions on both
   passes, each already ruled in the design, and the plan resume answered neither (`skills/review-brief.ts`).
+- **A finding is a defect, a dispute is a denial.** A finding states the defect and its evidence,
+  never a fix; the author owns the remedy. A dispute is for a finding whose defect is denied; an
+  accepted defect is fixed, whatever the reviewer suggested. An adjudicating pass rules on the
+  disputed findings alone, and everything else it blocks on routes as on any pass. Reason: the
+  GH-373 trial's reviewer proposed a mechanism, the design accepted the defect and disputed the
+  mechanism, the adjudicating pass upheld it and the run still died `PLAN_DISPUTE_REJECTED` on two
+  fresh findings (`graph-nodes/review-plan`, `graph-nodes/design-under-review`).
 - **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
   Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
   evidence never needs more than the count line.

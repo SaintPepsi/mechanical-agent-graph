@@ -40,6 +40,7 @@ const sendBackBlock = (findingsPath: string): readonly string[] => [
   "a change, and for any that need none (already fixed, or wrong) quote the finding in your",
   "reply's `dispute` list with the reason, instead of inventing a change to satisfy it. An empty",
   "list means nothing is disputed. A single pass may commit fixes and dispute the rest.",
+  "Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.",
   "When addressing a finding adds an input or a failure condition, re-derive the contract in the",
   "same commit: the declared inputs and failure modes the change widens, and the documents that",
   "record them, and say so in your reply."

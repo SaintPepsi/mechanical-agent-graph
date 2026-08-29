@@ -229,6 +229,7 @@ describe("review-diff", () => {
       expect(prompt).toContain("- blocking: shipped as-is")
       expect(prompt).toContain("- notes: everything else")
       expect(prompt).toContain("No questions. Nobody answers one in this run.")
+      expect(prompt).toContain("5. A finding states the defect and its evidence, never a fix or a mechanism")
       expect(prompt).not.toContain("Prior-art hunt:")
       expect(prompt).not.toContain("Structure audit:")
       expect(prompt).not.toContain("re-review")

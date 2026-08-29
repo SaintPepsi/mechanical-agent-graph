@@ -317,6 +317,7 @@ describe("brainstorm", () => {
       expect(request.prompt).toContain(`Read the ticket at \`${sendBack.ticketPath}\`.`)
       expect(request.prompt).toContain(sendBack.findingsPath!)
       expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
+      expect(request.prompt).toContain("Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.")
       expect(request.prompt).not.toContain(sendBack.prompt)
       expect(request.prompt).not.toContain(sendBack.recycleMapPath)
       expect(request.prompt).not.toContain("Read each vision below")
