@@ -160,6 +160,17 @@ maintainer rules otherwise.
   GH-373 trial's reviewer proposed a mechanism, the design accepted the defect and disputed the
   mechanism, the adjudicating pass upheld it and the run still died `PLAN_DISPUTE_REJECTED` on two
   fresh findings (`graph-nodes/review-plan`, `graph-nodes/design-under-review`).
+- **A node's required inputs are the ticket plus the one artifact of the stage before it; a second
+  artifact needs a ruling naming why, listed in the conformance rule's exceptions.** Loop state
+  (`findingsPath`, `disputePath`, `priorFindingsPath`, `resume`) is not a stage input. The rule is
+  `input-boundary` (`graph-nodes/conformance/rules.ts`): it walks every node, counts the required
+  `...Path` fields beside `ticketPath`, and fails a second one unless the node is in
+  `INPUT_BOUNDARY_EXCEPTIONS` with its ruling: `plan` (the plan resolves names against the repo,
+  v1's Resolution Table position) and `review-plan` (a reviewer reads only what it judges: the plan
+  and the design it was built from). Reason: both trial designs paid a reconciliation tax for a
+  second artifact, a nine-row Vision Reconciliation table on one and three invented nodes refused
+  on the other; the shell drawn as a section of the design, in the design's own session, got the
+  value without it.
 - **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
   Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
   evidence never needs more than the count line.

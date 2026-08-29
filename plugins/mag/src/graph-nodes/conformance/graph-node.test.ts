@@ -8,7 +8,7 @@ import type { ConformanceViolations, RootUnreadable, UnknownNode, Violation } fr
 import { conformance } from "mag/graph-nodes/conformance/graph-node"
 import { gather } from "mag/graph-nodes/conformance/gather"
 import { classifyExtras, ownedFiles } from "mag/graph-nodes/conformance/ownership"
-import { runRules } from "mag/graph-nodes/conformance/rules"
+import { INPUT_BOUNDARY_EXCEPTIONS, runRules } from "mag/graph-nodes/conformance/rules"
 import { platform } from "mag/runtime/platform"
 import { nodeFixture } from "mag/test/node-fixture"
 
@@ -1081,6 +1081,84 @@ describe("rules — journaled construction", () => {
     try {
       const violations = await runFailure(fixture.root)
       expect(violations.map((violation) => violation.rule)).toEqual(["journaled-construction"])
+    } finally {
+      fixture.cleanup()
+    }
+  })
+})
+
+describe("rules — input boundary", () => {
+  /** A ticket-driven node whose input names the given required paths, plus an optional findingsPath that never counts. */
+  const ticketNode = (name: string, paths: readonly string[]) => ({
+    name,
+    files: {
+      ...conformingNodeSpec.files,
+      "graph-node.ts":
+        "import { Schema } from \"effect\"\n" +
+        "import { make } from \"mag/runtime/graph-node.definition\"\n" +
+        `export const graphNode = make({ name: "${name}", description: "d", input: Schema.Struct({ ticketPath: Schema.String, ${
+          paths.map((path) => `${path}: Schema.String, `).join("")
+        }findingsPath: Schema.optional(Schema.String) }), success: Schema.Struct({}), run: () => { throw new Error("GRAPH_NODE_UNIMPLEMENTED") } })\n`
+    }
+  })
+  const boundaryViolations = (violations: readonly Violation[]) => violations.filter((violation) => violation.rule === "input-boundary")
+
+  test("a ticket-driven node reading two required stage artifacts fails input-boundary, naming both", async () => {
+    const fixture = nodeFixture([ticketNode("two-artifacts", ["designPath", "planPath"])])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations)).toEqual([
+        {
+          node: "two-artifacts",
+          rule: "input-boundary",
+          file: join(fixture.root, "two-artifacts", "graph-node.ts"),
+          detail:
+            "reads 2 stage artifacts beside the ticket (designPath, planPath): " +
+            "the ticket plus one artifact is the boundary, a second needs a ruling in INPUT_BOUNDARY_EXCEPTIONS naming why"
+        }
+      ])
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  test("one required artifact passes; loop state (an optional path) never counts", async () => {
+    const fixture = nodeFixture([ticketNode("one-artifact", ["designPath"])])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations)).toEqual([])
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  test("a node in INPUT_BOUNDARY_EXCEPTIONS passes with two, and every exception carries its ruling", async () => {
+    const fixture = nodeFixture([ticketNode("plan", ["designPath", "recycleScanPath"])])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations)).toEqual([])
+      for (const ruling of INPUT_BOUNDARY_EXCEPTIONS.values()) expect(ruling.length).toBeGreaterThan(0)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  test("a node with no ticketPath is outside the ruling, whatever it reads", async () => {
+    const fixture = nodeFixture([
+      {
+        name: "comparer",
+        files: {
+          ...conformingNodeSpec.files,
+          "graph-node.ts":
+            "import { Schema } from \"effect\"\n" +
+            "import { make } from \"mag/runtime/graph-node.definition\"\n" +
+            "export const graphNode = make({ name: \"comparer\", description: \"d\", input: Schema.Struct({ visionPath: Schema.String, derivedVisionPath: Schema.String }), success: Schema.Struct({}), run: () => { throw new Error(\"GRAPH_NODE_UNIMPLEMENTED\") } })\n"
+        }
+      }
+    ])
+    try {
+      const violations = await runFailure(fixture.root)
+      expect(boundaryViolations(violations)).toEqual([])
     } finally {
       fixture.cleanup()
     }
