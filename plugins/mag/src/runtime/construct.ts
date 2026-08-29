@@ -1,4 +1,4 @@
-import { Data, Effect, Record, type Schema } from "effect"
+import { Data, Effect, type Schema } from "effect"
 import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
@@ -95,7 +95,12 @@ export type Step =
 const nodeStep = (node: AnyNode, wire: AnyWire, keep?: AnyKeep): Step =>
   ({ kind: "node", node, wire, keep, modifiers: [] })
 
-const applyKeep = (keep: AnyKeep, a: unknown) => Record.map(keep, (pick) => pick(a))
+/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker.
+ *  Written over `Object.entries`/`Object.fromEntries` rather than `effect`'s `Record` module: a
+ *  value import named `Record` would sit beside `AnyKeep`'s use of the global `Record<K, V>` utility
+ *  type in this same file, two different things resolving through one identifier by accident. */
+const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(keep).map(([field, pick]) => [field, pick(a)]))
 
 /** A finalised construct's published shape: its step list, and how to re-close a possibly-bent
  *  variant of it into a fresh `graph()` without restating any `.finalise` option. Held in a
