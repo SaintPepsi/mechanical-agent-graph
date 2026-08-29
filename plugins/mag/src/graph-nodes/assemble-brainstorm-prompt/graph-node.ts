@@ -5,9 +5,10 @@ import { composeDesignPrompt, COMPOSED_PROMPT_BUDGET, promptBytes } from "mag/sk
 import { BRAINSTORM_DESIGN } from "mag/skills/design/variants"
 
 /**
- * Composes `brainstorm`'s own dispatch prompt. `brainstorm` always gets the same variant — the
- * shells are already drawn by `envision-notation`, one per matched notation — so this node doesn't
- * resolve any probe's verdicts into a splice; it composes `BRAINSTORM_DESIGN` and nothing else.
+ * Composes `brainstorm`'s own dispatch prompt. `brainstorm` always gets the same variant, since
+ * the shell is already drawn by `envision-shell`, the same session's blind first pass, so this
+ * node doesn't resolve any probe's verdicts into a splice; it composes `BRAINSTORM_DESIGN` and
+ * nothing else.
  * That is what makes the input `{}` and lets the node run standalone: `mag
  * assemble-brainstorm-prompt` prints the composed prompt and its size, letting a maintainer read
  * what a design session is actually told without spending a session to find out.

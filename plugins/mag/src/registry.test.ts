@@ -228,9 +228,9 @@ describe("registry — folds into a real CLI", () => {
     expect(descendantCommandNames(registry)).toContain("ps")
   })
 
-  test("design-graph, envision-notation and assemble-brainstorm-prompt are registered, so the built help lists them", () => {
+  test("design-graph, recycle-scan and assemble-brainstorm-prompt are registered, so the built help lists them", () => {
     const names = descendantCommandNames(registry)
-    for (const name of ["design-graph", "envision-notation", "assemble-brainstorm-prompt"]) {
+    for (const name of ["design-graph", "recycle-scan", "assemble-brainstorm-prompt"]) {
       expect(names).toContain(name)
     }
   })

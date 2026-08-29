@@ -31,7 +31,7 @@ const messageFor = (name: string, sessions: readonly string[]): string =>
  * `plugins/mag/src/graphs/<name>/`, not a policy-gated record), so there is nothing here for
  * `records.ts`'s `record` to gate. `runRoot` is still checked before dispatch (`requireRunRoot`), a
  * bare CLI run outside `runScopedLayers` is a wiring bug that must not pay for a session first — the
- * same precheck `design`/`discover`/`brainstorm`/`envision-notation` already run, kept here even
+ * same precheck `design`/`discover`/`brainstorm`/`envision-shell` already run, kept here even
  * though this node copies nothing into it, since it is still the "was this run ever scoped" signal.
  *
  * Never trusts the session's own claim: the written document must be present, non-empty after trim,

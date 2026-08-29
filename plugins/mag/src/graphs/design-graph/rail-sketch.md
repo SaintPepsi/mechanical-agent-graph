@@ -1,66 +1,61 @@
 ```ts
-// design, outside: { ticket, title, body } → Effect<{ designPath, visionPaths, discoverPath },
-//   DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing>
+// design, outside: { ticket, title, ticketPath } → Effect<{ designPath, planPath, headSha, discoverPath },
+//   DesignGraphTicketUnreadable | ShellBlocked | ShellMissing | DiscoverNoteMissing | BrainstormPromptOversized
+//   | DesignMissing | RecycleScanDesignUnreadable | PlanMissing | PlanBlocked | PlanDisputeRejected>
 
-const PrepareDesignPrompt = Graph.construct("prepare-design-prompt")
+const Probes = Graph.construct("probes")
+  .then(ReadTicket)
+    // { ticketPath } → { text }   !DesignGraphTicketUnreadable (the ticket file is a trust boundary, read once here)
   .fork(DetectSvelte, DetectEffect, DetectGraphCore)
-    // { } → { stack, matched }   ∥ ×3, one per candidate stack, no ticket dependency, manifest walk only
-  .join(AssembleBrainstormPrompt)
-    // { verdicts: [{ stack, matched }] } → { promptPath, matchedStacks }
-    //   !DesignPromptOversized (composed bytes exceed the size budget; nothing written, worktree untouched)
-  .finalise()   // outside: { } → { promptPath, matchedStacks } !DesignPromptOversized
+    // { text } → { stack, matched }   ∥ ×3, manifest walk only; graph-core also needs the ticket's GraphNodes line to name a node
+  .join(MatchedStacks)
+    // { verdicts: [{ stack, matched }] } → { notations[] }, the matched ids in probe order; empty draws the generic notation downstream
+  .finalise()   // outside: { ticketPath } → { notations[] } !DesignGraphTicketUnreadable
 
-const VerifyOneVision = Graph.construct("verify-one-vision")
-  .then(CheckVision)
-    // { stack, visionPath, verdict } → { stack, visionPath, present }
-    //   !NotationDeclaredFailure (verdict = failure, independent of whether the file exists; worktree kept, uncommitted, for a human)
-  .then(RetryVision)
-    // { visionPath } → { visionPath }, only when verdict = success and present = false; skipped once the first check already found the file
-  .then(RecheckVision)
-    // { visionPath } → { visionPath }
-    //   !VisionUnverified (still missing or empty after the one retry, second and final pass; worktree kept, uncommitted, for a human)
-  .finalise()   // outside: { stack, visionPath, verdict } → { visionPath } !NotationDeclaredFailure !VisionUnverified
+const OpenDesign = Graph.construct("open-design")
+  .fork(EnvisionShell, Discover, AssembleBrainstormPrompt)
+    // { ticket, title, ticketPath, notations[] } → { designPath, sessionRef, modules[] }
+    //   !ShellBlocked (the session declared it cannot draw; the reason lands as vision-blocked-N.md, trusted, no retry)
+    //   !ShellMissing (design missing, blank, or unchanged from its snapshot)
+    //   one session, every matched notation's body, the design doc's Envisioned Shell section alone; blind by schema: no field can carry the discover note
+    // ∥ { ticket, title, ticketPath } → { discoverPath }   !DiscoverNoteMissing
+    //   read-only recon of what already exists; sees the ticket only, never the shell
+    // ∥ { } → { prompt, bytes }   !BrainstormPromptOversized (composed bytes exceed the budget; nothing written, no session spent)
+  .finalise()   // outside: { ticket, title, ticketPath, notations[] } → { sessionRef, discoverPath, prompt } !ShellBlocked !ShellMissing !DiscoverNoteMissing !BrainstormPromptOversized
 
-const VerifyVisions = Graph.construct("verify-visions")
-  .map(VerifyOneVision)
-    // { visions[] } → { visionPaths[] }, one branch per matched notation, isolated from its siblings' own retries
-    // a branch's die bubbles and ends the run rather than surfacing in the success shape; every branch already
-    // in flight still resolves its own check/retry first, so a human sees every notation's outcome, not just the first to die
-    // !NotationDeclaredFailure !VisionUnverified
-    // how many branches run concurrently is a policy value, not fixed by this shape
-  .finalise()   // outside: { visions[] } → { visionPaths[] } !NotationDeclaredFailure !VisionUnverified
-
-const BuildDesign = Graph.construct("build-design")
-  .borrow(PrepareDesignPrompt)   // { } → { promptPath, matchedStacks } !DesignPromptOversized
-  .then(DesignSession)
-    // { ticket, title, body, promptPath, matchedStacks } → { designPath, visions[] }
-    // one dispatch writes the design doc and every matched notation's vision together, each with its own declared verdict
-  .borrow(VerifyVisions)         // { visions[] } → { visionPaths[] } !NotationDeclaredFailure !VisionUnverified
-  .then(CommitDesignArtifacts)
-    // { designPath, visionPaths[] } → { designPath, visionPaths[] }, git add + commit onto the ticket's own branch, success only
-  .finalise()   // outside: { ticket, title, body } → { designPath, visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
-
-const DiscoverGraph = Graph.construct("discover")
-  .then(Discover)
-    // { ticket, title, body } → { discoverPath }
-    //   !DiscoverNoteMissing (note missing or empty; worktree kept, nothing committed)
-    // read-only recon of what already exists; sees the ticket only, never the vision or the design doc
-  .finalise()   // outside: { ticket, title, body } → { discoverPath } !DiscoverNoteMissing
+const DesignUnderReview = Graph.construct("design-under-review")
+  .then(Brainstorm)
+    // { ticket, title, ticketPath, prompt, discoverPath, resume } → { designPath, headSha, sessionRef, changed }
+    //   resumes the shell's session: the design completed in place around the shell already in the file
+    //   !DesignMissing (design missing, blank, or unchanged and silent)
+  .then(RecycleScan)
+    // { designPath } → { recycleScanPath }, mechanical: every backticked name in the design grepped across git's tracked files, kebab, camel and snake case
+    //   !RecycleScanDesignUnreadable !RecycleScanFileUnreadable !RecycleScanWriteFailed
+  .then(Plan)
+    // { ticket, title, ticketPath, designPath, recycleScanPath } → { planPath, headSha, sessionRef }   !PlanMissing
+    //   the second artifact by ruling: the plan resolves the design's names against the repo
+  .then(ReviewPlan)
+    // { ticket, title, ticketPath, designPath, planPath, headSha } → { findingsPath }
+    //   !PlanBlocked (a blocking finding, tagged design or plan; the loop resumes that artifact's session, at most cap times per producer)
+    //   !PlanDisputeRejected (an adjudicating pass rejected a disputed finding; never routed back)
+    // a design finding resumes Brainstorm over the findings, then RecycleScan and Plan fresh when the design changed
+    // a plan-only finding resumes Plan over the findings, the design and its scan untouched
+    // a dispute from Brainstorm makes the next ReviewPlan adjudicating: it decides the disputed findings only
+  .finalise()   // outside: { ticket, title, ticketPath, prompt, discoverPath, resume, cap } → { designPath, planPath, headSha, reviewPasses }
+                //   !DesignMissing !RecycleScanDesignUnreadable !PlanMissing !PlanBlocked !PlanDisputeRejected
 
 const DesignGraph = Graph.construct("design")
-  .fork(BuildDesign, DiscoverGraph)
-    // { ticket, title, body } → { designPath, visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
-    //   ∥   { ticket, title, body } → { discoverPath } !DiscoverNoteMissing
-  .join(Brainstorm)
-    // { designPath, visionPaths[], discoverPath } → { designPath, visionPaths[], discoverPath }
-    // reconciles every vision against discover's recon; records each collision's resolution before build begins
+  .borrow(Probes)          // { ticketPath } → { notations[] } !DesignGraphTicketUnreadable
+  .borrow(OpenDesign)      // { ticket, title, ticketPath, notations[] } → { sessionRef, discoverPath, prompt }
+  .borrow(DesignUnderReview)
+    // { ticket, title, ticketPath, prompt, discoverPath, resume: sessionRef, cap } → { designPath, planPath, headSha }
   .finalise()
-    // outside: { ticket, title, body } → { designPath, visionPaths, discoverPath }
-    //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing
+    // outside: { ticket, title, ticketPath } → { designPath, planPath, headSha, discoverPath }
+    //   !DesignGraphTicketUnreadable | ShellBlocked | ShellMissing | DiscoverNoteMissing | BrainstormPromptOversized
+    //   | DesignMissing | RecycleScanDesignUnreadable | PlanMissing | PlanBlocked | PlanDisputeRejected
 ```
 
 Gaps flagged, not patched:
-- `DesignSession` is drawn as one dispatch that writes every matched notation's vision plus the design doc, then declares a verdict per notation. A per-notation dispatch reads equally plausibly from the same source material, and would reshape `DesignSession` into a `.map(DesignOneNotation)` fan-out instead of a single `.then()`. Which of the two is real needs a ruling.
-- `RetryVision`'s input is drawn as the bare `visionPath` it must overwrite, with no prompt of its own. Whether it re-enters `AssembleBrainstormPrompt` scoped down to its one failing stack, or is composed some other way, is undecided; the sketch cannot invent that producer.
-- `VerifyVisions`'s die timing is drawn as "every in-flight branch resolves its own check and retry before the run ends," so a human sees every notation's outcome at once. Whether that is really the rule, versus the run ending as soon as one branch's own siblings-in-flight (not the whole fan-out) finish, is undecided.
-- The size budget `AssembleBrainstormPrompt` enforces, and how many `VerifyOneVision` branches run concurrently, are both named as policy values in the sketch and left to configuration; neither has a stated default.
+- `ReadTicket` and `MatchedStacks` are drawn as steps for the sketch's own readability; in the shipped graph both are a file read and a `filter`/`map` inside the pipeline, not nodes, since neither has a contract of its own worth a journal row.
+- The blind ordering (shell ∥ discover) is drawn as a fork; the property the graph relies on is the shell's schema, which cannot name the discover note. A sequential drawing would be equally blind.
+- `cap` is a policy value named in the sketch and left to the graph file; it has no default here.

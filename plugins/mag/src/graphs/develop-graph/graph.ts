@@ -263,7 +263,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
   .borrowKeep(
     designGraph,
     (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, agent: s.agent, model: MODEL_DESIGN }),
-    (designed) => ({ designPath: designed.designPath, designSessions: designed.sessions, designCost: designed.costUsd })
+    (designed) => ({ designPath: designed.designPath, planPath: designed.planPath, designSessions: designed.sessions, designCost: designed.costUsd })
   )
   .borrowKeep(
     buildUnderReview,
@@ -276,6 +276,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       base: s.base,
       cap: REVIEW_CAP,
       designPath: s.designPath,
+      planPath: s.planPath,
       agent: s.agent,
       buildModel: MODEL_BUILD,
       simplifyModel: MODEL_SIMPLIFY,

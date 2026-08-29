@@ -31,10 +31,10 @@ graph TD
   WA -. "fails: WorktreeAddFailed | WorktreeSetupFailed" .-> DEADTREE
   BR -. "fails: BranchCheckoutFailed | BranchCreateFailed" .-> DEADTREE
 
-  DG[["design-graph · borrowed whole<br/>probes → design-session → verify-visions ∥ discover → brainstorm"]]
+  DG[["design-graph · borrowed whole<br/>probes → envision-shell ∥ discover → design-under-review (brainstorm → recycle-scan → plan → review-plan, findings sent back into the design)"]]
   FT -- "ticket, title, body → ticket, title, body" --> DG
   BR -- "branch → (gate: design writes on this checkout, and commits here too under records = committed)" --> DG
-  DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing" .-> DEADTREE
+  DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing | DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected" .-> DEADTREE
 
   PTE["prompt-terseness-evaluator · Model<br/>rewrite verbose prompt text the run wrote — the build's included — and commit the repair; a moved head re-runs the declared suite"]
   RB -- "base → base" --> PTE
@@ -50,7 +50,7 @@ graph TD
   DG -- "headSha → (gate: build starts from the designed tree)" --> B
   FT -- "ticket, title, body → ticket, title, body" --> B
   FBN -- "branch → branch" --> B
-  DG -- "designPath → designPath (first pass only)" --> B
+  DG -- "designPath, planPath → designPath, planPath (first pass only)" --> B
   B -- "headSha → headSha" --> V
   IN -- "verification? → command" --> V
   V -- "command → (gate: tree is green)" --> S

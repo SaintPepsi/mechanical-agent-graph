@@ -79,6 +79,9 @@ not turn into a reason to keep polling in the foreground.
 
 ## Reading the outcome (the "after" half)
 
+Quiet on green: a green run reports the PR URL and the closing count line, nothing else; a failed
+run gets the full report below.
+
 One run emits four things:
 
 - **stdout, success only**: one JSON line, `{ ticket, branch, summaryPath, commits, costUsd,
@@ -116,7 +119,10 @@ than the run's input. Decide on what the payload carries:
 
 - **A path field** (`findingsPath`, `disputePath`): the run wrote a document saying what it
   concluded. Read that file in the run root before anything else — it is the argument, the tag is
-  only its headline. The review errors also carry `headSha`, `sessions` and `costUsd`, so the
+  only its headline. Two review nodes raise these: `review-plan` (`PLAN_BLOCKED`,
+  `PLAN_DISPUTE_REJECTED`, before any build, the findings in `review-plan-N.md` against the design
+  and the plan) and `review-diff` (`REVIEW_BLOCKED`, `REVIEW_DISPUTE_REJECTED`, against the
+  branch diff). Both families carry `headSha`, `sessions` and `costUsd`, so the
   spend is on the line even though the journal has no cost column. (`build`'s own `BuildDisputed`
   also carries a `summaryPath`, but that tag never reaches this line — `build-under-review`
   catches it itself and turns it into either a success or a `reviewDiff` failure, so a

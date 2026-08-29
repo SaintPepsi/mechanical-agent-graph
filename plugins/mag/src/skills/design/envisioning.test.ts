@@ -17,8 +17,8 @@ import {
 
 /**
  * A probe's match id resolves to its stack's notation, no match resolves to `GENERIC` (an answer,
- * not an error), and an id no `STACKS` row carries is a caller mistake (`resolve-notations` and
- * `envision-notation` are the nodes that turn that failure into a named error, not this module).
+ * not an error), and an id no `STACKS` row carries is a caller mistake (`envision-shell` is the
+ * node that turns that failure into a named error, not this module).
  */
 
 describe("notationsFor selects the notation its matched stack owns", () => {

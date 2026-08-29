@@ -18,6 +18,7 @@ describe("readShape", () => {
 
     // Steps only: IN/OUT are boundary boxes and must not appear.
     expect(shape.nodes).toContain("detect-svelte")
+    expect(shape.nodes).toContain("envision-shell")
     expect(shape.nodes).toContain("assemble-brainstorm-prompt")
     expect(shape.nodes).toContain("brainstorm")
     expect(shape.nodes).not.toContain("IN")
@@ -26,20 +27,39 @@ describe("readShape", () => {
     expect(shape.nodes).not.toContain("probes")
 
     // A death is an edge endpoint, never a member of `nodes`.
-    expect(shape.nodes).not.toContain("DesignPromptOversized")
-    expect(shape.edges).toContain("assemble-brainstorm-prompt -> DesignPromptOversized")
+    expect(shape.nodes).not.toContain("BrainstormPromptOversized")
+    expect(shape.edges).toContain("assemble-brainstorm-prompt -> BrainstormPromptOversized")
 
     // A boundary-touching edge is dropped: `IN -- ... --> detect-svelte` never appears.
     expect(shape.edges.some((edge) => edge.startsWith("IN ->"))).toBe(false)
-    expect(shape.edges).toContain("commit-design-artifacts -> brainstorm")
+    expect(shape.edges).toContain("envision-shell -> brainstorm")
+    expect(shape.edges).toContain("discover -> brainstorm")
 
     // A conditional edge's clause, cut at the first colon.
-    expect(shape.conditions).toContain("assemble-brainstorm-prompt -> DesignPromptOversized when bytes > budget")
-    expect(shape.conditions).toContain(
-      "check-vision -> retry-vision when verdict = success, file missing or empty",
-    )
+    expect(shape.conditions).toContain("assemble-brainstorm-prompt -> BrainstormPromptOversized when bytes > budget")
+    expect(shape.conditions).toContain("envision-shell -> ShellBlocked when verdict = blocked")
     // A plain field-mapping edge contributes no condition.
-    expect(shape.conditions.some((condition) => condition.startsWith("commit-design-artifacts ->"))).toBe(false)
+    expect(shape.conditions.some((condition) => condition.startsWith("envision-shell -> brainstorm"))).toBe(false)
+  })
+
+  test("design-graph's complete condition list: the shell's two deaths, the recycle-scan death, plus the design-under-review loop's six", () => {
+    const result = readShape("design-graph/vision.md", designGraphVision)
+    expect(Result.isSuccess(result)).toBe(true)
+    if (!Result.isSuccess(result)) return
+    const loop = result.success.conditions.filter((condition) =>
+      condition.startsWith("envision-shell ->") || condition.startsWith("brainstorm ->") || condition.startsWith("review-plan ->") || condition.startsWith("recycle-scan ->")
+    )
+    expect(loop).toEqual([
+      "envision-shell -> ShellBlocked when verdict = blocked",
+      "envision-shell -> ShellMissing when design missing, blank or unchanged",
+      "recycle-scan -> RecycleScanDesignUnreadable | RecycleScanFileUnreadable | RecycleScanWriteFailed when design unreadable, a tracked file unreadable, or the table unwritable",
+      "review-plan -> brainstorm when verdict = blocked, a finding targets design, design sendbacks < cap",
+      "review-plan -> plan when verdict = blocked, every finding targets plan, plan sendbacks < cap",
+      "brainstorm -> review-plan when verdict = disputed",
+      "brainstorm -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when design missing or unchanged and silent",
+      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when verdict = blocked, cap exhausted",
+      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when adjudicating pass rejects a disputed finding"
+    ])
   })
 
   test("a subgraph title carrying the box's own bracket-plus-quote shape is excluded by the line filter", () => {

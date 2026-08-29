@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test"
-import { Option, Schema } from "effect"
-import { decodeJournalLines, presentRows, renderTable, STALE_THRESHOLD_MS, summarizeJournal } from "mag/ps"
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { Effect, Option, Schema } from "effect"
+import { decodeJournalLines, presentRows, processAlive, renderTable, scanRoot, STALE_THRESHOLD_MS, summarizeJournal } from "mag/ps"
 import { JournalRowSchema } from "mag/runtime/journal/row"
+import { platform } from "mag/runtime/platform"
+import { PID_FILE } from "mag/runtime/run-layers"
 
 /**
  * Fixture journal rows, not live runs — the parsing/active-detection logic is pure and
  * testable against fixture lines without touching the real journal root (the scan-the-real-filesystem
- * half, `scanRoot`/`rowForJournal`, stays unverified here).
+ * half, `scanRoot`/`rowForJournal`, is covered by the fake run on disk at the end of this file).
  */
 
 const decode = Schema.decodeUnknownSync(JournalRowSchema)
@@ -75,12 +80,12 @@ describe("summarizeJournal — active vs finished", () => {
 
   test("a fork's interleaving — an end row lands last while the other side is still open — stays active", () => {
     const rows = [
-      startRow({ node: "envision-visions", attempt: 1, timestamp: "2026-08-20T12:00:00.000Z" }),
+      startRow({ node: "envision-shell", attempt: 1, timestamp: "2026-08-20T12:00:00.000Z" }),
       startRow({ node: "discover", attempt: 1, timestamp: "2026-08-20T12:00:01.000Z" }),
       endRow({ node: "discover", attempt: 1, timestamp: "2026-08-20T12:01:00.000Z" })
     ]
     const row = summarizeJournal(rows, "proj-abc", FRESH_MTIME, NOW).pipe(Option.getOrThrow)
-    expect(row.node).toBe("envision-visions")
+    expect(row.node).toBe("envision-shell")
     expect(row.attempt).toBe(1)
   })
 
@@ -187,6 +192,22 @@ describe("summarizeJournal — stale marker on a silent file", () => {
     const mtimeMs = NOW - STALE_THRESHOLD_MS - 1
     const row = summarizeJournal([startRow()], "proj-abc", mtimeMs, NOW).pipe(Option.getOrThrow)
     expect(row.stale).toBe(true)
+  })
+
+  test("a live process outranks a silent journal: a long single-session node is not stale", () => {
+    const mtimeMs = NOW - STALE_THRESHOLD_MS - 1
+    const row = summarizeJournal([startRow()], "proj-abc", mtimeMs, NOW, Option.some(true)).pipe(Option.getOrThrow)
+    expect(row.stale).toBe(false)
+  })
+
+  test("a dead process is stale at once, however fresh the journal", () => {
+    const row = summarizeJournal([startRow()], "proj-abc", NOW, NOW, Option.some(false)).pipe(Option.getOrThrow)
+    expect(row.stale).toBe(true)
+  })
+
+  test("processAlive: this process is alive, a pid nothing owns is not", () => {
+    expect(processAlive(process.pid)).toBe(true)
+    expect(processAlive(2 ** 22 - 1)).toBe(false)
   })
 })
 
@@ -331,5 +352,45 @@ describe("presentRows — fleet total", () => {
     const out = presentRows([rowWithCost("GH-1", 1.5), rowWithCost("GH-2", 2.25), staleWithCost], false)
 
     expect(out).toContain("fleet total: $3.75")
+  })
+})
+
+describe("scanRoot — a fake run on disk, liveness read off its pidfile", () => {
+  const writeRun = (root: string, runId: string, pid: number | undefined, cost: number) => {
+    const dir = join(root, "proj-abc", "GH-7", runId)
+    mkdirSync(dir, { recursive: true })
+    const rows = [
+      { ...STAMP, runId, node: "build", attempt: 1, event: "end", timestamp: "2026-08-20T12:00:00.000Z", replayed: false, outcome: "ok", success: { costUsd: cost } },
+      { ...STAMP, runId, node: "simplify", attempt: 1, event: "start", timestamp: "2026-08-20T12:00:01.000Z" }
+    ]
+    writeFileSync(join(dir, "journal.jsonl"), rows.map((row) => JSON.stringify(row)).join("\n") + "\n")
+    if (pid !== undefined) writeFileSync(join(dir, PID_FILE), String(pid))
+  }
+  const scan = (root: string) => Effect.runPromise(scanRoot(root, Date.now()).pipe(Effect.provide(platform)))
+
+  test("a live process keeps its run visible past the mtime threshold; killing it makes the run stale at once; no pidfile falls back to mtime", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ps-scan-"))
+    const sleeper = Bun.spawn(["sleep", "300"])
+    try {
+      writeRun(root, "run-live", sleeper.pid, 1.5)
+      writeRun(root, "run-legacy", undefined, 2.25)
+      const old = new Date(Date.now() - STALE_THRESHOLD_MS - 60_000)
+      for (const runId of ["run-live", "run-legacy"]) utimesSync(join(root, "proj-abc", "GH-7", runId, "journal.jsonl"), old, old)
+
+      const before = await scan(root)
+      expect(before.map((row) => [row.runId, row.node, row.stale, row.costUsd]).sort()).toStrictEqual([
+        ["run-legacy", "simplify", true, 2.25],
+        ["run-live", "simplify", false, 1.5]
+      ])
+
+      sleeper.kill()
+      await sleeper.exited
+      const after = await scan(root)
+      expect(after.find((row) => row.runId === "run-live")?.stale).toBe(true)
+      expect(presentRows(after, false)).toContain("(2 stale runs hidden")
+    } finally {
+      sleeper.kill()
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

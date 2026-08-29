@@ -28,10 +28,13 @@ const removeDir = (path: string): void => {
 
 const tempRepo = (): string => mkdtempSync(join(tmpdir(), "detect-graph-core-test-"))
 
-/** `runPromise`, not `runSync`: `detectGraphCore` always provides `platform` internally (`graph-node.ts`), and a real `FileSystem` read genuinely suspends the fiber (`design/graph-node.test.ts`'s own precedent). */
-const runAt = (repo: string) =>
+/** A ticket whose `GraphNodes:` line names one node, the shape `PRINCIPLES.md` asks of a GraphNode ticket. */
+const NAMES_A_NODE = "GraphNodes: [%] `detect-graph-core`\n\nMatch only on a ticket that names a node."
+
+/** `runPromise`, not `runSync`: `detectGraphCore` always provides `platform` internally (`graph-node.ts`), and a real `FileSystem` read genuinely suspends the fiber (`design/graph-node.test.ts`'s own precedent). `text` defaults to a ticket naming a node, so the manifest tests below exercise the identity half alone. */
+const runAt = (repo: string, text = NAMES_A_NODE) =>
   Effect.runPromise(
-    Effect.result(detectGraphCore.run({}).pipe(Effect.provideService(RunInfo, testRunInfo({ workRoot: repo }))))
+    Effect.result(detectGraphCore.run({ text }).pipe(Effect.provideService(RunInfo, testRunInfo({ workRoot: repo }))))
   )
 
 describe("detect-graph-core", () => {
@@ -55,6 +58,34 @@ describe("detect-graph-core", () => {
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
       expect(result.success).toStrictEqual({ stack: "graph-core", matched: true, manifests: ["package.json"] })
+    } finally {
+      removeDir(repo)
+    }
+  })
+
+  test("this repository with a ticket naming no GraphNode is a clean non-match: an empty GraphNodes line, or none at all", async () => {
+    const repo = tempRepo()
+    try {
+      writeFileSync(join(repo, "package.json"), JSON.stringify({ name: "mechanical-agent-graph" }))
+      for (const text of ["GraphNodes: none\n\nFix the README.", "Fix the README, which mentions `detect-graph-core` in prose."]) {
+        const result = await runAt(repo, text)
+        expect(Result.isSuccess(result)).toBe(true)
+        if (!Result.isSuccess(result)) return
+        expect(result.success).toStrictEqual({ stack: "graph-core", matched: false, manifests: [] })
+      }
+    } finally {
+      removeDir(repo)
+    }
+  })
+
+  test("a ticket naming no GraphNode never reads the manifest: an unreadable package.json is still a clean non-match", async () => {
+    const repo = tempRepo()
+    try {
+      mkdirSync(join(repo, "package.json"))
+      const result = await runAt(repo, "Fix the README.")
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.matched).toBe(false)
     } finally {
       removeDir(repo)
     }

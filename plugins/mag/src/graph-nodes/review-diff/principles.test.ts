@@ -1,19 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { governingPrinciples, nulPaths } from "mag/graph-nodes/review-diff/principles"
-
-describe("nulPaths", () => {
-  test("splits on NUL and drops the trailing empty the terminating NUL produces", () => {
-    expect(nulPaths("a.ts\0b.ts\0")).toStrictEqual(["a.ts", "b.ts"])
-  })
-
-  test("empty stdout yields no paths", () => {
-    expect(nulPaths("")).toStrictEqual([])
-  })
-
-  test("a path with a space passes through untouched", () => {
-    expect(nulPaths("dir with space/z.ts\0")).toStrictEqual(["dir with space/z.ts"])
-  })
-})
+import { governingPrinciples } from "mag/graph-nodes/review-diff/principles"
 
 describe("governingPrinciples", () => {
   test("a root file governs every changed path, including one at the root", () => {

@@ -3,7 +3,7 @@ import { Command, Flag } from "effect/unstable/cli"
 import { decodeJournalLines } from "mag/runtime/journal/decode"
 import { isEndRow, isStartRow, type JournalRow } from "mag/runtime/journal/row"
 import { platform } from "mag/runtime/platform"
-import { RunRootEnv } from "mag/runtime/run-layers"
+import { PID_FILE, RunRootEnv } from "mag/runtime/run-layers"
 import { graphRoot } from "mag/runtime/run-root"
 import { fmtMs, usd } from "mag/usage-report"
 
@@ -24,8 +24,21 @@ import { fmtMs, usd } from "mag/usage-report"
  * `toCommand`'s GraphNode pipeline.
  */
 
-/** A flat default is enough for now — a journal silent this long is flagged, not hidden. */
+/**
+ * The fallback for a run with no pidfile (written before the pidfile existed): a journal silent
+ * this long is flagged, not hidden. A run with a pidfile is live exactly while its process is.
+ */
 export const STALE_THRESHOLD_MS = 45 * 60 * 1000
+
+/** Signal 0 sends nothing and only asks: ESRCH is dead, EPERM is alive but someone else's. */
+export const processAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
 
 export interface PsRow {
   readonly projectKey: string
@@ -73,7 +86,9 @@ export const summarizeJournal = (
   rows: readonly JournalRow[],
   projectKey: string,
   mtimeMs: number,
-  nowMs: number
+  nowMs: number,
+  /** Whether the run's process is alive, when its pidfile says; `none` falls back to the mtime rule. */
+  alive: Option.Option<boolean> = Option.none()
 ): Option.Option<PsRow> => {
   const open = new Map<string, JournalRow>()
   for (const row of rows) {
@@ -94,7 +109,7 @@ export const summarizeJournal = (
     attempt: last.attempt,
     nodeElapsedMs: nowMs - Date.parse(last.timestamp),
     runElapsedMs: nowMs - Date.parse(first.timestamp),
-    stale: nowMs - mtimeMs > STALE_THRESHOLD_MS,
+    stale: Option.match(alive, { onNone: () => nowMs - mtimeMs > STALE_THRESHOLD_MS, onSome: (isAlive) => !isAlive }),
     costUsd: rows.reduce((a, r) => a + endRowCostUsd(r), 0)
   })
 }
@@ -159,8 +174,13 @@ const rowForJournal = (root: string, relPath: string, nowMs: number) =>
     // No mtime is treated as maximally stale rather than special-cased: staleness only ever needs a
     // recency signal, and "unknown" is never more trustworthy than "old".
     const mtimeMs = Option.match(info.mtime, { onNone: () => 0, onSome: (d) => d.getTime() })
+    // The pidfile decides when it exists; an unreadable or malformed one falls back to the mtime rule.
+    const alive = yield* fs.readFileString(path.join(path.dirname(fullPath), PID_FILE)).pipe(
+      Effect.map((pid) => (/^\d+$/.test(pid.trim()) ? Option.some(processAlive(Number(pid.trim()))) : Option.none<boolean>())),
+      Effect.catch(() => Effect.succeed(Option.none<boolean>()))
+    )
 
-    return summarizeJournal(decodeJournalLines(text), projectKey, mtimeMs, nowMs)
+    return summarizeJournal(decodeJournalLines(text), projectKey, mtimeMs, nowMs, alive)
   }).pipe(Effect.catch(() => Effect.succeed(Option.none<PsRow>())))
 
 /**

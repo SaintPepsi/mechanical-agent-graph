@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { inputExamples as buildInputs } from "mag/graph-nodes/build/examples"
 import { build } from "mag/graph-nodes/build/graph-node"
-import { inputExamples as notationInputs } from "mag/graph-nodes/envision-notation/examples"
-import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
+import { inputExamples as shellInputs } from "mag/graph-nodes/envision-shell/examples"
+import { envisionShell } from "mag/graph-nodes/envision-shell/graph-node"
 import { inputExamples as simplifyInputs } from "mag/graph-nodes/simplify/examples"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
 import { type ClaudeAgentService, claudeAgentLayer } from "mag/runtime/claude/service"
@@ -15,7 +15,7 @@ import { recordingAgent, scriptedShell, testRunInfo } from "mag/test/node-fixtur
 
 /**
  * No compiled prompt, and no agent definition, may instruct a session to run the
- * repository's declared verification suite: a session with nothing to verify (`envision-notation`,
+ * repository's declared verification suite: a session with nothing to verify (`envision-shell`,
  * dispatched under `--agent effect-expert` by `develop-graph`) has no way to tell the difference
  * between "the repo's suite happens to be red" and "I broke it," so it must never be asked to check.
  * Neither `build` nor `simplify` carries a `command` field; the regex below is what catches a
@@ -31,8 +31,8 @@ const out = (stdout: string): ShellResult => ({ exitCode: 0, stdout, stderr: "" 
 
 /**
  * Dispatches one node far enough to record its prompt. Every failure is swallowed: a stub that
- * answers one canned reply cannot satisfy what a node does after its dispatch (`envision-notation`
- * fails `NotationVisionMissing` on the vision file the stub never writes), and the prompt is already
+ * answers one canned reply cannot satisfy what a node does after its dispatch (`envision-shell`
+ * fails `ShellMissing` on the design file the stub never writes), and the prompt is already
  * recorded by then.
  */
 const dispatch = <A, E>(effect: Effect.Effect<A, E, never>, agent: ClaudeAgentService, shell: ShellService) =>
@@ -71,12 +71,12 @@ describe("no self-verification", () => {
     expect(agent.prompts[0]!).not.toMatch(NAMES_THE_SUITE)
   })
 
-  // `envision-notation` never named a suite of its own; the instruction only ever
+  // `envision-shell` never named a suite of its own; the instruction only ever
   // reached it through `--agent effect-expert` (`graphs/develop-graph/graph.ts`'s `EFFECT_AGENT`), so its own compiled
   // prompt is asserted here mechanically rather than trusted by inspection.
-  test("envision-notation's prompt names no suite command", async () => {
+  test("envision-shell's prompt names no suite command", async () => {
     const agent = recordingAgent()
-    await dispatch(envisionNotation.run(notationInputs[0]!), agent.service, scriptedShell([]).service)
+    await dispatch(envisionShell.run(shellInputs[0]!), agent.service, scriptedShell([]).service)
 
     expect(agent.prompts).toHaveLength(1)
     expect(agent.prompts[0]!).not.toMatch(NAMES_THE_SUITE)

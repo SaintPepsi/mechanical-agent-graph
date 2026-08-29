@@ -256,7 +256,7 @@ describe("build", () => {
       const sendBack = inputExamples[2]!
       const { calls, service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("0\n"), out("aaa111\n")])
       const agent = stubAgent({
-        verdict: { summary: "investigated", dispute: "both findings were already fixed at HEAD" }
+        verdict: { summary: "investigated", dispute: ["both findings were already fixed at HEAD"] }
       })
       const result = await runWith(build.run(sendBack), service, agent.service, testRunInfo({ runRoot }))
 
@@ -270,7 +270,7 @@ describe("build", () => {
       expect(disputed.commits).toBe(0)
       expect(disputed.sessions).toStrictEqual(["stub-session"])
       expect(readFileSync(disputed.disputePath, "utf8")).toBe(
-        `Disputes ${sendBack.findingsPath}\n\nboth findings were already fixed at HEAD`
+        `Disputes ${sendBack.findingsPath}\n\n- both findings were already fixed at HEAD`
       )
       for (const call of calls) {
         expect(call.argv).not.toContain("add")
@@ -281,7 +281,7 @@ describe("build", () => {
   test("no findingsPath, count 0, a dispute in the reply anyway still fails BuildNoCommits", () =>
     withRunRoot(async (runRoot) => {
       const { calls, service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("0\n")])
-      const agent = stubAgent({ verdict: { summary: "did nothing", dispute: "nothing was asked of me" } })
+      const agent = stubAgent({ verdict: { summary: "did nothing", dispute: ["nothing was asked of me"] } })
       const result = await runWith(build.run(INPUT), service, agent.service, testRunInfo({ runRoot }))
 
       expect(Result.isFailure(result)).toBe(true)
@@ -308,7 +308,7 @@ describe("build", () => {
     withRunRoot(async (runRoot) => {
       const sendBack = inputExamples[2]!
       const { calls, service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("0\n")])
-      const agent = stubAgent({ verdict: { summary: "investigated", dispute: "   \n" } })
+      const agent = stubAgent({ verdict: { summary: "investigated", dispute: ["   \n"] } })
       const result = await runWith(build.run(sendBack), service, agent.service, testRunInfo({ runRoot }))
 
       expect(Result.isFailure(result)).toBe(true)
@@ -323,7 +323,7 @@ describe("build", () => {
       const sendBack = inputExamples[2]!
       const { service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")])
       const agent = stubAgent({
-        verdict: { summary: "fixed findings 1 and 2", dispute: "finding 3 was already fixed at HEAD" }
+        verdict: { summary: "fixed findings 1 and 2", dispute: ["finding 3 was already fixed at HEAD"] }
       })
       const result = await runWith(build.run(sendBack), service, agent.service, testRunInfo({ runRoot }))
 
@@ -333,7 +333,7 @@ describe("build", () => {
       expect(result.success.findingsPath).toBe(sendBack.findingsPath!)
       expect(result.success.disputePath).toBe(`${runRoot}/dispute-1.md`)
       expect(readFileSync(result.success.disputePath!, "utf8")).toBe(
-        `Disputes ${sendBack.findingsPath}\n\nfinding 3 was already fixed at HEAD`
+        `Disputes ${sendBack.findingsPath}\n\n- finding 3 was already fixed at HEAD`
       )
       // The summary keeps its own prefix and numbering, unaffected by the dispute write.
       expect(result.success.summaryPath).toBe(`${runRoot}/build-1.md`)
@@ -342,7 +342,7 @@ describe("build", () => {
   test("the gate is still the input field on the committed path — no findingsPath, commits 1, a dispute in the reply changes nothing", () =>
     withRunRoot(async (runRoot) => {
       const { service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")])
-      const agent = stubAgent({ verdict: { summary: "did the work", dispute: "unsolicited dispute" } })
+      const agent = stubAgent({ verdict: { summary: "did the work", dispute: ["unsolicited dispute"] } })
       const result = await runWith(build.run(INPUT), service, agent.service, testRunInfo({ runRoot }))
 
       expect(Result.isSuccess(result)).toBe(true)
@@ -356,7 +356,7 @@ describe("build", () => {
     withRunRoot(async (runRoot) => {
       const sendBack = inputExamples[2]!
       const { service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")])
-      const agent = stubAgent({ verdict: { summary: "did the work", dispute: "   \n" } })
+      const agent = stubAgent({ verdict: { summary: "did the work", dispute: ["   \n"] } })
       const result = await runWith(build.run(sendBack), service, agent.service, testRunInfo({ runRoot }))
 
       expect(Result.isSuccess(result)).toBe(true)
@@ -379,6 +379,7 @@ describe("build", () => {
       expect(prompt).not.toContain("make no commit")
       expect(prompt).toContain("A single pass may commit fixes and")
       expect(prompt).toContain("dispute the rest.")
+      expect(prompt).toContain("Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.")
     }))
 
   test("a zero-forward-commit count with a moved HEAD is BuildHeadMoved, not a dispute and not BuildNoCommits", () =>
@@ -391,7 +392,7 @@ describe("build", () => {
       // agent did nothing" — the branch lost commits and the previously-verified tree is gone.
       const { calls, service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("0\n"), out("zzz999\n")])
       const agent = stubAgent({
-        verdict: { summary: "investigated", dispute: "both findings were already fixed at HEAD" }
+        verdict: { summary: "investigated", dispute: ["both findings were already fixed at HEAD"] }
       })
       const result = await runWith(build.run(sendBack), service, agent.service, testRunInfo({ runRoot }))
 

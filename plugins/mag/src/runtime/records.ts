@@ -19,7 +19,7 @@ export interface RecordCopyFailedFields {
 }
 
 /**
- * The one seam every record-writing node's dispatch spine ends at — `discover`, `envision-notation`,
+ * The one seam every record-writing node's dispatch spine ends at — `discover`,
  * `brainstorm` and `design` all share this check-copy-commit shape rather than each carrying a copy
  * of it. The check and the copy are mechanical and run unconditionally; only the commit is gated on
  * the records policy the run was launched with (`RunInfoService.records`), which is the target
@@ -84,11 +84,11 @@ export const record = <EMissing, ECopy, EGit, ECommit>(
 
 /**
  * The `runRoot === ""` wiring-bug check `design/graph-node.ts` runs before dispatch
- * (`DesignRunRootMissing`), shared so `discover`, `brainstorm`, `envision-notation`,
+ * (`DesignRunRootMissing`), shared so `discover`, `brainstorm`, `recycle-scan`,
  * `envision-mermaid` and `envision-rail-sketch` gate on the same fact before dispatching instead of
- * paying for a session first. `discover`, `brainstorm` and `envision-notation` map it onto their own
- * `*CopyFailed` tag with detail `"run root missing"`, the same detail `record` uses when it catches
- * the same fact later, inside `onCopyFailed`; `design`, `envision-mermaid` and `envision-rail-sketch`
+ * paying for a session first. `discover`, `brainstorm` and `recycle-scan` map it onto their own
+ * `*CopyFailed`/`*WriteFailed` tag with detail `"run root missing"`, the same detail `record` uses when it catches
+ * the same fact later, inside `onCopyFailed`; `design`, `envision-shell`, `envision-mermaid` and `envision-rail-sketch`
  * each keep a dedicated `*RunRootMissing` tag instead, `design`'s own `DesignRunRootMissing`
  * precedent. `onMissing` is the caller's own tagged error, the closed-error-union rule every export
  * here already follows.

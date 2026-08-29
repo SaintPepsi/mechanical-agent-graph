@@ -12,7 +12,9 @@ export const inputExamples = [
     ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     base: "main",
     headSha: "d6c8b0a1f3e5d7c9b1a3e5d7e5a9c1d0b3f7a2e4",
-    addendum: "Delta pass: verify your prior blocking findings are fixed. Settled items stay settled.",
+    // A re-review: the send-back moved the tree, and this pass judges the delta against pass 1's findings.
+    priorFindingsPath: "/home/dev/repo/.claude/graph/GH-98/run-1/review-diff-1.md",
+    addendum: "Verify the fix against the second NUL case specifically.",
     agent: "effect-expert",
     model: "opus"
   },

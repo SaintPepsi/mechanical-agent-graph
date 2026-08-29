@@ -1,12 +1,14 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Effect, type Layer } from "effect"
+import { Effect, type Layer, Option } from "effect"
+import { ReplayProbe } from "mag/runtime/resume"
+import { decodeBestEffort } from "mag/runtime/schema-codec"
 import { Command } from "effect/unstable/cli"
 import pkg from "mag/package.json" with { type: "json" }
 import { buildCli } from "mag/runtime/build-cli"
 import { platformRefusal } from "mag/runtime/platform"
 import { renderFailure, renderRefusal, withStdoutRouting } from "mag/runtime/render"
 import { tracingLayer } from "mag/runtime/trace/layer"
-import type { Registry } from "mag/runtime/types"
+import type { CommandNode, Registry } from "mag/runtime/types"
 
 /**
  * Composition only: fold the registry into the root command, run it through `render.ts`'s
@@ -39,6 +41,28 @@ import type { Registry } from "mag/runtime/types"
  * `Effect.provide(NodeServices.layer)` in `main` can no longer reduce it to `never`, which
  * `NodeRuntime.runMain` requires.
  */
+/** Every GraphNode's current success schema by name, groups walked; a raw command has none. */
+const successSchemas = (entries: Registry, into = new Map<string, CommandNode["success"]>()): Map<string, CommandNode["success"]> => {
+  for (const entry of entries) {
+    if (entry.kind === "command") into.set(entry.node.name, entry.node.success)
+    else if (entry.kind === "group") successSchemas(entry.children, into)
+  }
+  return into
+}
+
+/**
+ * The resume ranking's probe (`resume.ts`'s `ReplayProbe`): a recorded success counts only if it
+ * decodes against the node's current schema, the same test `journaled.ts` applies at replay. An
+ * unknown node (renamed, deleted) never replays, so it never counts.
+ */
+export const replayProbe = (registry: Registry): ((node: string, success: unknown) => boolean) => {
+  const schemas = successSchemas(registry)
+  return (node, success) => {
+    const schema = schemas.get(node)
+    return schema !== undefined && Option.isSome(Effect.runSync(decodeBestEffort(schema, success)))
+  }
+}
+
 export const runCli = (registry: Registry) =>
   buildCli(registry).pipe(
     Effect.flatMap((command) =>
@@ -50,6 +74,8 @@ export const runCli = (registry: Registry) =>
     ),
     Effect.catch(renderFailure),
     Effect.catchDefect(renderFailure),
+    // The resume ranking asks this probe which recorded successes still decode (`resume.ts`).
+    Effect.provideService(ReplayProbe, replayProbe(registry))
   )
 
 /**

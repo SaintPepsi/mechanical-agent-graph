@@ -30,6 +30,19 @@ import { type Effect, JsonSchema, Schema } from "effect"
 
 export const DRAFT_07_URI = "http://json-schema.org/draft-07/schema#"
 
+/** The schema of a verdict with nothing to say: an object, and only an object. */
+const EMPTY_OBJECT = { type: "object", properties: {}, additionalProperties: false } as const
+
+/**
+ * `Schema.Struct({})` emits `anyOf: [{type:"object"}, {type:"array"}]` with no top-level `type`, and
+ * the API refuses a structured-output tool whose schema has none (`tools.N.custom.input_schema.type:
+ * Field required`, the GH-332 run that died in `simplify`). A verdict is always an object, so a
+ * schema that lost its `type` is pinned back to one here, where every verdict passes. A top-level
+ * `$ref` (a recursive verdict) keeps its own shape.
+ */
+const objectTyped = (schema: Record<string, unknown>): Record<string, unknown> =>
+  "type" in schema || "$ref" in schema ? schema : EMPTY_OBJECT
+
 declare const VerdictSchemaId: unique symbol
 
 export interface VerdictSchema<A> {
@@ -49,7 +62,7 @@ export const verdictSchema = <A>(schema: Schema.Schema<A>): VerdictSchema<A> => 
   const hasDefinitions = Object.keys(document.definitions).length > 0
   const serialized = JSON.stringify({
     $schema: DRAFT_07_URI,
-    ...document.schema,
+    ...objectTyped(document.schema),
     ...(hasDefinitions ? { definitions: document.definitions } : {})
   })
   return {

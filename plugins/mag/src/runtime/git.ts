@@ -4,7 +4,7 @@ import { Shell } from "mag/runtime/shell"
 
 /**
  * One permit for every write to the index this process makes. A run is one process and one
- * worktree, and `design-graph` runs `envision-visions` and `discover` side by side, each
+ * worktree, and `design-graph` runs `envision-shell` and `discover` side by side, each
  * committing its own artifact into that worktree: git serialises writers with `index.lock`, and the
  * loser of the race dies `fatal: Unable to create '.git/.../index.lock': File exists`. Queueing
  * here, in the one seam every artifact commit passes through, is the fix that holds for every node
@@ -138,7 +138,7 @@ export const commitAgentLeftovers = <EGit, ECommit>(
  * Stages and commits exactly one path — the pathspec-limited sibling of {@link commitAgentLeftovers}.
  * Called directly by `envision-mermaid`/`envision-rail-sketch` to commit their own deliverable
  * unconditionally, and by `records.ts`'s `record` on behalf of every other record-writing node
- * (`discover`, `brainstorm`, `design`, `envision-notation`) when this repository's own policy is
+ * (`discover`, `brainstorm`, `design`) when this repository's own policy is
  * `records: "committed"`. Where `commitAgentLeftovers`
  * trusts a session to have left only its own leftovers in a dirty tree, this node never trusts that:
  * `git add` is scoped to `path` alone, so a session that strays and writes its sibling artifact

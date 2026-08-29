@@ -21,6 +21,7 @@ import { platform } from "mag/runtime/platform"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
 import { SWEEP_LABEL, SWEEP_TRIGGER } from "mag/skills/design/reference-sweep"
+import { compileReviewBrief } from "mag/skills/review-brief"
 import { testJournalLayer, testRunInfo } from "mag/test/node-fixture"
 
 const DIFF = "diff --git a/x.ts b/x.ts\n-old\n+new\n"
@@ -82,13 +83,13 @@ const failingLsFilesShell = (result: ShellResult) => {
   return { calls, service }
 }
 
-const stubAgent = (blocking: readonly string[]) => {
+const stubAgent = (blocking: readonly string[], notes: readonly string[] = []) => {
   const requests: Array<ClaudePrint<unknown>> = []
   const service: ClaudeAgentService = {
     prompt: <A>(request: ClaudePrint<A>) => {
       requests.push(request as ClaudePrint<unknown>)
       return Effect.succeed({
-        verdict: { blocking } as A,
+        verdict: { blocking, notes } as A,
         result: {},
         sessions: ["review-session"],
         costUsd: 0.31,
@@ -189,7 +190,7 @@ describe("review-diff", () => {
       expect(prompt).toContain("blocking finding, like any other")
     }))
 
-  test("no declared PRINCIPLES.md leaves the prompt exactly today's, minus the inline diff, plus the unconditional sweep gate", () =>
+  test("no declared PRINCIPLES.md leaves the prompt exactly the ticket, the diff line, the diff charter and the unconditional sweep gate", () =>
     withRunRoot(async (runRoot) => {
       const shell = gitStub({ changed: "x.ts\0", declared: "" })
       const agent = stubAgent([])
@@ -206,10 +207,61 @@ describe("review-diff", () => {
           // `DIFF.split("\n").length` (4) — `DIFF` is 3 lines plus a trailing newline, and the
           // node's own `lines` computation strips that trailing newline before splitting, so this
           // asserts the real count rather than reproducing an off-by-one bug.
-          `Review the diff at ${diffPath} (3 lines, \`git diff main...${INPUT.headSha}\`) against the ticket: read every line, paging past any truncation notice, then reply with only the blocking findings, each specific enough to act on. Change nothing. An empty list means the diff passes.`,
+          `Review the diff at ${diffPath} (3 lines, \`git diff main...${INPUT.headSha}\`): read every line, paging past any truncation notice. Change nothing.`,
+          "",
+          ...compileReviewBrief("diff"),
           "",
           `When this diff ${SWEEP_TRIGGER} and carries a design record, that record states a ${SWEEP_LABEL}: the repo-wide grep for the old name and every hit, each hit owned by an edit in this diff or carrying a one-line reason its wording stays. A design record present without one is a blocking finding; a diff with no design record is nothing this gate checks.`
         ].join("\n")
+      )
+    }))
+
+  test("the diff charter carries the diff target, the three output channels and the fresh-eyes skim, and none of the plan target's audits", () =>
+    withRunRoot(async (runRoot) => {
+      const agent = stubAgent([])
+      await runWith(reviewDiff.run(INPUT), gitStub().service, agent.service, testRunInfo({ runRoot }))
+
+      const prompt = agent.requests[0]!.prompt
+      expect(prompt).toContain("You are an adversarial reviewer. Find where the target fails to meet the ticket.")
+      expect(prompt).toContain("does the code as written do what the ticket requires?")
+      expect(prompt).toContain("fresh-eyes skim of the whole branch")
+      expect(prompt).toContain("Duplicated logic across sibling files is a note")
+      expect(prompt).toContain("- blocking: shipped as-is")
+      expect(prompt).toContain("- notes: everything else")
+      expect(prompt).toContain("No questions. Nobody answers one in this run.")
+      expect(prompt).toContain("5. A finding states the defect and its evidence, never a fix or a mechanism")
+      expect(prompt).not.toContain("Prior-art hunt:")
+      expect(prompt).not.toContain("Structure audit:")
+      expect(prompt).not.toContain("re-review")
+    }))
+
+  test("priorFindingsPath makes the pass a re-review: the prior findings are named, the delta is judged, and the fresh hunt framing is gone", () =>
+    withRunRoot(async (runRoot) => {
+      const delta = inputExamples[1]!
+      const agent = stubAgent([])
+      await runWith(reviewDiff.run(delta), gitStub({ head: delta.headSha }).service, agent.service, testRunInfo({ runRoot }))
+
+      const prompt = agent.requests[0]!.prompt
+      expect(prompt).toContain(`A prior pass raised blocking findings, recorded at ${delta.priorFindingsPath},`)
+      expect(prompt).toContain("Judge whether each prior blocking finding is fixed and whether the change introduced a new blocker.")
+      expect(prompt).not.toContain("Find where the target fails to meet the ticket.")
+      // The rest of the charter still applies: the re-review only swaps the framing.
+      expect(prompt).toContain("- blocking: shipped as-is")
+      expect(prompt).toContain(delta.addendum!)
+    }))
+
+  test("notes are recorded in the findings file and never gate", () =>
+    withRunRoot(async (runRoot) => {
+      const result = await runWith(
+        reviewDiff.run(INPUT),
+        gitStub().service,
+        stubAgent([], ["x.ts:3 the helper name shadows the module's"]).service,
+        testRunInfo({ runRoot })
+      )
+
+      expect(Result.isSuccess(result)).toBe(true)
+      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(
+        `Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\n- x.ts:3 the helper name shadows the module's`
       )
     }))
 
@@ -331,7 +383,7 @@ describe("review-diff", () => {
         sessions: ["review-session"],
         costUsd: 0.31
       })
-      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.`)
+      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.`)
     }))
 
   test("blocking findings are the node's tagged error, findingsPath pointing at the rendered bullets, headSha naming the tree", () =>
@@ -352,7 +404,7 @@ describe("review-diff", () => {
       expect(blocked.sessions).toStrictEqual(["review-session"])
       expect(blocked.costUsd).toBe(0.31)
       expect(readFileSync(blocked.findingsPath, "utf8")).toBe(
-        `Reviewed at ${INPUT.headSha}\n\n- the fix misses the second NUL at line 105`
+        `Reviewed at ${INPUT.headSha}\n\n- the fix misses the second NUL at line 105\n\nNotes:\nNone.`
       )
     }))
 
@@ -495,8 +547,8 @@ describe("review-diff", () => {
       if (!Result.isFailure(second)) return
       const blocked = second.failure as ReviewBlocked
       expect(blocked.findingsPath).toBe(`${runRoot}/review-diff-2.md`)
-      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${delta.headSha}\n\n- second pass finding`)
-      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- first pass finding`)
+      expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${delta.headSha}\n\n- second pass finding\n\nNotes:\nNone.`)
+      expect(readFileSync(`${runRoot}/review-diff-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- first pass finding\n\nNotes:\nNone.`)
       // Each pass writes its own `diff-<N>.patch`, and the `.patch` files must not inflate
       // the `review-diff-` count — `writeArtifact`'s prefix filter is what makes that true.
       expect(existsSync(`${runRoot}/diff-1.patch`)).toBe(true)

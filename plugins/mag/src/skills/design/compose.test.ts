@@ -19,7 +19,7 @@ const NON_CONCERN_FILES = new Set(["concern.ts", "compose.ts", "variants.ts", "t
  * so `headlessDesign([])`/`HEADLESS_DESIGN` never lists them, and this orphan scan would otherwise
  * flag every one as authored-but-unreachable. `envision-generic` left this set once `INSTALLED_DESIGN`
  * started listing it directly: it's reachable through a real `Variant` now, the same way
- * `reconciliation` already was. */
+ * `shell-drawn` already was. */
 const UNLISTED_IDS = new Set([
   "preamble",
   "envision-svelte",
@@ -73,8 +73,8 @@ describe("one concern, one module", () => {
   })
 
   test("every Concern exported anywhere under skills/design is reachable — a module cannot be authored into orphanhood", async () => {
-    // BRAINSTORM_DESIGN and INSTALLED_DESIGN are each reachable variants too — `reconciliation` and
-    // `lane` are each listed in exactly one variant — omitting either union member here would flag a
+    // BRAINSTORM_DESIGN and INSTALLED_DESIGN are each reachable variants too, `shell-drawn` and
+    // `lane` are each listed in exactly one variant, so omitting either union member here would flag a
     // real, wired concern as an orphan.
     const reachableIds = new Set(
       [...HEADLESS_DESIGN.concerns, ...BRAINSTORM_DESIGN.concerns, ...INSTALLED_DESIGN.concerns].map((concern) =>
@@ -103,32 +103,35 @@ describe("one concern, one module", () => {
   })
 })
 
-/** BRAINSTORM_DESIGN carries reconciliation and its template section, and carries no envisioning
- * module. `brainstorm`'s own dispatch draws no shell — the visions are already committed — so its
- * variant occupies the envisioning slot with `reconciliation` instead of a matched stack's module. */
+/** BRAINSTORM_DESIGN carries shell-drawn and no envisioning module. `brainstorm`'s own dispatch draws
+ * no shell: the same session drew it blind into the design doc first, so its variant occupies the
+ * envisioning slot with `shell-drawn` instead of a matched stack's module, and its template is the
+ * headless one, the shell section included, with no reconciliation section to fill. */
 describe("BRAINSTORM_DESIGN", () => {
-  test("carries the 13 core ids plus reconciliation, and none of the four envisioning modules", () => {
+  test("carries the 13 core ids plus shell-drawn, and none of the four envisioning modules", () => {
     const ids = BRAINSTORM_DESIGN.concerns.map((concern) => concern.id)
-    expect(ids).toEqual([...CORE_IDS.slice(0, 6), "reconciliation", ...CORE_IDS.slice(6)])
+    expect(ids).toEqual([...CORE_IDS.slice(0, 6), "shell-drawn", ...CORE_IDS.slice(6)])
     for (const envisioningId of ["envision-svelte", "envision-effect", "envision-graph-core", "envision-generic"]) {
       expect(ids).not.toContain(envisioningId)
     }
   })
 
-  test("carries reconciliation's own template section, \"Vision Reconciliation\"", () => {
+  test("its template is HEADLESS_DESIGN's: the shell section replaces any reconciliation section", () => {
     const headings = BRAINSTORM_DESIGN.templateSections.map((section) => section.heading)
-    expect(headings).toContain("## Vision Reconciliation")
+    expect(headings).toEqual(HEADLESS_DESIGN.templateSections.map((section) => section.heading))
+    expect(headings).toContain("## Envisioned Shell")
+    expect(headings).not.toContain("## Vision Reconciliation")
   })
 
-  test("composeDesignPrompt(BRAINSTORM_DESIGN) carries reconciliation's own rule and the reconciliation heading, not any envisioning module's body", () => {
+  test("composeDesignPrompt(BRAINSTORM_DESIGN) carries shell-drawn's own rule and no envisioning module's body", () => {
     const compiled = composeDesignPrompt(BRAINSTORM_DESIGN)
-    expect(compiled).toContain("## Vision Reconciliation")
-    expect(compiled).toContain("Each notation's vision document is the shell")
+    expect(compiled).toContain("The Envisioned Shell section already stands in the design doc")
+    expect(compiled).not.toContain("Vision Reconciliation")
   })
 })
 
 describe("HEADLESS_DESIGN.templateSections — an authored order, pinned", () => {
-  test("matches its own doc comment's order: Problem/Constraints open it, Open Questions closes it", () => {
+  test("matches its own doc comment's order: Problem/Constraints open it, the rulings sections close it", () => {
     const headings = HEADLESS_DESIGN.templateSections.map((section) => section.heading)
     expect(headings).toEqual([
       "## Problem",
@@ -144,9 +147,15 @@ describe("HEADLESS_DESIGN.templateSections — an authored order, pinned", () =>
       "## Testing Strategy",
       "## Principles Applied",
       "## Interpretation Rulings",
-      "## Convention Rulings",
-      "## Open Questions"
+      "## Convention Rulings"
     ])
+  })
+
+  test("carries no Open Questions section: an autonomous design decides, so the template has no slot for a hedge", () => {
+    for (const variant of [HEADLESS_DESIGN, BRAINSTORM_DESIGN, INSTALLED_DESIGN]) {
+      expect(variant.templateSections.map((section) => section.heading)).not.toContain("## Open Questions")
+      expect(composeDesignPrompt(variant)).not.toContain("Open Questions")
+    }
   })
 
   test("is exactly the template sections HEADLESS_DESIGN's own concerns own — no more, no fewer, so the authored order can't drift from the concern list", () => {
@@ -214,10 +223,9 @@ describe("the composed prompt has headroom under the execve cap", () => {
     expect(MAX_ARG_STRLEN % COMPOSED_PROMPT_BUDGET).toBe(0)
   })
 
-  // No live caller composes `headlessDesign(STACKS.map(...))` anymore — verdicts-to-modules
-  // envisioning moved to `compileEnvisionNotation`, one notation at a time, entirely outside
-  // `headlessDesign`. The slot's real occupant now is `reconciliation` (`BRAINSTORM_DESIGN`), so the
-  // worst-case budget check retargets to it.
+  // No live caller composes `headlessDesign(STACKS.map(...))` anymore: verdicts-to-modules
+  // envisioning moved to `compileEnvisionShell`, entirely outside `headlessDesign`. The slot's real
+  // occupant now is `shell-drawn` (`BRAINSTORM_DESIGN`), so the worst-case budget check retargets to it.
   test("BRAINSTORM_DESIGN composes under budget — the real worst case now", () => {
     expect(promptBytes(composeDesignPrompt(BRAINSTORM_DESIGN))).toBeLessThan(COMPOSED_PROMPT_BUDGET)
   })

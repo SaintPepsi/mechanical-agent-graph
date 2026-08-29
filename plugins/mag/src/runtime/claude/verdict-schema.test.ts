@@ -62,6 +62,13 @@ describe("verdictSchema", () => {
     expect(definitions[ref.replace("#/definitions/", "")]).toBeDefined()
   })
 
+  test("an empty struct serializes as a typed object, never an untyped anyOf the API refuses", () => {
+    const parsed = JSON.parse(verdictSchema(Schema.Struct({})).serialized)
+    expect(parsed.type).toBe("object")
+    expect(parsed.anyOf).toBeUndefined()
+    expect(parsed.additionalProperties).toBe(false)
+  })
+
   test("a schema with nothing to define carries no empty definitions key", () => {
     const serialized: Record<string, unknown> = JSON.parse(verdictSchema(Verdict).serialized)
     expect("definitions" in serialized).toBe(false)
