@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Schema } from "effect"
-import { fieldNameOf, objectAstOf, schemaFieldNames } from "mag/runtime/schema-fields"
+import { objectAstOf, schemaFieldNames } from "mag/runtime/schema-fields"
 
 describe("schemaFieldNames", () => {
   test("a struct's field names come back in declaration order", () => {
@@ -23,9 +23,6 @@ describe("schemaFieldNames", () => {
   })
 
   test("objectAstOf hands back the narrowed AST, so a caller can read its index signatures too", () => {
-    const objects = objectAstOf(Schema.Struct({ x: Schema.String }).ast)
-
-    expect(objects?.indexSignatures).toEqual([])
-    expect(objects?.propertySignatures.map(fieldNameOf)).toEqual(["x"])
+    expect(objectAstOf(Schema.Struct({ x: Schema.String }).ast)?.indexSignatures).toEqual([])
   })
 })

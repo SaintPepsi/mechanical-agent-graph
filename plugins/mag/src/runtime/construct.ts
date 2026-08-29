@@ -1,4 +1,4 @@
-import { Data, Effect, type Schema } from "effect"
+import { Data, Effect, Record, type Schema } from "effect"
 import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
@@ -95,9 +95,7 @@ export type Step =
 const nodeStep = (node: AnyNode, wire: AnyWire, keep?: AnyKeep): Step =>
   ({ kind: "node", node, wire, keep, modifiers: [] })
 
-/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker. */
-const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(keep).map(([field, pick]) => [field, pick(a)]))
+const applyKeep = (keep: AnyKeep, a: unknown) => Record.map(keep, (pick) => pick(a))
 
 /** A finalised construct's published shape: its step list, and how to re-close a possibly-bent
  *  variant of it into a fresh `graph()` without restating any `.finalise` option. Held in a
@@ -548,8 +546,7 @@ const closeSteps = <Seed extends object, Ctx extends object, E, R, SI, SA>(
     close: (newSteps, newApplied) => closeSteps(name, options, newSteps, newApplied)
   })
   // The shape is not an afterthought of a construct: one that cannot be drawn refuses here, at
-  // import, rather than at whatever later moment first asks for its shape. `close` recurses into
-  // this same function, so a bent variant is gated exactly as a freshly finalised one is.
+  // import, rather than at whatever later moment first asks for its shape.
   projectSteps(name, steps)
   return node
 }
