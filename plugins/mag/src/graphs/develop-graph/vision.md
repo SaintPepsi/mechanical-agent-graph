@@ -48,9 +48,9 @@ graph TD
     RD["review-diff · Model<br/>adversarial read of the diff, or adjudicate a build's own dispute"]
   end
   DG -- "headSha → (gate: build starts from the designed tree)" --> B
-  FT -- "ticket, title, body → ticket, title, body" --> B
+  FT -- "ticket → ticket (the id alone, for the salvage commit's subject: build reads no ticket)" --> B
   FBN -- "branch → branch" --> B
-  DG -- "planPath → planPath (first pass only, never designPath: the design is the plan's input and nothing else's)" --> B
+  DG -- "planPath → planPath (the builder's whole contract, never designPath: the design is the plan's input and nothing else's)" --> B
   B -- "headSha → headSha" --> V
   IN -- "verification? → command" --> V
   V -- "command → (gate: tree is green)" --> S

@@ -52,9 +52,11 @@ const WriteBody = Graph.construct("write-body")
 
 const BuildUnderReview = Graph.construct("build-under-review")
   .loop(Build, Verification, Simplify, ReviewDiff, {
-    // Build: { headSha, ticket, title, body, branch, planPath (first pass only) } → { headSha }
+    // Build: { headSha, ticket, branch, planPath } → { headSha }
     //   implements the plan, or answers ReviewDiff's own standing findings on a send-back;
-    //   never designPath — the design is the plan's input and nothing else's
+    //   the plan is the whole brief — never the ticket, whose criteria the plan quotes, and
+    //   never designPath — the design is the plan's input and nothing else's;
+    //   ticket is the id alone, for the salvage commit's subject
     //   !BuildWorkdirDirty !BuildNoCommits !BuildHeadMoved !BuildGitFailed !BuildCommitFailed !BuildSummaryEmpty
     //   (verdict not disputed)
     skip: {

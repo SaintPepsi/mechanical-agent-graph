@@ -165,11 +165,13 @@ maintainer rules otherwise.
   (`findingsPath`, `disputePath`, `priorFindingsPath`, `resume`) is not a stage input. The design is
   the plan's input and nothing else's: the plan is the reviewer's input and the builder's, and it
   carries whatever design decisions and principles it applies, in its own words — a decision the
-  plan never states is a plan finding on that ground alone. The rule is
-  `input-boundary` (`graph-nodes/conformance/rules.ts`): it walks every node, counts the required
-  `...Path` fields beside `ticketPath`, and fails a second one unless the node is in
-  `INPUT_BOUNDARY_EXCEPTIONS` with its ruling: `plan` (the plan resolves names against the repo,
-  v1's Resolution Table position). Reason: both trial designs paid a reconciliation tax for a
+  plan never states is a plan finding on that ground alone. The plan is the builder's only input:
+  the builder never reads the ticket, so the plan quotes the acceptance criteria it proves, and a
+  build pass is judged against the plan rather than re-deriving the work from the ticket. The rule
+  is `input-boundary` (`graph-nodes/conformance/rules.ts`): it walks every node that names the
+  ticket's id or its document, counts the required `...Path` fields beside `ticketPath`, and fails a
+  second one unless the node is in `INPUT_BOUNDARY_EXCEPTIONS` with its ruling: `plan` (the plan
+  resolves names against the repo, v1's Resolution Table position). Reason: both trial designs paid a reconciliation tax for a
   second artifact, a nine-row Vision Reconciliation table on one and three invented nodes refused
   on the other; the shell drawn as a section of the design, in the design's own session, got the
   value without it.
