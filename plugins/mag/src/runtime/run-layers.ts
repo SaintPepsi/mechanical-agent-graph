@@ -90,6 +90,9 @@ export interface RunScope {
   readonly records?: "run-root" | "committed"
 }
 
+/** The file beside `journal.jsonl` holding the pid of the process running the run; `ps` reads liveness off it. */
+export const PID_FILE = "pid"
+
 /** The process-environment slice the path composers read. */
 export interface RootEnv {
   readonly env: Env
@@ -229,9 +232,20 @@ export const runScopedLayers = Effect.fn("runScopedLayers")(function* (scope: Ru
       ...values
     }))
 
+  // The run's liveness signal, beside the journal: `ps` asks the OS whether this pid is alive
+  // rather than guessing from the journal's mtime, which a long single-session node leaves silent.
+  // Written after the safety checks above and, on a resume, after the predecessor is chosen, so a
+  // refused run still leaves no trace.
+  const writePidFile = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    yield* fs.makeDirectory(runRoot, { recursive: true })
+    yield* fs.writeFileString(`${runRoot}/${PID_FILE}`, String(process.pid))
+  }).pipe(Effect.provide(platform), Effect.orDie)
+
   if (scope.resume !== true) {
     const workRoot = workRootFor(runId)
     const recordsRoot = yield* recordsRootFor(workRoot)
+    yield* writePidFile
     return Layer.mergeAll(
       journalLayer({ path, graph: scope.graph, predecessor: Option.none() }).pipe(Layer.provide(platform)),
       Layer.succeed(RunInfo, yield* runInfoFor(workRoot, recordsRoot)),
@@ -259,6 +273,7 @@ export const runScopedLayers = Effect.fn("runScopedLayers")(function* (scope: Ru
   // predecessor's rows, not two. The record states the tree this run adopted, so the adopted value
   // replaces `selection`'s own `Option` of the predecessor's.
   const record = { ...selection, workRoot }
+  yield* writePidFile
   const journal = yield* makeJournal({ path, graph: scope.graph, predecessor: Option.some(selection.journalPath) }).pipe(
     Effect.provide(platform),
     // A run whose own record failed to write has lost the one thing it was keeping (`journaled.ts`'s
