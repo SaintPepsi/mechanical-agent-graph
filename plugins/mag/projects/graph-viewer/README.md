@@ -2,6 +2,14 @@
 
 A SvelteKit view of a graph run, run by Bun on loopback only. Spec: `docs/requirements/graph-visualiser.md` at the repository root.
 
+## Routes
+
+- `/` lists the graphs and runs.
+- `/stats` reads every `journal.jsonl` under the graph root and reports the totals, the per-node,
+  per-graph and per-run figures, and the failure tags. The root is `$MAG_GRAPH_ROOT`, else
+  `~/.claude/graph`; the page names the one it read. Reading happens in the server load, and the
+  viewer never writes.
+
 ## Commands
 
 From the repository root, `bun run typecheck` runs this project's `svelte-check` and `bun run test` runs its vitest unit tests and Playwright smoke test alongside the rest of the suite. In this directory:
