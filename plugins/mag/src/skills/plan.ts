@@ -7,6 +7,10 @@ import { TICKET_TOKEN } from "mag/skills/design/tokens"
  *
  * What the standard governs is the plan's content: what a plan states and the rules a task is cut
  * under. Where the plan is filed and what runs it are the calling node's concerns.
+ *
+ * Acceptance criteria are quoted, never cited by id alone: the plan is the builder's whole
+ * contract and the builder never reads the ticket, so an id here would name what its reader cannot
+ * resolve.
  */
 
 /** One variant's decisions: what a plan states, in render order, and the rules its tasks obey. */
@@ -24,10 +28,10 @@ export const PLAN_DESTINATION = `docs/graph/${TICKET_TOKEN}/plan.md`
  */
 export const PLAN_PARAMS: PlanParams = {
   sections: [
-    "Goal: one sentence stating what the plan builds, and the acceptance criteria it proves, by id.",
+    "Goal: one sentence stating what the plan builds, and the acceptance criteria it proves, each quoted in full beside its id.",
     "Resolution table: one row per symbol the design names: reuse (exists, path), repurpose (exists, the change it needs), create (new file, exact path, one-line responsibility) or extract (inline today at path:lines, moved to a shared home, plus one replace row per existing site).",
     "Tasks: one per created, changed or extracted symbol, in build order, each stating the files it creates or changes with exact paths, the failing test it starts from with the command that runs that one test, the smallest implementation that makes it pass, and the commit.",
-    "Criteria map: every acceptance criterion by id, the task that proves it, and the one-line edit to the shipped module that would make that task's test fail."
+    "Criteria map: every acceptance criterion quoted in full beside its id, the task that proves it, and the one-line edit to the shipped module that would make that task's test fail."
   ],
   rules: [
     "Write for an engineer with zero context for this codebase: every path exact, every command runnable as written, every step one action.",

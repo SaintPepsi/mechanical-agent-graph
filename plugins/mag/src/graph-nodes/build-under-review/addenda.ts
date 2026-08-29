@@ -1,27 +1,10 @@
 /**
  * The words the composite's loop hands to a `build` dispatch through its own `addendum` field:
- * `build` stays design- and verification-ignorant, splicing whatever it's given verbatim, so the
- * loop that knows *why* the words exist owns them. Kept in a sibling module so `graph-node.ts`
- * stays about the loop as it grows, the same shape as `review-diff/principles.ts`, a sibling
- * module in a node folder.
+ * `build` stays verification-ignorant, splicing whatever it's given verbatim, so the loop that
+ * knows *why* the words exist owns them. Kept in a sibling module so `graph-node.ts` stays about
+ * the loop as it grows, the same shape as `review-diff/principles.ts`, a sibling module in a node
+ * folder.
  */
-
-/**
- * The first pass's addendum when a reviewed plan exists: the plan is the task list, and the only
- * record this node is ever handed — the design is the plan's input and nothing else's, so the
- * plan is what carries whatever design decisions the build needs, in its own words. The path
- * travels as a path, never as prose. It hangs from `recordsRoot`, which equals the build session's
- * own cwd under `records: "committed"` but is a separate temp directory for a foreign target under
- * the default `run-root` policy (`run-layers.ts`) — so the path can point outside the tree the
- * session works in. Probed, not assumed (`PRINCIPLES.md`, Cold-start meaning): a session may
- * `Read` an absolute path in a different git tree the same way it may `Write` one.
- */
-export const planAddendum = (planPath: string): string =>
-  [
-    `A design session thought this ticket through and a plan session cut it into tasks, both reviewed. Work`,
-    `through the plan at ${planPath} one task at a time, committing each. Depart from the plan only where the`,
-    "repository proves it wrong, and say so in your summary when you do."
-  ].join("\n")
 
 /**
  * A repair pass's own addendum: the loop resumes the session that produced a red head and

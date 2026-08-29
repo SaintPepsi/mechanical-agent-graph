@@ -18,6 +18,11 @@ describe("compilePlan", () => {
     expect(compiled).toContain("Criteria map:")
   })
 
+  test("acceptance criteria are quoted, never cited by id alone: the builder reads no ticket", () => {
+    expect(compiled).toContain("the acceptance criteria it proves, each quoted in full beside its id")
+    expect(compiled).toContain("Criteria map: every acceptance criterion quoted in full beside its id")
+  })
+
   test("renders in section order: perturbing the order moves the render", () => {
     const reversed: PlanParams = { ...PLAN_PARAMS, sections: [...PLAN_PARAMS.sections].reverse() }
     expect(compilePlan(reversed)).not.toBe(compiled)

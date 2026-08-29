@@ -59,7 +59,6 @@ const NODES: ReadonlyArray<{
   { node: reviewPlan, input: reviewPlanInputs[0]!, shell: () => scriptedShell([out("")]).service },
   { node: design, input: designInputs[0]!, shell: () => scriptedShell([]).service },
   { node: envisionShell, input: shellInputs[0]!, shell: () => scriptedShell([]).service },
-  { node: build, input: buildInputs[0]!, shell: buildShell },
   { node: reviewDiff, input: reviewInputs[0]!, shell: () => reviewShell(reviewInputs[0]!.headSha) }
 ]
 
@@ -141,6 +140,18 @@ describe("the ticket is never injected", () => {
       const agent = recordingAgent()
       await dispatch(githubTicketCreate.run({ ticketPath: join(runRoot, "absent.json") }), agent.service, scriptedShell([]).service, runRoot)
       expect(agent.prompts).toHaveLength(0)
+    }))
+
+  // The one dispatching node with no ticket at all: the reviewed plan is the builder's whole
+  // contract, so there is no citation to make and no text to splice (`PRINCIPLES.md`, input boundary).
+  test("build is dispatched with no ticket: no ticketPath field, and no citation in its prompt", () =>
+    withRunRoot("ticket-never-injected", async (runRoot) => {
+      const agent = recordingAgent()
+      await dispatch(build.run(buildInputs[0]!), agent.service, buildShell(), runRoot)
+
+      expect(fieldsOf(build.input)).not.toContain("ticketPath")
+      expect(agent.prompts).toHaveLength(1)
+      expect(agent.prompts[0]!).not.toContain("Read the ticket at")
     }))
 
   test("no registered node's success schema carries model prose by value under a name it once did", () => {

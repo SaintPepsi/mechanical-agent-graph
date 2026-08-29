@@ -1,5 +1,5 @@
 import { Effect, Option, Result, Schema } from "effect"
-import { planAddendum, verificationAddendum } from "mag/graph-nodes/build-under-review/addenda"
+import { verificationAddendum } from "mag/graph-nodes/build-under-review/addenda"
 import { build } from "mag/graph-nodes/build/graph-node"
 import type { ReviewBlocked, ReviewDisputeRejected } from "mag/graph-nodes/review-diff/errors"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
@@ -47,6 +47,10 @@ const sendsBack = (failure: { readonly _tag: string }): failure is ReviewBlocked
  * that a red suite is no longer automatically fatal: {@link verified} repairs it in
  * place first, by resuming the session that produced the red head, before the loop gives up on it.
  *
+ * The builder is dispatched with the plan and nothing else: the ticket travels through this node
+ * for the reviewer alone, never into a `build` pass, so the reviewed plan is the whole contract a
+ * build pass works from and the acceptance criteria it must prove are the ones the plan states.
+ *
  * The reviewer is blind by construction: it is dispatched with the ticket, the diff
  * and the head sha it is gating — never the build session, never a build summary, never the design
  * rationale in prose, and never its own prior session. A resumed session let review pass 2
@@ -88,12 +92,12 @@ export const buildUnderReview = make({
     /** Max send-backs: build runs at most `cap + 1` times. Negative has no meaning here. */
     cap: Schema.Natural,
     /**
-     * A repo-relative reviewed plan for the first build pass to work through, task by task; the
-     * graph that ran a design step passes it, a graph without one omits it. Send-back passes
-     * replace it with the reviewer's findings — the review verdict outranks the plan it reviewed
-     * against. The design is the plan's input and nothing else's, so this node is never handed one.
+     * The reviewed plan every build pass is dispatched with: the builder's whole contract, and the
+     * only record it is ever handed. Required, because a build with no plan to work through is a
+     * build with no brief at all. The design is the plan's input and nothing else's, so this node
+     * is never handed one.
      */
-    planPath: Schema.optional(Schema.String),
+    planPath: Schema.String,
     /** A named agent for every session this node dispatches — same convention as `build`'s field. */
     agent: Schema.optional(Schema.String),
     /**
@@ -123,8 +127,6 @@ export const buildUnderReview = make({
       const buildModelField = input.buildModel === undefined ? {} : { model: input.buildModel }
       const simplifyModelField = input.simplifyModel === undefined ? {} : { model: input.simplifyModel }
       const reviewModelField = input.reviewModel === undefined ? {} : { model: input.reviewModel }
-      const firstAddendum = input.planPath === undefined ? {} : { addendum: planAddendum(input.planPath) }
-
       let prior = Option.none<ReviewBlocked | ReviewDisputeRejected>()
       let spent: Spend = { costUsd: 0, sessions: [] }
       // One counter for the whole run, not one per head: a per-head budget multiplies
@@ -169,9 +171,8 @@ export const buildUnderReview = make({
             // this caller could never have handled.
             const repaired = yield* build.run({
               ticket: input.ticket,
-              title: input.title,
-              ticketPath: input.ticketPath,
               branch: input.branch,
+              planPath: input.planPath,
               resume: currentProducer,
               addendum: verificationAddendum(failure.reportPath),
               ...agentField,
@@ -188,13 +189,12 @@ export const buildUnderReview = make({
         const built = yield* Effect.result(
           build.run({
             ticket: input.ticket,
-            title: input.title,
-            ticketPath: input.ticketPath,
             branch: input.branch,
+            planPath: input.planPath,
             ...agentField,
             ...buildModelField,
             ...Option.match(prior, {
-              onNone: () => firstAddendum,
+              onNone: () => ({}),
               onSome: (blocked) => ({ findingsPath: blocked.findingsPath, resume: lastBuildSessionRef })
             })
           })
