@@ -17,7 +17,7 @@ const isBrainstormPrompt = (request: ClaudePrint<unknown>) =>
   request.prompt.includes("holds the Envisioned Shell you drew") || request.prompt.includes("A reviewer examined this design")
 const isPlanPrompt = (request: ClaudePrint<unknown>) =>
   request.prompt.includes("Read the design below") || request.prompt.includes("A reviewer examined this plan")
-const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Review the design at")
+const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Review the plan at")
 
 /** A bare string is a design finding, the common case; a plan finding names its target. */
 type Finding = string | { readonly target: "design" | "plan"; readonly finding: string }
@@ -144,13 +144,13 @@ describe("design-under-review", () => {
       })
       expect(kindsOf(agent.requests)).toStrictEqual(["brainstorm", "plan", "review"])
 
-      // The plan prompt cites the design the brainstorm wrote; the reviewer is handed both paths
-      // and the plan's headSha, never the brainstorm session's output. Every session cites the
-      // ticket file by path; the recycle scan reaches the plan alone.
+      // The plan prompt cites the design the brainstorm wrote; the reviewer is handed the plan and
+      // its headSha alone, never the design path or the brainstorm session's output. Every session
+      // cites the ticket file by path; the recycle scan reaches the plan alone.
       expect(agent.requests[1]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[1]!.prompt).toContain(`- ${runRoot}/recycle-scan.md`)
       expect(agent.requests[0]!.prompt).not.toContain("recycle-scan.md")
-      expect(agent.requests[2]!.prompt).toContain(result.success.designPath)
+      expect(agent.requests[2]!.prompt).not.toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.planPath)
       for (const request of agent.requests) {
         expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
