@@ -42,15 +42,15 @@ describe("readShape", () => {
     expect(shape.conditions.some((condition) => condition.startsWith("commit-design-artifacts ->"))).toBe(false)
   })
 
-  test("design-graph's complete condition list: the probe, vision, discover and recycle-map deaths, plus the design-under-review loop's five", () => {
+  test("design-graph's complete condition list: the recycle-scan death plus the design-under-review loop's six", () => {
     const result = readShape("design-graph/vision.md", designGraphVision)
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
     const loop = result.success.conditions.filter((condition) =>
-      condition.startsWith("brainstorm ->") || condition.startsWith("review-plan ->") || condition.startsWith("recycle-map ->")
+      condition.startsWith("brainstorm ->") || condition.startsWith("review-plan ->") || condition.startsWith("recycle-scan ->")
     )
     expect(loop).toEqual([
-      "recycle-map -> RecycleMapMissing when map missing or empty",
+      "recycle-scan -> RecycleScanDesignUnreadable | RecycleScanFileUnreadable | RecycleScanWriteFailed when design unreadable, a tracked file unreadable, or the table unwritable",
       "review-plan -> brainstorm when verdict = blocked, a finding targets design, design sendbacks < cap",
       "review-plan -> plan when verdict = blocked, every finding targets plan, plan sendbacks < cap",
       "brainstorm -> review-plan when verdict = disputed",

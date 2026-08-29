@@ -59,7 +59,7 @@ describe("brainstorm", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(brainstorm.success)(example)
   })
 
-  test("the prompt names every vision path, the discover path and the recycle map path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
+  test("the prompt names every vision path and the discover path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
       await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
@@ -67,7 +67,6 @@ describe("brainstorm", () => {
       const request = agent.requests[0]!
       for (const path of INPUT.visionPaths) expect(request.prompt).toContain(path)
       expect(request.prompt).toContain(`- ${INPUT.discoverPath}`)
-      expect(request.prompt).toContain(`- ${INPUT.recycleMapPath}`)
       expect(request.prompt).toContain(INPUT.prompt)
     }))
 
@@ -80,7 +79,7 @@ describe("brainstorm", () => {
       expect(calls).toStrictEqual([LS_FILES, ["git", "rev-parse", "HEAD"]])
       const prompt = agent.requests[0]!.prompt
       expect(prompt).toContain(
-        `- ${INPUT.recycleMapPath}\n\nThis repository states rulings of its own, in the files below:\n- CLAUDE.md\n- plugins/mag/PRINCIPLES.md\n`
+        `- ${INPUT.discoverPath}\n\nThis repository states rulings of its own, in the files below:\n- CLAUDE.md\n- plugins/mag/PRINCIPLES.md\n`
       )
     }))
 
@@ -319,7 +318,7 @@ describe("brainstorm", () => {
       expect(request.prompt).toContain(`rewrite the design at \`${designIn(repoRoot)}\``)
       expect(request.prompt).toContain("Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.")
       expect(request.prompt).not.toContain(sendBack.prompt)
-      expect(request.prompt).not.toContain(sendBack.recycleMapPath)
+      expect(request.prompt).not.toContain(sendBack.discoverPath)
       expect(request.prompt).not.toContain("Read each vision below")
       expect(request.prompt).not.toContain("rulings of its own")
     }))

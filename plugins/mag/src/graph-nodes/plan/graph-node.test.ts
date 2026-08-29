@@ -52,7 +52,7 @@ describe("plan", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(plan.success)(example)
   })
 
-  test("the prompt cites the ticket, the design and the recycle map, never the discover note, names its own computed destination, and carries the compiled plan standard", () =>
+  test("the prompt cites the ticket, the design and the recycle scan, never the discover note, names its own computed destination, and carries the compiled plan standard", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = planAgent(() => writePlan(repoRoot))
       await runWith(plan.run(INPUT), agent.service, readsHeadOnly().service, run)
@@ -61,7 +61,7 @@ describe("plan", () => {
       expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(request.prompt).toContain(`- ${INPUT.designPath}`)
       expect(request.prompt).not.toContain("discover.md")
-      expect(request.prompt).toContain(`- ${INPUT.recycleMapPath}`)
+      expect(request.prompt).toContain(`- ${INPUT.recycleScanPath}`)
       expect(request.prompt).toContain(`Write the plan to \`${planIn(repoRoot)}\``)
       expect(request.prompt).toContain(compilePlan(PLAN_PARAMS))
     }))

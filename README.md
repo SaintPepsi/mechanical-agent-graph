@@ -19,8 +19,8 @@ pruned.
 prepare                     fetch the ticket, refuse it without acceptance criteria, verify the
                             base branch
 checkout                    a detached worktree per run, setup command run inside it
-design-graph                envision ∥ discover → recycle-map → design-under-review (brainstorm →
-                            plan → review-plan, each finding sent back to the session that owns
+design-graph                envision ∥ discover → design-under-review (brainstorm →
+                            recycle-scan → plan → review-plan, each finding sent back to the session that owns
                             the artifact it names, design or plan): a reviewed
                             design and plan before any code
 build-under-review          build → verification → simplify → review-diff, findings sent back into
@@ -32,7 +32,7 @@ publish-tail                PR body from the merge-base diff, push, open the PR
 
 ## Install the skills
 
-The plugin ships this repository's skills (brainstorming, discover, recycle-map, envision,
+The plugin ships this repository's skills (brainstorming, discover, envision,
 writing-plans, …) into Claude Code:
 
 ```sh

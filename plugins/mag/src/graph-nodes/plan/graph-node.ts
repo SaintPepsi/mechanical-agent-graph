@@ -23,7 +23,7 @@ const sendBackBlock = (findingsPath: string, planPath: string): readonly string[
 ]
 
 /**
- * Frames the ticket, cites the design and the recycle map by path, read-only
+ * Frames the ticket, cites the design and the recycle scan by path, read-only
  * references, never inlined, since an oversized prompt dies at execve, names this run's own
  * destination for the plan, and splices the compiled plan standard. A resumed pass drops the
  * citations and the standard, which the session already holds, and carries the ticket reference
@@ -35,7 +35,7 @@ const promptFor = (
     readonly title: string
     readonly ticketPath: string
     readonly designPath: string
-    readonly recycleMapPath: string
+    readonly recycleScanPath: string
     readonly findingsPath?: string | undefined
     readonly resume?: string | undefined
   },
@@ -46,9 +46,9 @@ const promptFor = (
     : [
     ...ticketReference(input),
     "",
-    "Read the design below and the recycle map as citations. Plan the build the design describes, as it stands. The discover note is the design's source, not the plan's: what the design took from it is in the design.",
+    "Read the design below and the recycle scan as citations. Plan the build the design describes, as it stands. The discover note is the design's source, not the plan's: what the design took from it is in the design. The scan is a grep of the repo for every name the design puts in backticks: it judges nothing, the resolution table does.",
     `- ${input.designPath}`,
-    `- ${input.recycleMapPath}`,
+    `- ${input.recycleScanPath}`,
     "",
     `Write the plan to \`${planPath}\`, this run's own destination for it.`,
     "",
@@ -67,7 +67,7 @@ const commitMessageFor = (ticket: string, sessions: readonly string[]): string =
   ].join("\n")
 
 /**
- * One plan session over the design and the recon. `brainstorm`'s spine with a different prompt
+ * One plan session over the design and the recycle scan. `brainstorm`'s spine with a different prompt
  * and destination: snapshot `before` → dispatch → `record` (verify against the snapshot, copy into
  * the run root, commit only under `records: "committed"`) → `git rev-parse HEAD` for `headSha`.
  */
@@ -79,7 +79,8 @@ export const plan = make({
     title: Schema.String,
     ticketPath: Schema.String,
     designPath: Schema.String,
-    recycleMapPath: Schema.String,
+    /** `recycle-scan`'s table, the design's own names grepped across the repo: the second artifact this node reads, by ruling (`PRINCIPLES.md`, input boundary: the plan resolves names against the repo). */
+    recycleScanPath: Schema.String,
     /** The blocking verdict this pass answers (`review-plan`'s findings). Present means a send-back pass: the prompt names the file and asks for the plan-tagged findings. */
     findingsPath: Schema.optional(Schema.String),
     /** The session this pass resumes, `brainstorm`'s convention: the prompt drops the citations and the standard, which the session already holds. */

@@ -15,8 +15,6 @@ import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
 import { inputExamples as planInputs } from "mag/graph-nodes/plan/examples"
 import { plan } from "mag/graph-nodes/plan/graph-node"
-import { inputExamples as recycleInputs } from "mag/graph-nodes/recycle-map/examples"
-import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { inputExamples as reviewInputs } from "mag/graph-nodes/review-diff/examples"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
@@ -54,7 +52,6 @@ const NODES: ReadonlyArray<{
   readonly shell: () => ShellService
 }> = [
   { node: discover, input: discoverInputs[0]!, shell: () => scriptedShell([]).service },
-  { node: recycleMap, input: recycleInputs[0]!, shell: () => scriptedShell([]).service },
   // The rulings `ls-files` read, empty: a first brainstorm pass's one git call before its dispatch.
   { node: brainstorm, input: brainstormInputs[0]!, shell: () => scriptedShell([out("")]).service },
   { node: plan, input: planInputs[0]!, shell: () => scriptedShell([]).service },

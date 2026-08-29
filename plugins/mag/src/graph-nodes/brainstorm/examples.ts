@@ -15,7 +15,6 @@ export const inputExamples = [
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-generic.md"],
     discoverPath: "docs/graph/GH-288/discover.md",
-    recycleMapPath: "docs/graph/GH-288/recycle-map.md",
     agent: "effect-expert",
     model: "opus"
   },
@@ -27,7 +26,6 @@ export const inputExamples = [
     prompt: "Reconcile the visions above with discover's recon...",
     visionPaths: ["docs/graph/GH-288/vision-generic.md"],
     discoverPath: "docs/graph/GH-288/discover.md",
-    recycleMapPath: "docs/graph/GH-288/recycle-map.md",
     findingsPath: "/home/dev/repo/.claude/graph/GH-288/run-1/review-plan-1.md",
     resume: "a1b2c3"
   }

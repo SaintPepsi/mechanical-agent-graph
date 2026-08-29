@@ -6,7 +6,6 @@ import type { CitationRoot } from "mag/skills/design/concern"
 import { INSTALLED_DESIGN } from "mag/skills/design/variants"
 import { INSTALLED_SKILLS, installedPath, renderInstalled, SKILLS_ROOT } from "mag/skills/installed"
 import { DISCOVER_STANDARD } from "mag/skills/recon"
-import { RECYCLE_MAP_STANDARD } from "mag/skills/recycle-map"
 
 /**
  * The drift gate: proves every installed row hasn't drifted from what a fresh render produces.
@@ -33,19 +32,6 @@ describe("the installed discover skill renders the step's own standard", () => {
   test("a perturbed standard drifts the installed bytes off disk", () => {
     const perturbedSkill = { ...discover, body: () => discover.body().replace(DISCOVER_STANDARD, `${DISCOVER_STANDARD} †PERTURBED†`) }
     expect(renderInstalled(perturbedSkill)).not.toBe(readFileSync(installedPath(SKILLS_ROOT, "discover"), "utf8"))
-  })
-})
-
-describe("the installed recycle-map skill renders the step's own standard", () => {
-  const recycleMap = INSTALLED_SKILLS.find((skill) => skill.name === "recycle-map")!
-
-  test("the row's body opens with RECYCLE_MAP_STANDARD whole", () => {
-    expect(recycleMap.body().startsWith(RECYCLE_MAP_STANDARD)).toBe(true)
-  })
-
-  test("a perturbed standard drifts the installed bytes off disk", () => {
-    const perturbedSkill = { ...recycleMap, body: () => recycleMap.body().replace(RECYCLE_MAP_STANDARD, `${RECYCLE_MAP_STANDARD} †PERTURBED†`) }
-    expect(renderInstalled(perturbedSkill)).not.toBe(readFileSync(installedPath(SKILLS_ROOT, "recycle-map"), "utf8"))
   })
 })
 

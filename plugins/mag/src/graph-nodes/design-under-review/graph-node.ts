@@ -1,6 +1,7 @@
 import { Effect, Option, Result, Schema } from "effect"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { plan } from "mag/graph-nodes/plan/graph-node"
+import { recycleScan } from "mag/graph-nodes/recycle-scan/graph-node"
 import type { PlanBlocked } from "mag/graph-nodes/review-plan/errors"
 import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { make } from "mag/runtime/graph-node.definition"
@@ -36,18 +37,20 @@ interface PlanState {
   readonly planPath: string
   readonly headSha: string
   readonly sessionRef: string
+  /** The scan the plan was written over; a resumed plan pass cites the same one, since the design it scanned stood. */
+  readonly recycleScanPath: string
 }
 
 /**
  * The design lane's backward edge as a composite GraphNode, `build-under-review`'s shape:
- * brainstorm → plan → review-plan, a blocking review sending its findings back to the session
+ * brainstorm → recycle-scan → plan → review-plan, a blocking review sending its findings back to the session
  * that owns the artifact each finding names, at most `cap` times per producer. The loop is one
  * generator over the error channel, `PLAN_BLOCKED` IS the failure track, and its state lives in
  * loop locals, so nothing about the loop escapes this node.
  *
  * A finding names its target (`review-plan`'s verdict). Every finding on the plan resumes the plan
  * session over the findings and leaves the design and its session untouched. Any finding on the
- * design resumes the brainstorm session; the plan then runs fresh when the design changed, is
+ * design resumes the brainstorm session; the plan then runs fresh over a fresh scan when the design changed, is
  * resumed over the same findings when the design stood but a plan finding remains, and stands as
  * it was when the design disputed and nothing was the plan's. Two caps, one number: design
  * send-backs and plan send-backs each count against `cap` on their own, so one fix of each fits
@@ -63,7 +66,7 @@ interface PlanState {
  */
 export const designUnderReview = make({
   name: "design-under-review",
-  description: "Design, plan, and review both before any build; findings sent back to the session they name until clean or the cap is spent.",
+  description: "Design, scan the repo for the design's names, plan, and review before any build; findings sent back to the session they name until clean or the cap is spent.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -72,8 +75,6 @@ export const designUnderReview = make({
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
-    /** The reuse map every session in the loop cites, and the reviewer checks the plan's tasks against. */
-    recycleMapPath: Schema.String,
     /** Max send-backs per producer: brainstorm and plan are each resumed at most `cap` times. */
     cap: Schema.Natural,
     /** A named agent for every session this node dispatches. */
@@ -97,9 +98,8 @@ export const designUnderReview = make({
       const agentField = input.agent === undefined ? {} : { agent: input.agent }
       const modelField = input.model === undefined ? {} : { model: input.model }
       const ticketFields = { ticket: input.ticket, title: input.title, ticketPath: input.ticketPath }
-      // The discover note feeds the design only; the plan cites the design and the recycle map.
-      const recycleMap = { recycleMapPath: input.recycleMapPath }
-      const citations = { discoverPath: input.discoverPath, ...recycleMap }
+      // The discover note feeds the design only; the plan cites the design and its recycle scan.
+      const citations = { discoverPath: input.discoverPath }
 
       let prior = Option.none<PlanBlocked>()
       let spent: Spend = { costUsd: 0, sessions: [] }
@@ -134,27 +134,28 @@ export const designUnderReview = make({
         }
         designed = currentDesign
 
-        // The plan pass: fresh over a new or changed design, resumed over the findings when a plan
-        // finding stands on an unchanged design, untouched when the design disputed alone.
+        // The plan pass: fresh over a new or changed design, scanned first, resumed over the findings
+        // when a plan finding stands on an unchanged design, untouched when the design disputed alone.
         const planFinding = Option.exists(prior, (blocked) => blocked.targets.includes("plan"))
         const priorPlan: PlanState | undefined = planned
         let currentPlan: PlanState
         if (priorPlan === undefined || designChanged) {
-          const fresh = yield* plan.run({ ...ticketFields, designPath: currentDesign.designPath, ...recycleMap, ...agentField, ...modelField })
+          const scanned = yield* recycleScan.run({ designPath: currentDesign.designPath })
+          const fresh = yield* plan.run({ ...ticketFields, designPath: currentDesign.designPath, recycleScanPath: scanned.recycleScanPath, ...agentField, ...modelField })
           spent = charge(spent, fresh.sessions, fresh.costUsd)
-          currentPlan = { planPath: fresh.planPath, headSha: fresh.headSha, sessionRef: fresh.sessionRef }
+          currentPlan = { planPath: fresh.planPath, headSha: fresh.headSha, sessionRef: fresh.sessionRef, recycleScanPath: scanned.recycleScanPath }
         } else if (planFinding && Option.isSome(findings)) {
           const resumed = yield* plan.run({
             ...ticketFields,
             designPath: currentDesign.designPath,
-            ...recycleMap,
+            recycleScanPath: priorPlan.recycleScanPath,
             ...agentField,
             ...modelField,
             findingsPath: findings.value,
             resume: priorPlan.sessionRef
           })
           spent = charge(spent, resumed.sessions, resumed.costUsd)
-          currentPlan = { planPath: resumed.planPath, headSha: resumed.headSha, sessionRef: resumed.sessionRef }
+          currentPlan = { planPath: resumed.planPath, headSha: resumed.headSha, sessionRef: resumed.sessionRef, recycleScanPath: priorPlan.recycleScanPath }
         } else {
           currentPlan = priorPlan
         }

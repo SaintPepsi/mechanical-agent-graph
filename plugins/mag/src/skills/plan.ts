@@ -32,7 +32,7 @@ export const PLAN_PARAMS: PlanParams = {
   rules: [
     "Write for an engineer with zero context for this codebase: every path exact, every command runnable as written, every step one action.",
     "A condition a task detects names the signal the design designates for it, never a fact about how the data happens to be shaped; when the design names no signal, adding one is its own task.",
-    "Check the recycle map before any create row: rebuilding what exists is a plan defect.",
+    "Check the recycle scan before any create row: a name it finds in the repo is prior art to resolve, and rebuilding what exists is a plan defect.",
     "An extract leaves no straggler: every existing inline site of the same logic gets its own replace task in this plan.",
     "Before saving, sweep the tasks once for contradictions: a condition one task detects whose inputs another task changes is resolved here, not left for the build.",
     "The plan is your only write."

@@ -43,7 +43,7 @@ const disputeContentFor = (findingsPath: string, dispute: readonly string[]): st
   [`Disputes ${findingsPath}`, "", ...dispute.map((line) => `- ${line}`)].join("\n")
 
 /**
- * A first pass frames the ticket, cites every vision, the discover note and the recycle map by
+ * A first pass frames the ticket, cites every vision and the discover note by
  * path, read-only references, never inlined, since an oversized prompt dies at execve, names
  * the repository's own rulings files, the same list `review-plan` will hold the design to, and
  * appends the already-composed, already-budget-checked brainstorm prompt
@@ -60,7 +60,6 @@ const promptFor = (
     readonly ticketPath: string
     readonly visionPaths: readonly string[]
     readonly discoverPath: string
-    readonly recycleMapPath: string
     readonly prompt: string
     readonly findingsPath?: string | undefined
     readonly resume?: string | undefined
@@ -73,10 +72,9 @@ const promptFor = (
     : [
       ...ticketReference(input),
       "",
-      "Read each vision below, the discover note and the recycle map as citations. Do not redraw a vision or re-run recon.",
+      "Read each vision below and the discover note as citations. Do not redraw a vision or re-run recon.",
       ...input.visionPaths.map((path) => `- ${path}`),
       `- ${input.discoverPath}`,
-      `- ${input.recycleMapPath}`,
       ...rulingsBlock(rulings),
       "",
       // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
@@ -130,7 +128,6 @@ export const brainstorm = make({
     prompt: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
-    recycleMapPath: Schema.String,
     /** The blocking verdict this pass is answering (`review-plan`'s findings). Present means a send-back pass: the prompt names the file, and an unchanged design may end in a dispute. */
     findingsPath: Schema.optional(Schema.String),
     /** The session this pass resumes, `build`'s convention: the prompt drops the citations and the compiled skill, which the session already holds. */

@@ -1,7 +1,7 @@
 ```mermaid
 graph TD
   IN[["design(ticket, title, body)"]]
-  OUT[["{ designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }"]]
+  OUT[["{ designPath, planPath, headSha, visionPaths, discoverPath }"]]
 
   subgraph Probes["probes · parallel, no ticket dependency"]
     PS["detect-svelte · Mechanical<br/>manifest walk for a svelte dependency"]
@@ -42,22 +42,19 @@ graph TD
   IN -- "ticket, title, body → ticket, title, body" --> DISC
   DISC -. "note missing or empty: discoverPath → discoverPath" .-> DEADDISC[/"die: DiscoverNoteMissing<br/>kept: worktree, nothing committed"/]
 
-  RM["recycle-map · Model<br/>map what this ticket reuses, from the discover note; the map every later session cites"]
-  DISC -- "discoverPath → discoverPath" --> RM
-  RM -. "map missing or empty: recycleMapPath → recycleMapPath" .-> DEADRM[/"die: RecycleMapMissing<br/>kept: worktree, nothing committed"/]
-
   subgraph Loop["design-under-review · loop, cap send-backs per producer"]
     BS["brainstorm · Model<br/>reconcile the visions against discover's recon; every ambiguity a ruling with a basis, or answer the design-tagged findings"]
+    RS["recycle-scan · Mechanical<br/>grep the repo for every backticked name in the design, kebab, camel and snake case; the table the plan resolves against"]
     PL["plan · Model<br/>the build as small ordered tasks over the design; fresh when the design changed, resumed over plan-tagged findings otherwise"]
     RP["review-plan · Model<br/>adversarial read of design and plan against the ticket, no code; or adjudicate the design's own dispute"]
   end
   CMT -- "designPath, visionPaths → designPath, visionPaths" --> BS
   DISC -- "discoverPath → discoverPath" --> BS
-  RM -- "recycleMapPath → recycleMapPath" --> BS
+  BS -- "designPath → designPath" --> RS
+  RS -. "design unreadable, a tracked file unreadable, or the table unwritable: designPath → designPath" .-> DEADRS[/"die: RecycleScanDesignUnreadable | RecycleScanFileUnreadable | RecycleScanWriteFailed<br/>kept: worktree, the records so far"/]
   BS -- "designPath → designPath" --> PL
-  RM -- "recycleMapPath → recycleMapPath" --> PL
+  RS -- "recycleScanPath → recycleScanPath" --> PL
   PL -- "planPath, headSha → planPath, headSha" --> RP
-  RM -- "recycleMapPath → recycleMapPath" --> RP
   RP -. "verdict = blocked, a finding targets design, design sendbacks < cap: findingsPath → findingsPath" .-> BS
   RP -. "verdict = blocked, every finding targets plan, plan sendbacks < cap: findingsPath → findingsPath" .-> PL
   BS -. "verdict = disputed: findingsPath, disputePath → findingsPath, disputePath" .-> RP

@@ -51,18 +51,17 @@ const DesignGraph = Graph.construct("design")
   .fork(BuildDesign, DiscoverGraph)
     // { ticket, title, body } → { designPath, visionPaths[] } !DesignPromptOversized !NotationDeclaredFailure !VisionUnverified
     //   ∥   { ticket, title, body } → { discoverPath } !DiscoverNoteMissing
-  .join(RecycleMap)
-    // { discoverPath } → { recycleMapPath } !RecycleMapMissing
   .borrow(DesignUnderReview)
-    // { visionPaths[], discoverPath, recycleMapPath } → { designPath, planPath, headSha }
-    //   brainstorm → plan → review-plan; a blocking finding resumes the session that owns the artifact it names
+    // { visionPaths[], discoverPath } → { designPath, planPath, headSha }
+    //   brainstorm → recycle-scan → plan → review-plan; a blocking finding resumes the session that owns the artifact it names
+    //   recycle-scan is mechanical: { designPath } → { recycleScanPath }, every backticked name in the design grepped across the repo
     //   (design → brainstorm, then plan fresh if the design changed; plan only → the plan session), at most cap times per producer
     //   an adjudicating pass decides the disputed findings only; its other blocking findings route as above
     //   !DesignMissing !PlanMissing !PlanBlocked (cap spent) !PlanDisputeRejected (a disputed finding rejected)
   .finalise()
-    // outside: { ticket, title, body } → { designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }
-    //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing
-    //   | DesignMissing | PlanMissing | PlanBlocked | PlanDisputeRejected
+    // outside: { ticket, title, body } → { designPath, planPath, headSha, visionPaths, discoverPath }
+    //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing
+    //   | DesignMissing | RecycleScanDesignUnreadable | PlanMissing | PlanBlocked | PlanDisputeRejected
 ```
 
 Gaps flagged, not patched:

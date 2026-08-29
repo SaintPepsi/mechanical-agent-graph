@@ -6,7 +6,6 @@ import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
-import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
 import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
 import { DesignGraphTicketUnreadable } from "mag/graphs/design-graph/errors"
 import { graph } from "mag/runtime/graph"
@@ -35,8 +34,8 @@ const probeVerdicts = (text: string) =>
   Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({})], { concurrency: "unbounded" })
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
- * assignment, spelled once so `envisionVisions`, `discover`, `recycleMap` and `designUnderReview`'s
- * four calls below cannot drift from each other. */
+ * assignment, spelled once so `envisionVisions`, `discover` and `designUnderReview`'s
+ * three calls below cannot drift from each other. */
 const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }) => ({
   ticket: input.ticket,
   title: input.title,
@@ -48,14 +47,13 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 })
 
 /**
- * The spine is **Envision ∥ Discover → Recycle-map → Design under review**. The three probes run
+ * The spine is **Envision ∥ Discover → Design under review**. The three probes run
  * first and gate what `envisionVisions` dispatches; envisioning, discovery and prompt assembly then
  * run side by side, and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all`
  * even though nothing upstream feeds it: it has no dependency on the probes or the visions, so
- * waiting for them first would only cost wall-clock for no reason. `recycleMap` follows discovery
- * alone, since it reads the discover note; `designUnderReview` is the only node that reads every
- * half: brainstorm → plan → review-plan, each finding sent back to the session that owns the
- * artifact it names until clean.
+ * waiting for them first would only cost wall-clock for no reason. `designUnderReview` is the only
+ * node that reads every half: brainstorm → recycle-scan → plan → review-plan, each finding sent
+ * back to the session that owns the artifact it names until clean.
  */
 const pipeline = (input: {
   readonly ticket: string
@@ -83,14 +81,11 @@ const pipeline = (input: {
       { concurrency: "unbounded" }
     )
 
-    const recycled = yield* recycleMap.run({ ...ticketFields(input), discoverPath: discovered.discoverPath, ...agentFields(input) })
-
     const designed = yield* designUnderReview.run({
       ...ticketFields(input),
       prompt: assembled.prompt,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
-      recycleMapPath: recycled.recycleMapPath,
       cap: PLAN_CAP,
       ...agentFields(input)
     })
@@ -101,10 +96,9 @@ const pipeline = (input: {
       headSha: designed.headSha,
       visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
-      recycleMapPath: recycled.recycleMapPath,
-      sessions: [...visions.sessions, ...discovered.sessions, ...recycled.sessions, ...designed.sessions],
+      sessions: [...visions.sessions, ...discovered.sessions, ...designed.sessions],
       // One unpriced session makes the run's figure unpriced, never silently zero — `graphs/develop-graph/graph.ts`'s own reduction.
-      costUsd: [visions.costUsd, discovered.costUsd, recycled.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
+      costUsd: [visions.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
     }
   }).pipe(Effect.provide(platform))
 
@@ -124,7 +118,7 @@ const pipeline = (input: {
  */
 export const designGraph = graph({
   name: "design-graph",
-  description: "Envision every matched stack's notation, discover what exists, map what to reuse, brainstorm them into a design, plan it, and review both before any build.",
+  description: "Envision every matched stack's notation, discover what exists, brainstorm them into a design, scan the repo for its names, plan it, and review both before any build.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -143,7 +137,6 @@ export const designGraph = graph({
     headSha: Schema.String,
     visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
-    recycleMapPath: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)
   }),

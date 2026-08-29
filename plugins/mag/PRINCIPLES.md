@@ -165,8 +165,9 @@ maintainer rules otherwise.
   evidence never needs more than the count line.
 - **One concern per session.** A node's prompt asks one question and the session writes one
   artifact; a second question is a second node. A session given two concerns degrades on both, in
-  the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) and
-  `recycle-map` (what this task reuses) are two nodes, not two sections of one note.
+  the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) is one
+  node and one note; what a design reuses is `recycle-scan`, a script over the design's own names,
+  never a second section of that note.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one
   line, scope stated exactly. Enforced before build by `prompt-terseness-evaluator`.

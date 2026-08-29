@@ -84,7 +84,7 @@ const loopAgent = (reviews: readonly Review[] = [], disputing: ReadonlySet<numbe
   return { requests, service }
 }
 
-/** `rev-parse HEAD` for the two record writers, `ls-files` (no rulings files) for a first brainstorm pass and every review; nothing commits under the default policy. */
+/** `rev-parse HEAD` for the two record writers, `ls-files` (no rulings files) for a first brainstorm pass and every review, and the recycle scan's own `ls-files -z` (no tracked files) before every fresh plan; nothing commits under the default policy. */
 const loopShell = (reviewLsFiles: { exitCode: number; stdout: string; stderr: string } = { exitCode: 0, stdout: "", stderr: "" }) => {
   const calls: string[][] = []
   let lsFilesCalls = 0
@@ -94,6 +94,7 @@ const loopShell = (reviewLsFiles: { exitCode: number; stdout: string; stderr: st
       if (argv[1] === "rev-parse") return Effect.succeed({ exitCode: 0, stdout: "abc123\n", stderr: "" })
       // The first `ls-files` is the brainstorm's, before any review; `reviewLsFiles` scripts the
       // reviewer's own, so a failing reply lands on the review step and not on the design pass.
+      if (argv[1] === "ls-files" && argv.length === 3) return Effect.succeed({ exitCode: 0, stdout: "", stderr: "" })
       if (argv[1] === "ls-files") return Effect.succeed(++lsFilesCalls === 1 ? { exitCode: 0, stdout: "", stderr: "" } : reviewLsFiles)
       throw new Error(`loopShell: unexpected argv: ${argv.join(" ")}`)
     }
@@ -144,8 +145,10 @@ describe("design-under-review", () => {
 
       // The plan prompt cites the design the brainstorm wrote; the reviewer is handed both paths
       // and the plan's headSha, never the brainstorm session's output. Every session cites the
-      // ticket file by path; the recycle map reaches brainstorm and plan only.
+      // ticket file by path; the recycle scan reaches the plan alone.
       expect(agent.requests[1]!.prompt).toContain(result.success.designPath)
+      expect(agent.requests[1]!.prompt).toContain(`- ${runRoot}/recycle-scan.md`)
+      expect(agent.requests[0]!.prompt).not.toContain("recycle-scan.md")
       expect(agent.requests[2]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.planPath)
       for (const request of agent.requests) {
