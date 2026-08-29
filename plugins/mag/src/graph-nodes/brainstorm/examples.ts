@@ -1,30 +1,29 @@
 export const inputExamples = [
   {
+    // The design pass: resumes the session envision-shell opened, over the discover note.
     ticket: "GH-288",
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
-    prompt: "Reconcile the visions above with discover's recon...",
-    visionPaths: ["docs/graph/GH-288/vision-svelte.md", "docs/graph/GH-288/vision-generic.md"],
+    prompt: "Complete the design around the shell...",
     discoverPath: "docs/graph/GH-288/discover.md",
-    recycleMapPath: "docs/graph/GH-288/recycle-map.md"
+    resume: "a1b2c3"
   },
   {
     ticket: "GH-288",
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
-    prompt: "Reconcile the visions above with discover's recon...",
-    visionPaths: ["docs/graph/GH-288/vision-generic.md"],
+    prompt: "Complete the design around the shell...",
     discoverPath: "docs/graph/GH-288/discover.md",
+    resume: "a1b2c3",
     agent: "effect-expert",
     model: "opus"
   },
   {
-    // A send-back pass: the session that wrote the design is resumed over the reviewer's findings.
+    // A send-back pass: the same session is resumed over the reviewer's findings.
     ticket: "GH-288",
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
-    prompt: "Reconcile the visions above with discover's recon...",
-    visionPaths: ["docs/graph/GH-288/vision-generic.md"],
+    prompt: "Complete the design around the shell...",
     discoverPath: "docs/graph/GH-288/discover.md",
     findingsPath: "/home/dev/repo/.claude/graph/GH-288/run-1/review-plan-1.md",
     resume: "a1b2c3"

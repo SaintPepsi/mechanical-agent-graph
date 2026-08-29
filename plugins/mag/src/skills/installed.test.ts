@@ -92,15 +92,12 @@ describe("the installed skill renders from concern modules via composeDesignProm
     expect(onDisk).toContain("`../writing-plans/SKILL.md`")
   })
 
-  // Neither token is filled in the installed copy. `<TICKET>` has a substituting caller only in a
-  // headless dispatch (`design/tokens.ts`); `<notation>` has none anywhere — it stands for whichever
-  // matched stack the reader is on. So the document has to define both itself.
-  test("<TICKET> and <notation> are self-defined in the document, not left for the reader to guess", () => {
+  // The token is not filled in the installed copy: `<TICKET>` has a substituting caller only in a
+  // headless dispatch (`design/tokens.ts`), so the document has to define it itself.
+  test("<TICKET> is self-defined in the document, not left for the reader to guess", () => {
     expect(onDisk).toContain("<TICKET>")
     expect(onDisk).toContain("this session's ticket id")
     expect(onDisk).toContain("short kebab-case slug")
-    expect(onDisk).toContain("<notation>")
-    expect(onDisk).toContain("matched stack's vision")
   })
 
   // The session writes the design doc; the node checks, copies and (by policy) commits it, so the

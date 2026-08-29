@@ -10,8 +10,8 @@ export class GraphSourceMissing extends Data.TaggedError("GRAPH_SOURCE_MISSING")
  * The graph ships without a co-located vision. A review against nothing would report a clean bill it
  * never earned. Tagged `STAGE_VISION_MISSING`, not the bare `VISION_MISSING` `envision-mermaid/errors.ts`
  * already owns: the journal's fail event carries only `_tag` (`runtime/trace/outcome.ts`), so two nodes
- * sharing a tag make one row unattributable. `envision-notation/errors.ts`'s `NotationVisionMissing`
- * (`NOTATION_VISION_MISSING`) is the precedent for the same node-scoped prefix.
+ * sharing a tag make one row unattributable. `envision-shell/errors.ts`'s `ShellMissing`
+ * (`SHELL_MISSING`) is the precedent for the same node-scoped prefix.
  */
 export class ShippedVisionMissing extends Data.TaggedError("STAGE_VISION_MISSING")<{
   readonly name: string

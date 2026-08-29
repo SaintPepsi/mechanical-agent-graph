@@ -10,8 +10,8 @@ import { inputExamples as designInputs } from "mag/graph-nodes/design/examples"
 import { design } from "mag/graph-nodes/design/graph-node"
 import { inputExamples as discoverInputs } from "mag/graph-nodes/discover/examples"
 import { discover } from "mag/graph-nodes/discover/graph-node"
-import { inputExamples as notationInputs } from "mag/graph-nodes/envision-notation/examples"
-import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
+import { inputExamples as shellInputs } from "mag/graph-nodes/envision-shell/examples"
+import { envisionShell } from "mag/graph-nodes/envision-shell/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
 import { inputExamples as planInputs } from "mag/graph-nodes/plan/examples"
 import { plan } from "mag/graph-nodes/plan/graph-node"
@@ -52,13 +52,13 @@ const NODES: ReadonlyArray<{
   readonly shell: () => ShellService
 }> = [
   { node: discover, input: discoverInputs[0]!, shell: () => scriptedShell([]).service },
-  // The rulings `ls-files` read, empty: a first brainstorm pass's one git call before its dispatch.
+  // The rulings `ls-files` read, empty: the design pass's one git call before its dispatch.
   { node: brainstorm, input: brainstormInputs[0]!, shell: () => scriptedShell([out("")]).service },
   { node: plan, input: planInputs[0]!, shell: () => scriptedShell([]).service },
   // The rulings `ls-files` read, empty: `review-plan`'s one git call before its dispatch.
   { node: reviewPlan, input: reviewPlanInputs[0]!, shell: () => scriptedShell([out("")]).service },
   { node: design, input: designInputs[0]!, shell: () => scriptedShell([]).service },
-  { node: envisionNotation, input: notationInputs[0]!, shell: () => scriptedShell([]).service },
+  { node: envisionShell, input: shellInputs[0]!, shell: () => scriptedShell([]).service },
   { node: build, input: buildInputs[0]!, shell: buildShell },
   { node: reviewDiff, input: reviewInputs[0]!, shell: () => reviewShell(reviewInputs[0]!.headSha) }
 ]
@@ -71,7 +71,6 @@ const NODES: ReadonlyArray<{
  * without leaving this list.
  */
 const NON_DISPATCHING: ReadonlyArray<{ readonly name: string; readonly source: string }> = [
-  { name: "envision-visions", source: "graph-nodes/envision-visions/graph-node.ts" },
   { name: "build-under-review", source: "graph-nodes/build-under-review/graph-node.ts" },
   { name: "design-under-review", source: "graph-nodes/design-under-review/graph-node.ts" },
   { name: "design-graph", source: "graphs/design-graph/graph.ts" },

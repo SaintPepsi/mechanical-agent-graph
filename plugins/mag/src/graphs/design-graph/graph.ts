@@ -5,8 +5,7 @@ import { detectEffect } from "mag/graph-nodes/detect-effect/graph-node"
 import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
-import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
-import { resolveNotations } from "mag/graph-nodes/resolve-notations/graph-node"
+import { envisionShell } from "mag/graph-nodes/envision-shell/graph-node"
 import { DesignGraphTicketUnreadable } from "mag/graphs/design-graph/errors"
 import { graph } from "mag/runtime/graph"
 import { platform } from "mag/runtime/platform"
@@ -26,16 +25,17 @@ const isRecordsPolicyCheck = Schema.makeFilter<string>(
   { expected: RECORDS_POLICIES.join(" or ") }
 )
 
-/** The three probes' successes carry the fields `resolve-notations` needs (`stack`, `matched`) plus
- * one it doesn't (`manifests`) — passed straight through rather than reshaped: TypeScript's
- * structural typing accepts the wider tuple, and reshaping here would be a second copy of a fact
- * the probes already state. */
-const probeVerdicts = (text: string) =>
-  Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({ text })], { concurrency: "unbounded" })
+/** The three probes' matched stack ids, in probe order: `envision-shell`'s `notations`. The
+ * successes carry more (`manifests`, the unmatched rows), read here down to the one fact the shell
+ * pass needs, so the probes state their evidence once and the shell never sees it. */
+const matchedStacks = (text: string) =>
+  Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({ text })], { concurrency: "unbounded" }).pipe(
+    Effect.map((verdicts) => verdicts.filter((verdict) => verdict.matched).map((verdict) => verdict.stack))
+  )
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
- * assignment, spelled once so `envisionVisions`, `discover` and `designUnderReview`'s
- * three calls below cannot drift from each other. */
+ * assignment, spelled once so `envisionShell`, `discover` and `designUnderReview`'s three calls
+ * below cannot drift from each other. */
 const ticketFields = (input: { readonly ticket: string; readonly title: string; readonly ticketPath: string }) => ({
   ticket: input.ticket,
   title: input.title,
@@ -47,13 +47,16 @@ const agentFields = (input: { readonly agent?: string; readonly model?: string }
 })
 
 /**
- * The spine is **Envision ∥ Discover → Design under review**. The three probes run
- * first and gate what `envisionVisions` dispatches; envisioning, discovery and prompt assembly then
+ * The spine is **Envision ∥ Discover → Design under review**. The three probes run first and
+ * decide which notations `envisionShell` draws; the shell pass, discovery and prompt assembly then
  * run side by side, and the reason `assembleBrainstormPrompt` rides along in the same `Effect.all`
- * even though nothing upstream feeds it: it has no dependency on the probes or the visions, so
- * waiting for them first would only cost wall-clock for no reason. `designUnderReview` is the only
- * node that reads every half: brainstorm → recycle-scan → plan → review-plan, each finding sent
- * back to the session that owns the artifact it names until clean.
+ * even though nothing upstream feeds it: it has no dependency on the probes or the shell, so
+ * waiting for them first would only cost wall-clock for no reason. The shell pass is blind by
+ * schema (it cannot be handed the discover note) and by order (the note is still being written
+ * while it draws); `designUnderReview` is the only node that reads every half: brainstorm resumes
+ * the shell's own session over the discover note and completes the design in place, then
+ * recycle-scan → plan → review-plan, each finding sent back to the session that owns the artifact
+ * it names until clean.
  */
 const pipeline = (input: {
   readonly ticket: string
@@ -69,12 +72,11 @@ const pipeline = (input: {
     const text = yield* fs.readFileString(input.ticketPath).pipe(
       Effect.mapError((error) => new DesignGraphTicketUnreadable({ ticket: input.ticket, path: input.ticketPath, detail: String(error) }))
     )
-    const verdicts = yield* probeVerdicts(text)
-    const resolved = yield* resolveNotations.run({ verdicts })
+    const notations = yield* matchedStacks(text)
 
-    const [visions, discovered, assembled] = yield* Effect.all(
+    const [shell, discovered, assembled] = yield* Effect.all(
       [
-        envisionVisions.run({ notations: resolved.notations, ...ticketFields(input), ...agentFields(input) }),
+        envisionShell.run({ notations, ...ticketFields(input), ...agentFields(input) }),
         discover.run({ ...ticketFields(input), ...agentFields(input) }),
         assembleBrainstormPrompt.run({})
       ],
@@ -84,8 +86,8 @@ const pipeline = (input: {
     const designed = yield* designUnderReview.run({
       ...ticketFields(input),
       prompt: assembled.prompt,
-      visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
+      resume: shell.sessionRef,
       cap: PLAN_CAP,
       ...agentFields(input)
     })
@@ -94,21 +96,21 @@ const pipeline = (input: {
       designPath: designed.designPath,
       planPath: designed.planPath,
       headSha: designed.headSha,
-      visionPaths: visions.visions.map((vision) => vision.visionPath),
       discoverPath: discovered.discoverPath,
-      sessions: [...visions.sessions, ...discovered.sessions, ...designed.sessions],
-      // One unpriced session makes the run's figure unpriced, never silently zero — `graphs/develop-graph/graph.ts`'s own reduction.
-      costUsd: [visions.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
+      sessions: [...shell.sessions, ...discovered.sessions, ...designed.sessions],
+      // One unpriced session makes the run's figure unpriced, never silently zero, `graphs/develop-graph/graph.ts`'s own reduction.
+      costUsd: [shell.costUsd, discovered.costUsd, designed.costUsd].reduce((a, b) => (a === null || b === null ? null : a + b))
     }
   }).pipe(Effect.provide(platform))
 
 /**
  * design-graph: one GraphNode for the design lane, in the slot `develop-graph`'s host graph
- * composes it. Its success carries the reviewed plan beside the design: a build reads the plan. Its folder holds the two visions (`graphs/design-graph/{vision,rail-sketch}.md`)
- * beside the code they shaped. `design` alone is not available: the registry is one flat namespace,
- * and the standalone `design` node (`graph-nodes/design`) already holds that name.
+ * composes it. Its success carries the reviewed plan beside the design: a build reads the plan. Its
+ * folder holds the two visions (`graphs/design-graph/{vision,rail-sketch}.md`) beside the code they
+ * shaped. `design` alone is not available: the registry is one flat namespace, and the standalone
+ * `design` node (`graph-nodes/design`) already holds that name.
  *
- * Creates no branch, no worktree, no PR — it writes into the checkout it is handed, which is why
+ * Creates no branch, no worktree, no PR: it writes into the checkout it is handed, which is why
  * `worktree: false`: a host graph's already-minted scope wins by construction when this graph is
  * borrowed (`RunScoped`), the same reasoning `graphs/envision/graph.ts` already states for its own
  * `worktree: false`.
@@ -118,7 +120,7 @@ const pipeline = (input: {
  */
 export const designGraph = graph({
   name: "design-graph",
-  description: "Envision every matched stack's notation, discover what exists, brainstorm them into a design, scan the repo for its names, plan it, and review both before any build.",
+  description: "Draw the shell blind in every matched stack's notation, discover what exists, complete the design around the shell, scan the repo for its names, plan it, and review both before any build.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
@@ -135,7 +137,6 @@ export const designGraph = graph({
     designPath: Schema.String,
     planPath: Schema.String,
     headSha: Schema.String,
-    visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)

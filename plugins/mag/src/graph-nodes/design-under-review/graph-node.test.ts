@@ -14,7 +14,7 @@ import { withRecordRepo } from "mag/test/node-fixture"
 const INPUT = inputExamples[0]!
 
 const isBrainstormPrompt = (request: ClaudePrint<unknown>) =>
-  request.prompt.includes("Read each vision below") || request.prompt.includes("A reviewer examined this design")
+  request.prompt.includes("holds the Envisioned Shell you drew") || request.prompt.includes("A reviewer examined this design")
 const isPlanPrompt = (request: ClaudePrint<unknown>) =>
   request.prompt.includes("Read the design below") || request.prompt.includes("A reviewer examined this plan")
 const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.includes("Review the design at")
@@ -74,7 +74,8 @@ const loopAgent = (reviews: readonly Review[] = [], disputing: ReadonlySet<numbe
       if (disputing.has(brainstorms)) {
         return reply<A>({ designPath: "ignored", dispute: ["design: the finding is already answered by the design"] }, `session-brainstorm-${brainstorms}`, 0.2)
       }
-      const path = request.resume === undefined
+      // Every brainstorm pass resumes: the design pass the shell's session, a send-back its own.
+      const path = request.prompt.includes("Write the design doc to")
         ? destinationOf(request.prompt, "Write the design doc to")
         : destinationOf(request.prompt, "rewrite the design at")
       writeAt(path, `# Design ${brainstorms}\n\n## Interpretation Rulings\n\nNone.\n`)
@@ -173,7 +174,7 @@ describe("design-under-review", () => {
 
       const brainstorms = agent.requests.filter(isBrainstormPrompt)
       expect(brainstorms).toHaveLength(2)
-      expect(brainstorms[0]!.resume).toBeUndefined()
+      expect(brainstorms[0]!.resume).toBe(INPUT.resume)
       expect(brainstorms[1]!.resume).toBe("session-brainstorm-1")
       expect(brainstorms[1]!.prompt).toContain(join(runRoot, "review-plan-1.md"))
       expect(brainstorms[1]!.prompt).not.toContain(INPUT.prompt)

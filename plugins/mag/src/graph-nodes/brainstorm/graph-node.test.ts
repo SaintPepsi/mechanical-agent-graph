@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { Effect, Layer, Result, Schema } from "effect"
-import { BrainstormCommitFailed, BrainstormCopyFailed, BrainstormGitFailed, BrainstormResumeEmpty, DesignMissing } from "mag/graph-nodes/brainstorm/errors"
+import { BrainstormCommitFailed, BrainstormCopyFailed, BrainstormGitFailed, DesignMissing } from "mag/graph-nodes/brainstorm/errors"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { inputExamples, successExamples } from "mag/graph-nodes/brainstorm/examples"
 import { type ClaudeAgentService, claudeAgentLayer, type ClaudeReply } from "mag/runtime/claude/service"
@@ -19,9 +19,9 @@ const ok = (): ShellResult => ({ exitCode: 0, stdout: "", stderr: "" })
 const HEAD_SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 const LS_FILES = ["git", "ls-files", "-z", "--full-name", "--", ":/CLAUDE.md", ":/*/CLAUDE.md", ":/**/CLAUDE.md", ":/PRINCIPLES.md", ":/*/PRINCIPLES.md"]
 const headSha = (): ShellResult => ({ exitCode: 0, stdout: `${HEAD_SHA}\n`, stderr: "" })
-/** A first pass: the rulings `ls-files` (none declared), then `rev-parse HEAD`, which under the default `run-root` policy `brainstorm` still reads. */
+/** The design pass: the rulings `ls-files` (none declared), then `rev-parse HEAD`, which under the default `run-root` policy `brainstorm` still reads. */
 const readsHeadOnly = (declared = "") => scriptedShell([{ exitCode: 0, stdout: declared, stderr: "" }, headSha()])
-/** A resumed pass skips the rulings read: `rev-parse HEAD` alone. */
+/** A send-back pass skips the rulings read: `rev-parse HEAD` alone. */
 const resumesHeadOnly = () => scriptedShell([headSha()])
 /** `ls-files` (none), `git add` ok, `git diff --cached --quiet` exit 1 (staged), `git commit` ok, `git rev-parse HEAD` ok. */
 const commitsCleanly = () => scriptedShell([ok(), ok(), { exitCode: 1, stdout: "", stderr: "" }, ok(), headSha()])
@@ -59,18 +59,19 @@ describe("brainstorm", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(brainstorm.success)(example)
   })
 
-  test("the prompt names every vision path and the discover path, cited, and carries the already-composed brainstorm prompt verbatim", () =>
+  test("the design pass resumes the shell's session, cites the discover path, points at the shell already in the design doc, and carries the already-composed brainstorm prompt verbatim", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
       await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
 
       const request = agent.requests[0]!
-      for (const path of INPUT.visionPaths) expect(request.prompt).toContain(path)
-      expect(request.prompt).toContain(`- ${INPUT.discoverPath}`)
+      expect(request.resume).toBe(INPUT.resume)
+      expect(request.prompt).toContain(`Read the discover note at \`${INPUT.discoverPath}\` as a citation.`)
+      expect(request.prompt).toContain(`The design doc at \`${designIn(repoRoot)}\` holds the Envisioned Shell you drew; complete it in place, keeping that section as drawn.`)
       expect(request.prompt).toContain(INPUT.prompt)
     }))
 
-  test("a first pass reads the rulings files once and names every one after the citations, so the design rules against what the reviewer will hold it to", () =>
+  test("the design pass reads the rulings files once and names every one after the citations, so the design rules against what the reviewer will hold it to", () =>
     withRepo(async (repoRoot, _runRoot, run) => {
       const agent = stubAgent({}, () => writeDesign(repoRoot))
       const { calls, service: shell } = readsHeadOnly("CLAUDE.md\0plugins/mag/PRINCIPLES.md\0")
@@ -79,7 +80,7 @@ describe("brainstorm", () => {
       expect(calls).toStrictEqual([LS_FILES, ["git", "rev-parse", "HEAD"]])
       const prompt = agent.requests[0]!.prompt
       expect(prompt).toContain(
-        `- ${INPUT.discoverPath}\n\nThis repository states rulings of its own, in the files below:\n- CLAUDE.md\n- plugins/mag/PRINCIPLES.md\n`
+        `Read the discover note at \`${INPUT.discoverPath}\` as a citation. Do not re-run recon.\n\nThis repository states rulings of its own, in the files below:\n- CLAUDE.md\n- plugins/mag/PRINCIPLES.md\n`
       )
     }))
 
@@ -152,10 +153,11 @@ describe("brainstorm", () => {
       const request = agent.requests[0]!
       // The unfilled token never survives — proves the token fill still runs after the collapse.
       expect(request.prompt).not.toContain(TICKET_TOKEN)
-      // The resolved absolute path appears twice: the override sentence, and the collapsed write
-      // step. Without the collapse this would be 1 — the write step would still read the ticket-
-      // filled *relative* literal (`docs/graph/<ticket>/design.md`), a different, shorter string.
-      expect(request.prompt.split(path).length - 1).toBe(2)
+      // The resolved absolute path appears three times: the shell sentence, the override sentence,
+      // and the collapsed write step. Without the collapse this would be 2: the write step would
+      // still read the ticket-filled *relative* literal (`docs/graph/<ticket>/design.md`), a
+      // different, shorter string.
+      expect(request.prompt.split(path).length - 1).toBe(3)
     }))
 
   test("a missing design fails DesignMissing, and no git call follows the rulings read", () =>
@@ -224,7 +226,7 @@ describe("brainstorm", () => {
         "git",
         "commit",
         "-m",
-        `docs(${INPUT.ticket}): design\n\nThe brainstorm node reconciled the visions with discover's recon and committed the design doc.\n\nClaude-Session: stub-session`,
+        `docs(${INPUT.ticket}): design\n\nThe brainstorm node completed the design doc around its envisioned shell, over discover's recon, and committed it.\n\nClaude-Session: stub-session`,
         "--",
         path
       ])
@@ -319,7 +321,8 @@ describe("brainstorm", () => {
       expect(request.prompt).toContain("Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.")
       expect(request.prompt).not.toContain(sendBack.prompt)
       expect(request.prompt).not.toContain(sendBack.discoverPath)
-      expect(request.prompt).not.toContain("Read each vision below")
+      expect(request.prompt).not.toContain("Read the discover note")
+      expect(request.prompt).not.toContain("holds the Envisioned Shell")
       expect(request.prompt).not.toContain("rulings of its own")
     }))
 
@@ -358,7 +361,7 @@ describe("brainstorm", () => {
       expect(readFileSync(`${runRoot}/design.md`, "utf8")).toBe("# Design\n\nrevised\n")
     }))
 
-  test("a first pass ignores a dispute in the reply: no findings to answer, so no dispute file", () =>
+  test("the design pass ignores a dispute in the reply: no findings to answer, so no dispute file", () =>
     withRepo(async (repoRoot, runRoot, run) => {
       const agent = stubAgent({ verdict: { designPath: "ignored", dispute: ["nothing to dispute"] } }, () => writeDesign(repoRoot))
       const result = await runWith(brainstorm.run(INPUT), agent.service, readsHeadOnly().service, run)
@@ -367,14 +370,6 @@ describe("brainstorm", () => {
       if (!Result.isSuccess(result)) return
       expect(result.success.disputePath).toBeUndefined()
       expect(existsSync(`${runRoot}/dispute-1.md`)).toBe(false)
-    }))
-
-  test("resume without findingsPath is BrainstormResumeEmpty, before any dispatch", () =>
-    withRepo(async (_repoRoot, _runRoot, run) => {
-      const agent = stubAgent()
-      const result = await runWith(brainstorm.run({ ...INPUT, resume: "a1b2c3" }), agent.service, scriptedShell([]).service, run)
-      expect(Result.isFailure(result) && result.failure instanceof BrainstormResumeEmpty).toBe(true)
-      expect(agent.requests).toHaveLength(0)
     }))
 
   test("under the default run-root policy, a failed rev-parse fails BrainstormGitFailed, the copy itself untouched", () =>

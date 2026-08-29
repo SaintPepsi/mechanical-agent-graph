@@ -80,12 +80,12 @@ describe("summarizeJournal — active vs finished", () => {
 
   test("a fork's interleaving — an end row lands last while the other side is still open — stays active", () => {
     const rows = [
-      startRow({ node: "envision-visions", attempt: 1, timestamp: "2026-08-20T12:00:00.000Z" }),
+      startRow({ node: "envision-shell", attempt: 1, timestamp: "2026-08-20T12:00:00.000Z" }),
       startRow({ node: "discover", attempt: 1, timestamp: "2026-08-20T12:00:01.000Z" }),
       endRow({ node: "discover", attempt: 1, timestamp: "2026-08-20T12:01:00.000Z" })
     ]
     const row = summarizeJournal(rows, "proj-abc", FRESH_MTIME, NOW).pipe(Option.getOrThrow)
-    expect(row.node).toBe("envision-visions")
+    expect(row.node).toBe("envision-shell")
     expect(row.attempt).toBe(1)
   })
 

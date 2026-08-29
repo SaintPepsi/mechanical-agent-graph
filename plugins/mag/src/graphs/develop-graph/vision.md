@@ -31,7 +31,7 @@ graph TD
   WA -. "fails: WorktreeAddFailed | WorktreeSetupFailed" .-> DEADTREE
   BR -. "fails: BranchCheckoutFailed | BranchCreateFailed" .-> DEADTREE
 
-  DG[["design-graph · borrowed whole<br/>probes → design-session → verify-visions ∥ discover → recycle-map → design-under-review (brainstorm → plan → review-plan, findings sent back into the design)"]]
+  DG[["design-graph · borrowed whole<br/>probes → envision-shell ∥ discover → design-under-review (brainstorm → recycle-scan → plan → review-plan, findings sent back into the design)"]]
   FT -- "ticket, title, body → ticket, title, body" --> DG
   BR -- "branch → (gate: design writes on this checkout, and commits here too under records = committed)" --> DG
   DG -. "fails: DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing | DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected" .-> DEADTREE

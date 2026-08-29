@@ -16,9 +16,9 @@ import { lane } from "mag/skills/design/lane"
 import { noTooSimple } from "mag/skills/design/no-too-simple"
 import { principlesStack } from "mag/skills/design/principles-stack"
 import { productDecisions } from "mag/skills/design/product-decisions"
-import { reconciliation } from "mag/skills/design/reconciliation"
 import { referenceSweep } from "mag/skills/design/reference-sweep"
 import { seamsOwnership } from "mag/skills/design/seams-ownership"
+import { shellDrawn } from "mag/skills/design/shell-drawn"
 import { SKILLS_TOKEN } from "mag/skills/design/tokens"
 import { writeAndConfirm } from "mag/skills/design/write-and-confirm"
 
@@ -40,8 +40,9 @@ const SKILL_DIR = "brainstorming"
  * is drawn (`seams-ownership`), the codebase is swept (`reference-sweep`), then this slot's concerns
  * run before decisions are recorded. `[]` (no probes run, or none matched) reproduces the original
  * fixed thirteen exactly, which is `HEADLESS_DESIGN` below. The same slot carries
- * `[reconciliation]` for `BRAINSTORM_DESIGN` — a design session whose own dispatch draws no shell
- * (the visions already exist), so the slot's job there is joining them rather than drawing one.
+ * `[shellDrawn]` for `BRAINSTORM_DESIGN`: a design pass whose own session already drew the shell
+ * into the design doc, blind, so the slot's job there is completing the design around it rather
+ * than drawing one.
  */
 export const headlessDesign = (envisioning: readonly Concern<"any">[]): Variant => ({
   citationRoot: posix.join(SKILLS_TOKEN, SKILL_DIR),
@@ -67,9 +68,9 @@ export const headlessDesign = (envisioning: readonly Concern<"any">[]): Variant 
     ...seamsOwnership.templateSections!,
     ...referenceSweep.templateSections!,
     // The envisioning slot's own template sections, same position as the slot's concerns
-    // themselves (right after reference-sweep, above). `[]` for `HEADLESS_DESIGN` (none of the four
-    // envision-*.ts modules carry one), so this is a genuine no-op there — `reconciliation` is the
-    // first envisioning-slot concern that ever needed a template section of its own.
+    // themselves (right after reference-sweep, above). `[]` for every variant today (none of the
+    // four envision-*.ts modules nor `shellDrawn` carries one), kept so a slot concern that needs a
+    // section lands it here rather than in the composer.
     ...envisioning.flatMap((concern) => concern.templateSections ?? []),
     ...TEMPLATE_TAIL_SECTIONS,
     ...principlesStack.templateSections!,
@@ -81,12 +82,13 @@ export const headlessDesign = (envisioning: readonly Concern<"any">[]): Variant 
 export const HEADLESS_DESIGN: Variant = headlessDesign([])
 
 /**
- * `brainstorm`'s own dispatch — the shells are already drawn (`envision-notation`'s committed
- * visions), so this variant carries `reconciliation` instead of a matched stack's envisioning module in
- * the same slot (`headlessDesign`'s own doc comment above). No `verdicts`, no probes: `brainstorm`
- * always gets the same variant, which is what makes `assemble-brainstorm-prompt`'s input `{}`.
+ * `brainstorm`'s own dispatch: the shell is already drawn, by the same session's blind first pass
+ * (`envision-shell`), so this variant carries `shellDrawn` instead of a matched stack's envisioning
+ * module in the same slot (`headlessDesign`'s own doc comment above). No `verdicts`, no probes:
+ * `brainstorm` always gets the same variant, which is what makes `assemble-brainstorm-prompt`'s
+ * input `{}`.
  */
-export const BRAINSTORM_DESIGN: Variant = headlessDesign([reconciliation])
+export const BRAINSTORM_DESIGN: Variant = headlessDesign([shellDrawn])
 
 /**
  * The installed skill's own variant, `Variant<"interactive">` — a human is in the room, so
@@ -96,13 +98,13 @@ export const BRAINSTORM_DESIGN: Variant = headlessDesign([reconciliation])
  * the same reasoning `headlessDesign`'s re-rooting exists to undo once `<SKILLS>` is filled at
  * dispatch — this document is never dispatched, it's read from its own directory.
  *
- * `envisionGeneric` occupies the envisioning slot, not `reconciliation`:
- * `reconciliation`'s premise, "the shells already exist as committed per-notation vision documents",
- * is `brainstorm/graph-node.ts`'s own dispatch guarantee, never a standalone `/brainstorming`
- * session's — nothing commits a vision or a discover note before a human runs this skill directly, so
- * this variant draws its own shell instead of citing one that was never produced, the same fallback a
- * headless dispatch gets when no probe matches. `lane` is listed only here, `envisionGeneric`'s own
- * precedent (a concern listed in exactly one variant, reachable by the orphan scan through it).
+ * `envisionGeneric` occupies the envisioning slot, not `shellDrawn`: `shellDrawn`'s premise, "the
+ * shell already stands in the design doc", is `brainstorm/graph-node.ts`'s own dispatch guarantee,
+ * never a standalone `/brainstorming` session's, since nothing draws a shell before a human runs
+ * this skill directly, so this variant draws its own shell instead of citing one that was never
+ * produced, the same fallback a headless dispatch gets when no probe matches. `lane` is listed only
+ * here, `envisionGeneric`'s own precedent (a concern listed in exactly one variant, reachable by the
+ * orphan scan through it).
  */
 export const INSTALLED_DESIGN: Variant<"interactive"> = {
   citationRoot: null,
@@ -125,8 +127,7 @@ export const INSTALLED_DESIGN: Variant<"interactive"> = {
     conventionRulings,
     improvements
   ],
-  // `HEADLESS_DESIGN`'s fence, not `BRAINSTORM_DESIGN`'s: that one carries reconciliation's "Vision
-  // Reconciliation" section, which none of this variant's concerns populate. `envisionGeneric`
-  // contributes no sections of its own, so the empty-envisioning-slot fence is this variant's too.
+  // `envisionGeneric` contributes no sections of its own, so the empty-envisioning-slot fence is
+  // this variant's too.
   templateSections: HEADLESS_DESIGN.templateSections
 }

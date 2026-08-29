@@ -204,7 +204,7 @@ export const runScopedLayers = Effect.fn("runScopedLayers")(function* (scope: Ru
   //
   // Materialized here, where the decision is, not by a graph step. `recordsRoot` is minted
   // for every run of every graph, and every entry point that writes a record (`discover`,
-  // `brainstorm`, `design`, `envision-notation`, `design-graph`, `develop-graph`) builds these layers,
+  // `brainstorm`, `design`, `envision-shell`, `design-graph`, `develop-graph`) builds these layers,
   // so the root exists for all of them rather than only for the one host that remembered a step.
   // A home run makes no temp-directory call here at all.
   const recordsRootFor = (workRoot: string) =>

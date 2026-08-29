@@ -6,7 +6,7 @@ import { inputExamples, successExamples } from "mag/graph-nodes/assemble-brainst
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
 import type { CitationRoot } from "mag/skills/design/concern"
 import { COMPOSED_PROMPT_BUDGET, composeDesignPrompt, promptBytes } from "mag/skills/design/compose"
-import { reconciliation } from "mag/skills/design/reconciliation"
+import { shellDrawn } from "mag/skills/design/shell-drawn"
 import { BRAINSTORM_DESIGN } from "mag/skills/design/variants"
 
 const runAssemble = () => Effect.runPromise(Effect.result(assembleBrainstormPrompt.run({})))
@@ -30,12 +30,12 @@ describe("assemble-brainstorm-prompt", () => {
   /**
    * Disconfirming test: `BRAINSTORM_DESIGN` is a fixed variant (no verdicts to grow it), so proving
    * the bound genuinely fires means handing the real, shipped node a genuinely oversized
-   * composition rather than a lowered budget — done by swapping `reconciliation`'s own rendered body for the one dispatch this
+   * composition rather than a lowered budget, done by swapping `shell-drawn`'s own rendered body for the one dispatch this
    * test controls, restored in `finally` regardless of outcome.
    */
   test("disconfirming: a genuinely oversized prompt fails BrainstormPromptOversized, no prompt returned", async () => {
-    const original = reconciliation.section!.body
-    const mutable = reconciliation as { section: { body: (root: CitationRoot) => string } }
+    const original = shellDrawn.section!.body
+    const mutable = shellDrawn as { section: { body: (root: CitationRoot) => string } }
     mutable.section.body = () => "x".repeat(COMPOSED_PROMPT_BUDGET + 1)
     try {
       const result = await runAssemble()

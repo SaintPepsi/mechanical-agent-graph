@@ -11,7 +11,7 @@ Turn a software idea into a fully-formed design through collaborative dialogue, 
 
 Create a task for each item and complete in order:
 
-1. **Envision** — draw the ideal shape of the built thing, once per matched stack, blind to what exists today → `docs/graph/<TICKET>/vision-<notation>.md`
+1. **Envision** — draw the ideal shape of the built thing, one shell per matched stack, blind to what exists today, as the design doc's Envisioned Shell section and nothing else yet → `docs/graph/<TICKET>/design.md`
 2. **Discover** — recon what the codebase already has, cited by path, never assumed → `docs/graph/<TICKET>/discover.md`
 3. **Explore project context** — files, docs, recent commits, relevant types
 4. **Read `./principles/index.md`** — engineering principles stack (leaf files load just-in-time)
@@ -25,11 +25,11 @@ Create a task for each item and complete in order:
 
 ## The Design Lane
 
-This design follows one spine, **Envision ∥ Discover → Brainstorm**: draw the ideal shape of the built thing blind to what exists, recon the codebase for what already covers this ground, then join the two into a design. Envision and Discover (checklist items 1 and 2) open together; enter from either side. Brainstorm joins them:
+This design follows one spine, **Envision ∥ Discover → Brainstorm**: draw the ideal shape of the built thing blind to what exists, as the design doc's first section, recon the codebase for what already covers this ground, then complete the design around the shell. Envision and Discover (checklist items 1 and 2) open together; enter from either side. Brainstorm joins them:
 
-**Brainstorm** — join the visions to discover's recon and this checklist's own design into one design doc → `docs/graph/<TICKET>/design.md`
+**Brainstorm** — complete the design doc around its shell, over discover's recon and this checklist → `docs/graph/<TICKET>/design.md`
 
-`<TICKET>` above and below is this session's ticket id; use a short kebab-case slug instead when none exists, the same slug everywhere it appears. `<notation>` stands for whichever matched stack's vision this design cites (svelte, effect, graph-core, or generic) — one path per matched stack, not a single fill.
+`<TICKET>` above and below is this session's ticket id; use a short kebab-case slug instead when none exists, the same slug everywhere it appears.
 
 If the work is **not** primarily code (article, talk, naming, life decision), this engineering mode isn't the right fit — stop and brainstorm it conversationally instead.
 

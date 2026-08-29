@@ -82,8 +82,8 @@ describe("the headless composition is asserted complete", () => {
 
 /**
  * The installed variant's own coverage proof: the concerns differ (the interactive three plus `lane`
- * in, `autonomy` out, `envisionGeneric` occupies the envisioning slot — not `reconciliation`, whose
- * committed-visions premise a standalone session never satisfies), and
+ * in, `autonomy` out, `envisionGeneric` occupies the envisioning slot, not `shellDrawn`, whose
+ * shell-already-drawn premise a standalone session never satisfies), and
  * citations resolve against the skill's own directory (`citationRoot: null`) rather than
  * `<SKILLS>/brainstorming`.
  */

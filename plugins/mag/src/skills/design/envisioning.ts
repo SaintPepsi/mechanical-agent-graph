@@ -29,9 +29,8 @@ export const STACKS: readonly Stack[] = [
 ]
 
 /**
- * Every notation id the design lane knows, `STACKS`' three plus the generic fallback —
- * `resolve-notations`' own answer space and `envision-notation`'s closed dispatch set
- * (`UnknownNotation`) both read this one list, so neither can know an id the other doesn't.
+ * Every notation id the design lane knows, `STACKS`' three plus the generic fallback:
+ * `envision-shell`'s closed dispatch set (`UnknownNotation`) reads this one list.
  */
 export const NOTATIONS: readonly string[] = [...STACKS.map((stack) => stack.id), GENERIC]
 
@@ -39,7 +38,7 @@ export const NOTATIONS: readonly string[] = [...STACKS.map((stack) => stack.id),
  * Which notations a design run draws, in `STACKS` order, `[GENERIC]` when nothing matched (an
  * answer, not an error). An id no `STACKS` row carries is a caller mistake, not a silent drop —
  * checked before the empty-match fallback, so an unknown id can never resolve to generic by
- * accident. `resolve-notations` is the node that turns this `Result`'s left into `UnknownStackVerdict`.
+ * accident. `envision-shell` is the node that turns this `Result`'s left into `UnknownNotation`.
  */
 export const notationsFor = (matched: readonly string[]): Result.Result<readonly string[], string> => {
   const unknown = matched.find((id) => !STACKS.some((stack) => stack.id === id))
@@ -50,9 +49,9 @@ export const notationsFor = (matched: readonly string[]): Result.Result<readonly
 }
 
 /**
- * One notation id to its concern module, the closed set `envision-notation` dispatches against
+ * One notation id to its concern module, the closed set `envision-shell` dispatches against
  * (`NOTATIONS`), including the generic row. Fails on a fifth id, naming what it knows;
- * `envision-notation` is the node that turns this `Result`'s left into `UnknownNotation`.
+ * `envision-shell` is the node that turns this `Result`'s left into `UnknownNotation`.
  */
 export const concernForNotation = (notation: string): Result.Result<Concern<"any">, string> => {
   if (notation === GENERIC) return Result.succeed(envisionGeneric)

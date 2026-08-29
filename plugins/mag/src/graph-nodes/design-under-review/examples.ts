@@ -3,18 +3,18 @@ export const inputExamples = [
     ticket: "GH-288",
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
-    prompt: "Reconcile the visions above with discover's recon...",
-    visionPaths: ["docs/graph/GH-288/vision-svelte.md", "docs/graph/GH-288/vision-generic.md"],
+    prompt: "Complete the design around the shell...",
     discoverPath: "docs/graph/GH-288/discover.md",
+    resume: "session-shell-1",
     cap: 1
   },
   {
     ticket: "GH-288",
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
-    prompt: "Reconcile the visions above with discover's recon...",
-    visionPaths: ["docs/graph/GH-288/vision-generic.md"],
+    prompt: "Complete the design around the shell...",
     discoverPath: "docs/graph/GH-288/discover.md",
+    resume: "session-shell-1",
     cap: 1,
     agent: "effect-expert",
     model: "opus"

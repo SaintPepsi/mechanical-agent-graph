@@ -55,7 +55,7 @@ Detect-svelte, detect-effect, and detect-graph-core run as Mechanical nodes; the
 - The composed prompt for a non-matching stack contains none of that stack's module text (checked by module provenance at assembly, not string search).
 
 ### FR-3: Envisioning is one discipline, notation per stack
-Every envisioning module teaches the same move — draw the ideal, blind to the current mess — in its stack's notation (component markup / railway pseudo-code / mermaid). The seams & ownership table joins multi-stack visions; brainstorm reconciles visions against discover's recon, and that reconciliation becomes the plan's tasks.
+Every envisioning module teaches the same move — draw the ideal, blind to the current mess — in its stack's notation (component markup / railway pseudo-code / mermaid). The shell is drawn blind as the design doc's own Envisioned Shell section, one shell per matched stack, and the same session then completes the design around it over discover's recon; the seams & ownership table joins the shells, and the plan's resolution table turns the design into tasks.
 
 **Acceptance Criteria:**
 - A multi-stack ticket's design carries one vision per matched notation, joined by the seams table.

@@ -26,21 +26,21 @@ const inputWith = (repoRoot: string) => {
 
 /**
  * Routes a `ClaudePrint` to its writer by the one marker string unique to each dispatching node's
- * own prompt text — `BLIND_DRAW_RULE` (`skills/envision/notation.ts`, which `envision-notation`
- * compiles), `discover`'s recon line and `brainstorm`'s citation line (each verbatim in its own
+ * own prompt text: `BLIND_DRAW_RULE` (`skills/envision/notation.ts`, which `envision-shell`
+ * compiles), `discover`'s recon line and `brainstorm`'s shell line (each verbatim in its own
  * `graph-node.ts`). Cheaper than threading a fourth channel through the stub, and it doubles as a
  * structural check: a route can only be told apart by text its own node actually composed.
  */
 const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" | "plan" | "review-plan" => {
   if (prompt.includes("Draw the ideal shape")) return "envision"
   if (prompt.includes("Recon this repository")) return "discover"
-  if (prompt.includes("Read each vision below")) return "brainstorm"
+  if (prompt.includes("holds the Envisioned Shell you drew")) return "brainstorm"
   if (prompt.includes("Read the design below")) return "plan"
   if (prompt.includes("Review the design at")) return "review-plan"
   throw new Error(`stub agent: unrecognised route in prompt: ${prompt.slice(0, 120)}`)
 }
 
-/** Extracts the backticked path `envision-notation`/`discover`/`brainstorm` each spliced into their own prompt. */
+/** Extracts the backticked path `envision-shell`/`discover`/`brainstorm` each spliced into their own prompt. */
 const destinationOf = (prompt: string, marker: string): string => {
   const match = prompt.match(new RegExp(`${marker} \`([^\`]+)\``))
   if (match === null || match[1] === undefined) throw new Error(`no destination for "${marker}" in prompt`)
@@ -49,9 +49,9 @@ const destinationOf = (prompt: string, marker: string): string => {
 
 /**
  * A stub `ClaudeAgent` for the whole graph: every dispatching node's own destination convention
- * writes a real file at the path the node itself computed and echoes it back in the verdict — the
- * dispatch spine every node in this graph shares, `envision-notation`'s own doc comment. `brainstorm`
- * backtick-quotes its own computed destination the same way, so all three routes are proven the same
+ * writes a real file at the path the node itself computed and echoes it back in the verdict, the
+ * dispatch spine every node in this graph shares. `envision-shell` and `brainstorm` write the same
+ * file in turn, the shell section first and the design around it, so all routes are proven the same
  * way: parsed from the prompt the node actually sent, never a path the test computed itself and
  * handed in from outside.
  */
@@ -63,11 +63,11 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
       const route = routeOf(request.prompt)
 
       if (route === "envision") {
-        const destination = destinationOf(request.prompt, "Write the vision to")
+        const destination = destinationOf(request.prompt, "Write the design doc to")
         mkdirSync(dirname(destination), { recursive: true })
-        writeFileSync(destination, "graph TD\n  A --> B\n")
+        writeFileSync(destination, "# Design\n\n## Envisioned Shell\n\ngraph TD\n  A --> B\n")
         return Effect.succeed(
-          { verdict: { visionPath: destination } as A, result: {}, sessions: [`session-${destination}`], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
+          { verdict: { designPath: destination } as A, result: {}, sessions: ["session-shell"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
         )
       }
 
@@ -97,7 +97,7 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
 
       const destination = destinationOf(request.prompt, "Write the design doc to")
       mkdirSync(dirname(destination), { recursive: true })
-      writeFileSync(destination, "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
+      writeFileSync(destination, "# Design\n\n## Envisioned Shell\n\ngraph TD\n  A --> B\n\n## Seams & Ownership\n\nNone.\n")
       return Effect.succeed(
         { verdict: { designPath: destination } as A, result: {}, sessions: ["session-brainstorm"], costUsd: 0.3, attempts: 1 } as ClaudeReply<A>
       )
@@ -106,10 +106,10 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
   return { requests, service }
 }
 
-/** Answers every git read the run makes (`--show-toplevel`, `rev-parse HEAD`) and succeeds silently
- * on anything else. Under the default `run-root` policy no record is committed at all, so this stub
- * only has to be order-independent — concurrent dispatch across the graph's nodes makes call order
- * nondeterministic, `envision-visions`' own `alwaysCommits` precedent. */
+/** Answers every git read the run makes (`--show-toplevel`, `rev-parse HEAD`, the two `ls-files`
+ * shapes) and succeeds silently on anything else. Under the default `run-root` policy no record is
+ * committed at all, so this stub only has to be order-independent: concurrent dispatch across the
+ * graph's nodes makes call order nondeterministic. */
 const gitShell = (repoRoot: string): ShellService => ({
   run: (argv): Effect.Effect<ShellResult> => {
     if (argv.includes("--show-toplevel")) return Effect.succeed({ exitCode: 0, stdout: `${repoRoot}\n`, stderr: "" })
@@ -162,7 +162,7 @@ const journalRows = (root: RootEnv, repoRoot: string, ticket: string) => {
 }
 
 describe("design-graph", () => {
-  test("a multi-stack run probes before dispatch, produces one vision per matched notation, and journals a row per node", () =>
+  test("a multi-stack run probes before dispatch, draws one shell session over both matched notations, resumes it for the design, and journals a row per node", () =>
     withRepo(async (repoRoot) => {
       writeMultiStackManifest(repoRoot)
       const root = tempRoot()
@@ -170,19 +170,24 @@ describe("design-graph", () => {
 
       const success = await runDesignGraph(repoRoot, root, agent.service)
 
-      // The notation list came from the probes, run before any dispatch (`resolveNotations` sits
-      // between them and `envisionVisions` in the pipeline) — svelte and effect matched, so exactly
-      // those two visions exist, neither the generic fallback nor graph-core.
-      expect(success.visionPaths).toHaveLength(2)
-      expect(success.visionPaths.some((path) => path.includes("vision-svelte.md"))).toBe(true)
-      expect(success.visionPaths.some((path) => path.includes("vision-effect.md"))).toBe(true)
-      for (const path of success.visionPaths) expect(readFileSync(path, "utf8").length).toBeGreaterThan(0)
+      // The notation list came from the probes, run before any dispatch: svelte and effect matched,
+      // so the one shell session carries exactly those two bodies, neither the generic fallback nor
+      // graph-core, and the design pass resumes that session.
+      const shells = agent.requests.filter((request) => routeOf(request.prompt) === "envision")
+      expect(shells).toHaveLength(1)
+      expect(shells[0]!.prompt).toContain("picture the ideal markup as if from nothing")
+      expect(shells[0]!.prompt).toContain("envision the ideal program as if from nothing")
+      expect(shells[0]!.prompt).not.toContain("Pick the notation the change actually deserves")
+      const brainstorms = agent.requests.filter((request) => routeOf(request.prompt) === "brainstorm")
+      expect(brainstorms).toHaveLength(1)
+      expect(brainstorms[0]!.resume).toBe("session-shell")
 
       expect(success.discoverPath).toBe(`${repoRoot}/docs/graph/GH-288/discover.md`)
       expect(readFileSync(success.discoverPath, "utf8").length).toBeGreaterThan(0)
 
       expect(success.designPath).toBe(join(repoRoot, "docs", "graph", "GH-288", "design.md"))
-      expect(readFileSync(success.designPath, "utf8")).toContain("## Vision Reconciliation")
+      expect(readFileSync(success.designPath, "utf8")).toContain("## Envisioned Shell")
+      expect(readFileSync(success.designPath, "utf8")).toContain("## Seams & Ownership")
       expect(success.planPath).toBe(join(repoRoot, "docs", "graph", "GH-288", "plan.md"))
       expect(readFileSync(success.planPath, "utf8")).toContain("### Task 1")
       expect(success.sessions).toContain("session-plan")
@@ -198,16 +203,16 @@ describe("design-graph", () => {
       // appears, only the host's children and the composed subgraph). Only a graph composed BENEATH
       // another graph's scope gets its own row, the same test's `fixture-subgraph` entry.
       const names = journalRows(root, repoRoot, "GH-288").map((row) => row.node)
-      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "assemble-brainstorm-prompt", "design-under-review", "brainstorm", "recycle-scan", "plan", "review-plan"]) {
+      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "envision-shell", "discover", "assemble-brainstorm-prompt", "design-under-review", "brainstorm", "recycle-scan", "plan", "review-plan"]) {
         expect(names).toContain(name)
       }
-      // envision-visions fans out one envision-notation row per matched notation.
-      expect(names.filter((name) => name === "envision-notation")).toHaveLength(2)
+      // One shell session, whatever the notation count.
+      expect(names.filter((name) => name === "envision-shell")).toHaveLength(1)
     }))
 
-  test("envision and discover dispatch concurrently, and neither request carries the other's output", () =>
+  test("the shell pass and discover dispatch concurrently, and neither request carries the other's output", () =>
     withRepo(async (repoRoot) => {
-      // No manifest anywhere: `notationsFor([])` answers the generic fallback (`envisioning.ts`), one vision.
+      // No manifest anywhere: `notationsFor([])` answers the generic fallback (`envisioning.ts`).
       const root = tempRoot()
       const agent = stubAgent()
 
@@ -217,10 +222,13 @@ describe("design-graph", () => {
       const discoverRequests = agent.requests.filter((r) => routeOf(r.prompt) === "discover")
       expect(envisionRequests).toHaveLength(1)
       expect(discoverRequests).toHaveLength(1)
+      expect(envisionRequests[0]!.prompt).toContain("Pick the notation the change actually deserves")
 
-      // Structural: envision's input schema carries no discover-note field and vice versa —
-      // neither prompt can quote text only the other node's own dispatch composed.
+      // Structural: the shell's input schema carries no discover-note field and vice versa, so
+      // neither prompt can quote text only the other node's own dispatch composed; the discover
+      // note reaches the session only on the design pass, which resumes it.
       expect(envisionRequests[0]!.prompt).not.toContain("Recon this repository")
+      expect(envisionRequests[0]!.prompt).not.toContain("discover.md")
       expect(discoverRequests[0]!.prompt).not.toContain("Draw the ideal shape")
       // Neither carries the ticket's text: every route cites the file by path.
       for (const request of agent.requests) expect(request.prompt).not.toContain("Two notations.")
@@ -358,7 +366,7 @@ describe("design-graph", () => {
         )
       )
 
-      for (const path of [...success.visionPaths, success.discoverPath, success.designPath, success.planPath]) {
+      for (const path of [success.discoverPath, success.designPath, success.planPath]) {
         expect(path.startsWith(recordsRoot)).toBe(true)
         expect(path.startsWith(workRoot)).toBe(false)
       }
@@ -367,7 +375,7 @@ describe("design-graph", () => {
       expect(headShaCalls.length).toBeGreaterThan(0)
       for (const call of headShaCalls) expect(call.cwd).toBe(workRoot)
       // Nothing commits under the default policy, the rev-parse reads above plus the three
-      // `ls-files` reads (the rulings for `brainstorm`'s first pass and `review-plan`'s, and
+      // `ls-files` reads (the rulings for `brainstorm`'s design pass and `review-plan`'s, and
       // `recycle-scan`'s tracked-file list) are every call this graph makes, so no record write
       // ever reaches a git call to check the cwd of.
       const lsFilesCalls = calls.filter((call) => call.argv[1] === "ls-files")

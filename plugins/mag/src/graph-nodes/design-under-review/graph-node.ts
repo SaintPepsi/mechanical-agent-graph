@@ -46,7 +46,9 @@ interface PlanState {
  * brainstorm → recycle-scan → plan → review-plan, a blocking review sending its findings back to the session
  * that owns the artifact each finding names, at most `cap` times per producer. The loop is one
  * generator over the error channel, `PLAN_BLOCKED` IS the failure track, and its state lives in
- * loop locals, so nothing about the loop escapes this node.
+ * loop locals, so nothing about the loop escapes this node. The first design pass the loop sees
+ * is the second prompt of the session `envision-shell` opened (`resume`): the shell was drawn
+ * blind before this node ran, and every brainstorm pass here resumes that one session.
  *
  * A finding names its target (`review-plan`'s verdict). Every finding on the plan resumes the plan
  * session over the findings and leaves the design and its session untouched. Any finding on the
@@ -73,8 +75,9 @@ export const designUnderReview = make({
     ticketPath: Schema.String,
     /** The already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s success). */
     prompt: Schema.String,
-    visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    /** The session `envision-shell` opened, resumed by the design pass; a send-back resumes the design pass's own. */
+    resume: Schema.String,
     /** Max send-backs per producer: brainstorm and plan are each resumed at most `cap` times. */
     cap: Schema.Natural,
     /** A named agent for every session this node dispatches. */
@@ -120,11 +123,12 @@ export const designUnderReview = make({
           const pass = yield* brainstorm.run({
             ...ticketFields,
             prompt: input.prompt,
-            visionPaths: input.visionPaths,
             ...citations,
             ...agentField,
             ...modelField,
-            ...(priorDesign === undefined || Option.isNone(findings) ? {} : { findingsPath: findings.value, resume: priorDesign.sessionRef })
+            ...(priorDesign === undefined || Option.isNone(findings)
+              ? { resume: input.resume }
+              : { findingsPath: findings.value, resume: priorDesign.sessionRef })
           })
           spent = charge(spent, pass.sessions, pass.costUsd)
           designChanged = pass.changed

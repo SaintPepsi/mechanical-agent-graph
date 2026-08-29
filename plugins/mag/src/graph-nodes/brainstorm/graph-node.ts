@@ -1,11 +1,5 @@
 import { Effect, FileSystem, Schema } from "effect"
-import {
-  BrainstormCommitFailed,
-  BrainstormCopyFailed,
-  BrainstormGitFailed,
-  BrainstormResumeEmpty,
-  DesignMissing
-} from "mag/graph-nodes/brainstorm/errors"
+import { BrainstormCommitFailed, BrainstormCopyFailed, BrainstormGitFailed, DesignMissing } from "mag/graph-nodes/brainstorm/errors"
 import { writeArtifact } from "mag/runtime/artifact"
 import { ClaudeAgent } from "mag/runtime/claude/service"
 import { verdictSchema } from "mag/runtime/claude/verdict-schema"
@@ -43,39 +37,40 @@ const disputeContentFor = (findingsPath: string, dispute: readonly string[]): st
   [`Disputes ${findingsPath}`, "", ...dispute.map((line) => `- ${line}`)].join("\n")
 
 /**
- * A first pass frames the ticket, cites every vision and the discover note by
- * path, read-only references, never inlined, since an oversized prompt dies at execve, names
- * the repository's own rulings files, the same list `review-plan` will hold the design to, and
- * appends the already-composed, already-budget-checked brainstorm prompt
- * (`assemble-brainstorm-prompt`'s own job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>`
- * unfilled by design, and this is the one node in the pipeline that can fill them. A resumed pass
- * drops the citations and the compiled skill, the session already holds them, and restating them
- * invites a redesign from scratch, and carries the ticket reference plus the send-back alone, so
- * the session can still reopen the ticket the findings are judged against.
+ * The design pass frames the ticket, cites the discover note by path (a read-only reference, never
+ * inlined, since an oversized prompt dies at execve), names the repository's own rulings files, the
+ * same list `review-plan` will hold the design to, points the session back at the design doc it
+ * already holds the shell of, and appends the already-composed, already-budget-checked brainstorm
+ * prompt (`assemble-brainstorm-prompt`'s own job). `composeDesignPrompt` leaves `<TICKET>`/`<SKILLS>`
+ * unfilled by design, and this is the one node in the pipeline that can fill them. A send-back
+ * pass drops the citation and the compiled skill, the session already holds them, and restating
+ * them invites a redesign from scratch, and carries the ticket reference plus the send-back alone,
+ * so the session can still reopen the ticket the findings are judged against.
  */
 const promptFor = (
   input: {
     readonly ticket: string
     readonly title: string
     readonly ticketPath: string
-    readonly visionPaths: readonly string[]
     readonly discoverPath: string
     readonly prompt: string
     readonly findingsPath?: string | undefined
-    readonly resume?: string | undefined
   },
   designPath: string,
   rulings: readonly string[]
 ): string =>
-  input.resume !== undefined && input.findingsPath !== undefined
+  input.findingsPath !== undefined
     ? [...ticketReference(input), "", ...sendBackBlock(input.findingsPath, designPath)].join("\n")
     : [
       ...ticketReference(input),
       "",
-      "Read each vision below and the discover note as citations. Do not redraw a vision or re-run recon.",
-      ...input.visionPaths.map((path) => `- ${path}`),
-      `- ${input.discoverPath}`,
+      `Read the discover note at \`${input.discoverPath}\` as a citation. Do not re-run recon.`,
       ...rulingsBlock(rulings),
+      "",
+      // The shell pass wrote the design doc's first section into this same file, in this same
+      // session; the design grows around it in place, so the write step below and the skill's
+      // own destination both name the file the session already holds.
+      `The design doc at \`${designPath}\` holds the Envisioned Shell you drew; complete it in place, keeping that section as drawn.`,
       "",
       // `input.prompt` is opaque data from a sibling node (`assemble-brainstorm-prompt`'s
       // success), not text this node composes itself, unlike `design/graph-node.ts`'s `skillFor`,
@@ -91,8 +86,7 @@ const promptFor = (
       input.prompt
         .replaceAll(DESIGN_DESTINATION, designPath)
         .replaceAll(TICKET_TOKEN, input.ticket)
-        .replaceAll(SKILLS_TOKEN, SKILLS_ROOT),
-      ...(input.findingsPath === undefined ? [] : ["", ...sendBackBlock(input.findingsPath, designPath)])
+        .replaceAll(SKILLS_TOKEN, SKILLS_ROOT)
     ].join("\n")
 
 /** `discover`'s own `commitMessageFor` shape: `docs(<ticket>): <artifact>` plus one `Claude-Session` trailer per session. */
@@ -100,38 +94,41 @@ const commitMessageFor = (ticket: string, sessions: readonly string[]): string =
   [
     `docs(${ticket}): design`,
     "",
-    "The brainstorm node reconciled the visions with discover's recon and committed the design doc.",
+    "The brainstorm node completed the design doc around its envisioned shell, over discover's recon, and committed it.",
     "",
     ...sessions.map((session) => `Claude-Session: ${session}`)
   ].join("\n")
 
 /**
- * The one design dispatch over the drawn visions and the recon. `records.ts`'s `record` own spine:
- * snapshot `before` → dispatch → verify the written document against it, copy it into the run
- * root, and commit the repo copy only when this repository's own policy says so → `git rev-parse
- * HEAD` for `headSha`. `write-and-confirm` tells the session not to run git itself: the node is the
- * one place that checks, copies, and (conditionally) commits, for every writer alike.
+ * The design pass of the session `envision-shell` opened: always resumed (`resume` is that pass's
+ * `sessionRef`), so the shell was drawn before any recon reached the session, and the design that
+ * grows around it is the same session's work. The one artifact of the stage before it is the
+ * discover note; the shell is already in the file. `records.ts`'s `record` own spine: snapshot
+ * `before` → dispatch → verify the written document against it, copy it into the run root, and
+ * commit the repo copy only when this repository's own policy says so → `git rev-parse HEAD` for
+ * `headSha`. `write-and-confirm` tells the session not to run git itself: the node is the one
+ * place that checks, copies, and (conditionally) commits, for every writer alike.
  *
- * A send-back pass (`findingsPath` present) may answer with a dispute instead of a change: the
- * design unchanged from its snapshot plus a non-empty `dispute` is a filed `dispute-N.md` and an
- * ordinary success carrying both paths, `build`'s own dispute edge; unchanged and silent stays
- * {@link DesignMissing}. A changed design files the dispute too, when one is given.
+ * A send-back pass (`findingsPath` present) resumes the same session again and may answer with a
+ * dispute instead of a change: the design unchanged from its snapshot plus a non-empty `dispute`
+ * is a filed `dispute-N.md` and an ordinary success carrying both paths, `build`'s own dispute
+ * edge; unchanged and silent stays {@link DesignMissing}. A changed design files the dispute too,
+ * when one is given.
  */
 export const brainstorm = make({
   name: "brainstorm",
-  description: "Reconcile the drawn visions with discover's recon, write design.md, stamp headSha.",
+  description: "Complete the design doc around its envisioned shell over discover's recon, in the shell's own session; write design.md, stamp headSha.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
     ticketPath: Schema.String,
     /** The already-composed, already-budget-checked brainstorm prompt (`assemble-brainstorm-prompt`'s success). */
     prompt: Schema.String,
-    visionPaths: Schema.Array(Schema.String),
     discoverPath: Schema.String,
+    /** The session this pass resumes: `envision-shell`'s on the design pass, this node's own `sessionRef` on a send-back. */
+    resume: Schema.String,
     /** The blocking verdict this pass is answering (`review-plan`'s findings). Present means a send-back pass: the prompt names the file, and an unchanged design may end in a dispute. */
     findingsPath: Schema.optional(Schema.String),
-    /** The session this pass resumes, `build`'s convention: the prompt drops the citations and the compiled skill, which the session already holds. */
-    resume: Schema.optional(Schema.String),
     /** A named agent to run the session as, same convention as `discover`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */
@@ -140,7 +137,7 @@ export const brainstorm = make({
   success: Schema.Struct({
     designPath: Schema.String,
     /** HEAD of the tree the session worked in (`workdir(runInfo)`), meaningful under every records
-     * policy — under the default `run-root` policy `recordsDir(runInfo)` is a plain OS temp
+     * policy: under the default `run-root` policy `recordsDir(runInfo)` is a plain OS temp
      * directory with no git repository of its own, so `recordsDir` cannot answer this. */
     headSha: Schema.String,
     sessions: Schema.Array(Schema.String),
@@ -155,9 +152,6 @@ export const brainstorm = make({
   }),
   run: (input) =>
     Effect.gen(function* () {
-      if (input.resume !== undefined && input.findingsPath === undefined) {
-        return yield* Effect.fail(new BrainstormResumeEmpty())
-      }
       const agent = yield* ClaudeAgent
       const runInfo = yield* RunInfo
       const cwd = workdir(runInfo)
@@ -170,8 +164,8 @@ export const brainstorm = make({
       const fs = yield* FileSystem.FileSystem
       const before = yield* fs.readFileString(designPath).pipe(Effect.catch(() => Effect.succeed("")))
 
-      // A resumed session already holds the list; reading it again would only cost a git call.
-      const rulings = input.resume === undefined
+      // A send-back session already holds the list; reading it again would only cost a git call.
+      const rulings = input.findingsPath === undefined
         ? yield* declaredRulings(cwd, (fields) => new BrainstormGitFailed(fields))
         : []
 
@@ -179,7 +173,7 @@ export const brainstorm = make({
         prompt: promptFor(input, designPath, rulings),
         jsonSchema: VERDICT,
         cwd,
-        ...(input.resume === undefined ? {} : { resume: input.resume }),
+        resume: input.resume,
         ...(input.agent === undefined ? {} : { agent: input.agent }),
         ...(input.model === undefined ? {} : { model: input.model })
       })

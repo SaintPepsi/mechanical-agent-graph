@@ -18,7 +18,6 @@ import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionMermaid } from "mag/graph-nodes/envision-mermaid/graph-node"
-import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
 import { envisionRailSketch } from "mag/graph-nodes/envision-rail-sketch/graph-node"
 import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import { fixConflicts } from "mag/graph-nodes/fix-conflicts/graph-node"
@@ -77,7 +76,6 @@ export const registry: Registry = [
   { kind: "command", node: recycleScan },
   { kind: "command", node: promptTersenessEvaluator },
   { kind: "command", node: assembleBrainstormPrompt },
-  { kind: "command", node: envisionNotation },
   { kind: "command", node: plan },
   { kind: "command", node: reviewPlan },
   { kind: "command", node: designGraph },
@@ -123,13 +121,14 @@ export const registry: Registry = [
 ]
 
 /**
- * `format-branch-name`, `resolve-notations`, `envision-visions`, `brainstorm` and
- * `design-under-review` are deliberately absent. Their `labels`/`verdicts`/`notations`/`visionPaths`
+ * `format-branch-name` and `envision-shell` are deliberately absent. Their `labels`/`notations`
  * fields are arrays, and
  * `schema-flags.ts` derives flags for `string`/`number`/`boolean` only — registering any of them
  * would fail the whole CLI build with `UNSUPPORTED_INPUT_SCHEMA`, not just its own subcommand,
  * because `build-cli.ts` folds the registry with `Result.all`. Shaping the field as a comma-joined
  * string purely to make it CLI-representable would bend the node's contract to suit a tool, and the
  * node's input schema is its whole contract. They run through `design-graph` and through their own
- * tests instead. `assemble-brainstorm-prompt` has no such field and registers above.
+ * tests instead. `brainstorm` and `design-under-review` are absent for a different reason: each
+ * resumes the session `envision-shell` opened, so neither has a standalone run to offer a CLI.
+ * `assemble-brainstorm-prompt` has no such field and registers above.
  */
