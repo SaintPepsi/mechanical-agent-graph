@@ -22,7 +22,17 @@ describe("schemaFieldNames", () => {
     expect(schemaFieldNames(undefined)).toBeUndefined()
   })
 
-  test("objectAstOf hands back the narrowed AST, so a caller can read its index signatures too", () => {
-    expect(objectAstOf(Schema.Struct({ x: Schema.String }).ast)?.indexSignatures).toEqual([])
+  test("objectAstOf hands back the narrowed AST, so a caller can read its property and index signatures directly", () => {
+    const objects = objectAstOf(Schema.Struct({ x: Schema.String }).ast)
+
+    expect(objects?.indexSignatures).toEqual([])
+    expect(objects?.propertySignatures.map((signature) => String(signature.name))).toEqual(["x"])
+  })
+
+  test("an index signature is not a property signature: objectAstOf exposes it on its own list", () => {
+    const objects = objectAstOf(Schema.Record(Schema.String, Schema.String).ast)
+
+    expect(objects?.propertySignatures).toEqual([])
+    expect(objects?.indexSignatures.length).toBe(1)
   })
 })
