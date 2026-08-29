@@ -375,6 +375,23 @@ describe("Graph.construct — Blueprint.applied stays required", () => {
   })
 })
 
+describe("Graph.construct — a keep is a field-picker map, not a bare function", () => {
+  test("compile time: thenKeep rejects a bare function keep, and .via requires its third argument", () => {
+    const pins = Graph.construct<{ x: string }>("fixture-keep-pins")
+
+    // The positive control: a picker-map keep compiles.
+    pins.thenKeep(notify, () => ({}), { tag: (a) => a.notified })
+
+    // @ts-expect-error — a bare function was `Keep`'s shape before this ticket; PRINCIPLES.md's
+    // compile-time-pin ruling exists so this erosion cannot ship invisibly.
+    pins.thenKeep(notify, () => ({}), (a) => ({ tag: a.notified }))
+    // @ts-expect-error — `.via` now declares the fields it contributes as a third argument
+    pins.via("stage", (s) => Effect.succeed(s.x))
+
+    expect(true).toBe(true)
+  })
+})
+
 describe("Graph.construct — borrow/modify lifecycle", () => {
   test("removeWhen strips the borrowed when condition — the guarded node runs unconditionally", async () => {
     const { success, rows } = await runNode(bentHost, { flag: false }, "GH-290-bent")
