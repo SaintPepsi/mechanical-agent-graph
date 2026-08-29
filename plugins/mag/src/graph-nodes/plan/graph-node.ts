@@ -23,7 +23,7 @@ const sendBackBlock = (findingsPath: string, planPath: string): readonly string[
 ]
 
 /**
- * Frames the ticket, cites the design, the discover note and the recycle map by path, read-only
+ * Frames the ticket, cites the design and the recycle map by path, read-only
  * references, never inlined, since an oversized prompt dies at execve, names this run's own
  * destination for the plan, and splices the compiled plan standard. A resumed pass drops the
  * citations and the standard, which the session already holds, and carries the ticket reference
@@ -35,7 +35,6 @@ const promptFor = (
     readonly title: string
     readonly ticketPath: string
     readonly designPath: string
-    readonly discoverPath: string
     readonly recycleMapPath: string
     readonly findingsPath?: string | undefined
     readonly resume?: string | undefined
@@ -47,9 +46,8 @@ const promptFor = (
     : [
     ...ticketReference(input),
     "",
-    "Read the design below, the discover note and the recycle map as citations. Plan the build the design describes, as it stands.",
+    "Read the design below and the recycle map as citations. Plan the build the design describes, as it stands. The discover note is the design's source, not the plan's: what the design took from it is in the design.",
     `- ${input.designPath}`,
-    `- ${input.discoverPath}`,
     `- ${input.recycleMapPath}`,
     "",
     `Write the plan to \`${planPath}\`, this run's own destination for it.`,
@@ -81,7 +79,6 @@ export const plan = make({
     title: Schema.String,
     ticketPath: Schema.String,
     designPath: Schema.String,
-    discoverPath: Schema.String,
     recycleMapPath: Schema.String,
     /** The blocking verdict this pass answers (`review-plan`'s findings). Present means a send-back pass: the prompt names the file and asks for the plan-tagged findings. */
     findingsPath: Schema.optional(Schema.String),

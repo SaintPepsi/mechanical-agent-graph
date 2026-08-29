@@ -97,7 +97,9 @@ export const designUnderReview = make({
       const agentField = input.agent === undefined ? {} : { agent: input.agent }
       const modelField = input.model === undefined ? {} : { model: input.model }
       const ticketFields = { ticket: input.ticket, title: input.title, ticketPath: input.ticketPath }
-      const citations = { discoverPath: input.discoverPath, recycleMapPath: input.recycleMapPath }
+      // The discover note feeds the design only; the plan cites the design and the recycle map.
+      const recycleMap = { recycleMapPath: input.recycleMapPath }
+      const citations = { discoverPath: input.discoverPath, ...recycleMap }
 
       let prior = Option.none<PlanBlocked>()
       let spent: Spend = { costUsd: 0, sessions: [] }
@@ -138,14 +140,14 @@ export const designUnderReview = make({
         const priorPlan: PlanState | undefined = planned
         let currentPlan: PlanState
         if (priorPlan === undefined || designChanged) {
-          const fresh = yield* plan.run({ ...ticketFields, designPath: currentDesign.designPath, ...citations, ...agentField, ...modelField })
+          const fresh = yield* plan.run({ ...ticketFields, designPath: currentDesign.designPath, ...recycleMap, ...agentField, ...modelField })
           spent = charge(spent, fresh.sessions, fresh.costUsd)
           currentPlan = { planPath: fresh.planPath, headSha: fresh.headSha, sessionRef: fresh.sessionRef }
         } else if (planFinding && Option.isSome(findings)) {
           const resumed = yield* plan.run({
             ...ticketFields,
             designPath: currentDesign.designPath,
-            ...citations,
+            ...recycleMap,
             ...agentField,
             ...modelField,
             findingsPath: findings.value,

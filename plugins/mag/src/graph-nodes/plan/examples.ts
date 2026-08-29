@@ -4,7 +4,6 @@ export const inputExamples = [
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-288/design.md",
-    discoverPath: "/home/dev/repo/docs/graph/GH-288/discover.md",
     recycleMapPath: "/home/dev/repo/docs/graph/GH-288/recycle-map.md"
   },
   {
@@ -12,7 +11,6 @@ export const inputExamples = [
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-288/design.md",
-    discoverPath: "/home/dev/repo/docs/graph/GH-288/discover.md",
     recycleMapPath: "/home/dev/repo/docs/graph/GH-288/recycle-map.md",
     agent: "effect-expert",
     model: "opus"
@@ -23,7 +21,6 @@ export const inputExamples = [
     title: "Envision and build the design graph",
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-288/design.md",
-    discoverPath: "/home/dev/repo/docs/graph/GH-288/discover.md",
     recycleMapPath: "/home/dev/repo/docs/graph/GH-288/recycle-map.md",
     findingsPath: "/home/dev/repo/.claude/graph/GH-288/run-1/review-plan-1.md",
     resume: "a1b2c3"
