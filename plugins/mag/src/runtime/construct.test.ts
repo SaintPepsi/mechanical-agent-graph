@@ -7,6 +7,9 @@ import type { PlatformError } from "effect/PlatformError"
 import {
   applyModifiers,
   type Blueprint,
+  DecisionNameCollides,
+  DecisionNameUnaddressable,
+  FieldHasNoProducer,
   Graph,
   type Modifier,
   ModifierConflict,
@@ -91,6 +94,22 @@ const quietNotify = make({
   run: () => Effect.succeed({ notified: "quiet" })
 })
 
+const unenumerable = make({
+  name: "fixture-unenumerable",
+  description: "Its success is a union, so no field list can be read off it — the opaque case.",
+  input: Schema.Struct({}),
+  success: Schema.Union([Schema.Struct({ x: Schema.String }), Schema.Struct({ y: Schema.String })]),
+  run: () => Effect.succeed({ x: "x" })
+})
+
+const indexSigned = make({
+  name: "fixture-index-signed",
+  description: "Its success carries an index signature, so its named fields are not an exhaustive list — also opaque.",
+  input: Schema.Struct({}),
+  success: Schema.Record(Schema.String, Schema.String),
+  run: () => Effect.succeed({ x: "x" })
+})
+
 class FixtureNotifyError extends Data.TaggedError("FIXTURE_NOTIFY_ERROR")<{ readonly reason: string }> {}
 
 const widerErrorNotify = make({
@@ -108,6 +127,17 @@ const differentSuccessNotify = make({
   success: Schema.Struct({ notified: Schema.Number }),
   run: () => Effect.succeed({ notified: 1 })
 })
+
+/** The hand-built `when` step every step-list test below writes: one guarded node, and a decision
+ *  differing only in what it is called and reads. `wire`/`keep` are parameters for the one test that
+ *  must prove `removeWhen` carries them across. */
+type WhenStep = Extract<Step, { kind: "when" }>
+const whenStep = (
+  name: string,
+  reads: readonly string[],
+  wire: WhenStep["wire"] = () => ({}),
+  keep: WhenStep["keep"] = {}
+): Step => ({ kind: "when", decision: { name, reads, test: () => true }, node: guarded, wire, keep })
 
 /** Every borrow/modify fixture below finalises the same shape (the bendable sub's schemas, its
  *  flag seed, its success projection) and differs only in name, scope and prose. Shared so each
@@ -130,9 +160,9 @@ const bendableFinalise = (graph: string, ticket: string, description: string) =>
 
 const bendableSub = Graph.construct<{ flag: boolean }>("fixture-bendable")
   .when(
-    (s) => s.flag,
+    { name: "flag is set", reads: ["flag"], test: (s) => s.flag },
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
   .then(notify, () => ({}))
   .finalise(bendableFinalise(
@@ -212,11 +242,11 @@ const sub = Graph.construct<{ ticket: string; flag: boolean; seedVal: string }>(
   )
   .join(joiner, (s) => ({ a: s.a, b: s.b }))
   .when(
-    (s) => s.flag,
+    { name: "flag is set", reads: ["flag"], test: (s) => s.flag },
     guarded, () => ({}),
-    (g) => ({ guardedRan: g.ran })
+    { guardedRan: (g) => g.ran }
   )
-  .via("uppercase", (s) => Effect.succeed({ upper: s.joined.toUpperCase() }))
+  .via("uppercase", (s) => Effect.succeed(s.joined.toUpperCase()), { upper: (upper) => upper })
   .finalise({
     description: "Fork, join, a guarded node, a plain-Effect stage.",
     input: Schema.Struct({ ticket: Schema.String, flag: Schema.Boolean, seedVal: Schema.String }),
@@ -357,6 +387,23 @@ describe("Graph.construct — Blueprint.applied stays required", () => {
   })
 })
 
+describe("Graph.construct — a keep is a field-picker map, not a bare function", () => {
+  test("compile time: thenKeep rejects a bare function keep, and .via requires its third argument", () => {
+    const pins = Graph.construct<{ x: string }>("fixture-keep-pins")
+
+    // The positive control: a picker-map keep compiles.
+    pins.thenKeep(notify, () => ({}), { tag: (a) => a.notified })
+
+    // @ts-expect-error — a bare function was `Keep`'s shape before this ticket; PRINCIPLES.md's
+    // compile-time-pin ruling exists so this erosion cannot ship invisibly.
+    pins.thenKeep(notify, () => ({}), (a) => ({ tag: a.notified }))
+    // @ts-expect-error — `.via` now declares the fields it contributes as a third argument
+    pins.via("stage", (s) => Effect.succeed(s.x))
+
+    expect(true).toBe(true)
+  })
+})
+
 describe("Graph.construct — borrow/modify lifecycle", () => {
   test("removeWhen strips the borrowed when condition — the guarded node runs unconditionally", async () => {
     const { success, rows } = await runNode(bentHost, { flag: false }, "GH-290-bent")
@@ -417,6 +464,26 @@ describe("Graph.construct — borrow/modify lifecycle", () => {
     attempt.replaceNode(notify, widerErrorNotify)
     // @ts-expect-error — succeeds with `notified: number`, not `notify`'s `notified: string`
     attempt.replaceNode(notify, differentSuccessNotify)
+
+    expect(true).toBe(true)
+  })
+
+  test("compile time: a decision without a name or a field list does not compile", () => {
+    const pins = Graph.construct<{ flag: boolean; other: string }>("fixture-decision-pins")
+
+    // The positive control: a decision that names itself and declares what it reads compiles.
+    pins.when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+
+    // @ts-expect-error — no name: a decision the shape cannot address
+    pins.when({ reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+    // @ts-expect-error — no read list: nothing for a data edge to start from
+    pins.when({ name: "flag is set", test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — an empty read list fails the non-empty tuple
+    pins.when({ name: "flag is set", reads: [], test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — `missing` is not a field of this construct's context
+    pins.when({ name: "flag is set", reads: ["missing"], test: () => true }, guarded, () => ({}), {})
+    // @ts-expect-error — the test reads `other`, which this decision did not declare
+    pins.when({ name: "flag is set", reads: ["flag"], test: (s) => s.other.length > 0 }, guarded, () => ({}), {})
 
     expect(true).toBe(true)
   })
@@ -505,9 +572,7 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
   })
 
   test("a target that matches nothing throws ModifierTargetMissing, naming the real candidates", () => {
-    const steps: readonly Step[] = [
-      { kind: "when", condition: () => true, node: guarded, wire: () => ({}), keep: (a) => a }
-    ]
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"])]
     const modifiers: readonly Modifier[] = [{ kind: "removeWhen", target: notify }]
 
     const error = thrown(ModifierTargetMissing, () => applyModifiers(blueprintOf(steps), modifiers))
@@ -538,8 +603,8 @@ describe("applyModifiers — the pure fold over hand-built step lists", () => {
 
   test("removeWhen rewrites a when step into an unconditional node step, keeping its wire and keep", () => {
     const wire = () => ({})
-    const keep = (a: { readonly ran: boolean }) => ({ guardedRan: a.ran })
-    const steps: readonly Step[] = [{ kind: "when", condition: () => false, node: guarded, wire, keep }]
+    const keep = { guardedRan: (a: { readonly ran: boolean }) => a.ran }
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"], wire, keep)]
 
     const result = applyModifiers(blueprintOf(steps), [{ kind: "removeWhen", target: guarded }])
 
@@ -599,9 +664,9 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(byId.get(joinId)).toEqual({ kind: "node", id: joinId, label: "fixture-join", parent: containerId })
 
     // The `.when` is one decision element with a branch edge to the node it guards.
-    const decisionId = `${containerId}/2:decision:fixture-guarded`
+    const decisionId = `${containerId}/2:decision:flag is set`
     const guardedId = `${containerId}/2:node:fixture-guarded`
-    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "fixture-guarded", parent: containerId })
+    expect(byId.get(decisionId)).toEqual({ kind: "decision", id: decisionId, label: "flag is set", parent: containerId })
     expect(byId.get(guardedId)).toEqual({ kind: "node", id: guardedId, label: "fixture-guarded", parent: containerId })
     expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
 
@@ -651,7 +716,7 @@ describe("Graph.shapeOf / projectSteps", () => {
     expect(plainShape).toBeDefined()
     if (bentShape === undefined || plainShape === undefined) return
 
-    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "fixture-guarded")).toBe(true)
+    expect(plainShape.elements.some((element) => element.kind === "decision" && element.label === "flag is set")).toBe(true)
     expect(bentShape.elements.some((element) => element.kind === "decision")).toBe(false)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-guarded")).toBe(true)
     expect(bentShape.elements.some((element) => element.kind === "node" && element.label === "fixture-quiet-notify")).toBe(true)
@@ -681,6 +746,118 @@ describe("Graph.shapeOf / projectSteps", () => {
       { kind: "node", id: "fixture-root/0:node:fixture-notify", label: "fixture-notify", parent: "fixture-root" }
     ])
     expect(edges).toEqual([])
+  })
+
+  test("a declared read draws a data edge from the keep that produced the field", () => {
+    const steps: readonly Step[] = [
+      {
+        kind: "node",
+        node: notify,
+        wire: () => ({}),
+        keep: { tag: (a: { readonly notified: string }) => a.notified },
+        modifiers: []
+      },
+      whenStep("tag is loud", ["tag"])
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root/0:node:fixture-notify",
+      to: "fixture-root/1:decision:tag is loud",
+      field: "tag"
+    })
+  })
+
+  test("a keep-less stage produces every field of its node's success", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: notify, wire: () => ({}), modifiers: [] },
+      whenStep("notified at all", ["notified"])
+    ]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root/0:node:fixture-notify",
+      to: "fixture-root/1:decision:notified at all",
+      field: "notified"
+    })
+  })
+
+  test("a seeded read arrives from the container itself, the entry of the graph", () => {
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"])]
+
+    const { edges } = projectSteps("fixture-root", steps)
+
+    expect(edges).toContainEqual({
+      kind: "data",
+      from: "fixture-root",
+      to: "fixture-root/0:decision:flag is set",
+      field: "flag"
+    })
+  })
+
+  test("disconfirming: a read below a stage whose fields cannot be enumerated refuses, naming the opaque stage", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: unenumerable, wire: () => ({}), modifiers: [] },
+      whenStep("x is set", ["x"])
+    ]
+
+    const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
+
+    expect(error.field).toBe("x")
+    expect(error.opaque).toEqual(["fixture-root/0:node:fixture-unenumerable"])
+  })
+
+  test("disconfirming: an index-signature success is also opaque — its named fields are not an exhaustive list", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: indexSigned, wire: () => ({}), modifiers: [] },
+      whenStep("x is set", ["x"])
+    ]
+
+    const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
+
+    expect(error.field).toBe("x")
+    expect(error.opaque).toEqual(["fixture-root/0:node:fixture-index-signed"])
+  })
+
+  test("two decisions sharing a name in one container refuse: a name is an address", () => {
+    const steps: readonly Step[] = [whenStep("flag is set", ["flag"]), whenStep("flag is set", ["flag"])]
+
+    const error = thrown(DecisionNameCollides, () => projectSteps("fixture-root", steps))
+
+    expect(error.container).toBe("fixture-root")
+    expect(error.decision).toBe("flag is set")
+  })
+
+  test("a decision named with the id grammar's own separators refuses: a name reads as English, not as a path", () => {
+    const steps: readonly Step[] = [whenStep("checkout/0:decision:run wants a worktree", ["flag"])]
+
+    const error = thrown(DecisionNameUnaddressable, () => projectSteps("fixture-root", steps))
+
+    expect(error.container).toBe("fixture-root")
+    expect(error.decision).toBe("checkout/0:decision:run wants a worktree")
+  })
+
+  test("a construct whose decisions cannot be drawn refuses at .finalise, before any run", () => {
+    // Declared inside the test body: a top-level throw at module evaluation would take the whole
+    // suite down with it, since `.finalise` runs at declaration time.
+    const error = thrown(DecisionNameCollides, () =>
+      Graph.construct<{ flag: boolean }>("fixture-colliding-host")
+        .when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+        .when({ name: "flag is set", reads: ["flag"], test: (s) => s.flag }, guarded, () => ({}), {})
+        .finalise({
+          description: "Two decisions at one address — refused when the construct closes.",
+          input: Schema.Struct({ flag: Schema.Boolean }),
+          success: Schema.Struct({}),
+          scope: () => ({ ticket: "GH-332-colliding", graph: "fixture-colliding-host", worktree: false }),
+          seed: (input) => input,
+          out: () => ({})
+        }))
+
+    expect(error.decision).toBe("flag is set")
   })
 })
 

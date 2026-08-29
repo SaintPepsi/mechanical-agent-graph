@@ -1,5 +1,6 @@
 import { Option, Result, Schema, SchemaAST } from "effect"
 import { UnsupportedInputSchema } from "mag/runtime/errors"
+import { objectAstOf } from "mag/runtime/schema-fields"
 import type { CommandNode, FlagKind, FlagSpec } from "mag/runtime/types"
 
 /** camelCase field name -> kebab-case flag name (`maxRetries` -> `max-retries`). */
@@ -93,15 +94,16 @@ export const userHelp = (signature: SchemaAST.PropertySignature, kind: FlagKind)
  */
 export const deriveFlagSpecs = (node: CommandNode): Result.Result<readonly FlagSpec[], UnsupportedInputSchema> => {
   const rootAst = node.input.ast
-  if (!SchemaAST.isObjects(rootAst)) {
+  const rootObjects = objectAstOf(rootAst)
+  if (rootObjects === undefined) {
     return Result.fail(new UnsupportedInputSchema({ node: node.name, field: "<root>", type: rootAst._tag }))
   }
-  if (rootAst.indexSignatures.length > 0) {
+  if (rootObjects.indexSignatures.length > 0) {
     return Result.fail(new UnsupportedInputSchema({ node: node.name, field: "<root>", type: "IndexSignature" }))
   }
 
   const specs: Array<FlagSpec> = []
-  for (const signature of rootAst.propertySignatures) {
+  for (const signature of rootObjects.propertySignatures) {
     const field = String(signature.name)
     const optional = SchemaAST.isOptional(signature.type)
     const strippedAst = stripOptionalUnion(signature.type)
