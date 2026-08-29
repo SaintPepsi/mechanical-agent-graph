@@ -476,6 +476,38 @@ describe("develop-graph", () => {
       expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
     })
 
+    test("the decision \"terseness changed HEAD\" draws one data edge per declared field, from the stage that produced it", () => {
+      const decisionId = "develop-graph/5:decision:terseness changed HEAD"
+      expect(byId.get(decisionId)).toEqual({
+        kind: "decision",
+        id: decisionId,
+        label: "terseness changed HEAD",
+        parent: "develop-graph"
+      })
+
+      expect(shape.edges).toContainEqual({
+        kind: "data",
+        from: "develop-graph/3:node:build-under-review",
+        to: decisionId,
+        field: "builtHeadSha"
+      })
+      expect(shape.edges).toContainEqual({
+        kind: "data",
+        from: "develop-graph/4:node:prompt-terseness-evaluator",
+        to: decisionId,
+        field: "tersenedHeadSha"
+      })
+    })
+
+    test("a seeded field's data edge starts at the entry: checkout's decision reads its own group", () => {
+      expect(shape.edges).toContainEqual({
+        kind: "data",
+        from: "develop-graph/1:group:checkout",
+        to: "develop-graph/1:group:checkout/0:decision:run wants a worktree",
+        field: "worktree"
+      })
+    })
+
     test("write-body's group is parented to publish-tail's group id, three levels deep from the root", () => {
       const publishTailId = "develop-graph/6:group:publish-tail"
       const writeBodyId = `${publishTailId}/0:left:write-body`
