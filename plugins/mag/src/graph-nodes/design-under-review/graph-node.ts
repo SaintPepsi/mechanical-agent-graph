@@ -171,7 +171,6 @@ export const designUnderReview = make({
             ...ticketFields,
             designPath: currentDesign.designPath,
             planPath: currentPlan.planPath,
-            recycleMapPath: input.recycleMapPath,
             headSha: currentPlan.headSha,
             ...adjudication,
             ...agentField,

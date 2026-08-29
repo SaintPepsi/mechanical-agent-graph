@@ -25,12 +25,11 @@ const targetBlock = (designPath: string, planPath: string, priorFindingsPath: st
 ]
 
 /** This altitude's own blocking conditions, on top of the charter's. */
-const blockingBlock = (recycleMapPath: string): readonly string[] => [
+const blockingBlock: readonly string[] = [
   "At this altitude a blocking finding is also any of:",
   "- an acceptance criterion no task in the plan proves, named by id;",
   "- a ruling in the design stated as a choice still open, or with no basis named, quoted: the design decides, the plan builds what it decided;",
   "- a task or design section asking for what a rulings file below forbids, quoting the ruling;",
-  `- a task that rebuilds what the recycle map at ${recycleMapPath} says exists.`,
   "Change nothing."
 ]
 
@@ -54,7 +53,6 @@ const promptFor = (
     readonly ticketPath: string
     readonly designPath: string
     readonly planPath: string
-    readonly recycleMapPath: string
     readonly priorFindingsPath?: string | undefined
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
   },
@@ -63,7 +61,7 @@ const promptFor = (
   [
     ...ticketReference(input),
     ...targetBlock(input.designPath, input.planPath, input.priorFindingsPath),
-    ...blockingBlock(input.recycleMapPath),
+    ...blockingBlock,
     ...rulingsBlock(rulings),
     ...(input.dispute === undefined ? [] : disputeBlock(input.dispute.findingsPath, input.dispute.disputePath))
   ].join("\n")
@@ -88,8 +86,6 @@ export const reviewPlan = make({
     ticketPath: Schema.String,
     designPath: Schema.String,
     planPath: Schema.String,
-    /** The reuse map the plan's tasks are checked against: a task that rebuilds a listed thing is a finding. */
-    recycleMapPath: Schema.String,
     /** The tree the plan was written against (`plan`'s own `headSha`), stamped on the findings and any failure. */
     headSha: Schema.String,
     /** The previous pass's findings on a send-back that changed the design: this pass judges the delta against them rather than hunting afresh. Never alongside `disputePath`, whose own block governs an adjudicating pass. */

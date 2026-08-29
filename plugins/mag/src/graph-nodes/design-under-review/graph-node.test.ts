@@ -144,13 +144,12 @@ describe("design-under-review", () => {
 
       // The plan prompt cites the design the brainstorm wrote; the reviewer is handed both paths
       // and the plan's headSha, never the brainstorm session's output. Every session cites the
-      // ticket file and the recycle map by path.
+      // ticket file by path; the recycle map reaches brainstorm and plan only.
       expect(agent.requests[1]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.designPath)
       expect(agent.requests[2]!.prompt).toContain(result.success.planPath)
       for (const request of agent.requests) {
         expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
-        expect(request.prompt).toContain(INPUT.recycleMapPath)
       }
       expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe("Reviewed at abc123\n\nNo blocking findings.\n\nNotes:\nNone.")
     }))

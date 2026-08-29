@@ -93,7 +93,7 @@ describe("review-plan", () => {
       expect(prompt).toContain("a ruling in the design stated as a choice still open, or with no basis named")
       expect(prompt).not.toContain("Open Questions")
       expect(prompt).toContain("what a rulings file below forbids")
-      expect(prompt).toContain(`rebuilds what the recycle map at ${INPUT.recycleMapPath} says exists`)
+      expect(prompt).not.toContain("recycle map")
       expect(prompt).toContain("Change nothing.")
       expect(prompt).not.toContain("diff")
       expect(prompt).not.toContain("rulings of its own")

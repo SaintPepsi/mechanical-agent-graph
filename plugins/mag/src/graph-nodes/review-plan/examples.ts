@@ -5,7 +5,6 @@ export const inputExamples = [
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-98/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-98/design.md",
     planPath: "/home/dev/repo/docs/graph/GH-98/plan.md",
-    recycleMapPath: "/home/dev/repo/docs/graph/GH-98/recycle-map.md",
     headSha: "e5a9c1d0b3f7a2e4d6c8b0a1f3e5d7c9b1a3e5d7"
   },
   {
@@ -15,7 +14,6 @@ export const inputExamples = [
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-98/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-98/design.md",
     planPath: "/home/dev/repo/docs/graph/GH-98/plan.md",
-    recycleMapPath: "/home/dev/repo/docs/graph/GH-98/recycle-map.md",
     headSha: "d6c8b0a1f3e5d7c9b1a3e5d7e5a9c1d0b3f7a2e4",
     priorFindingsPath: "/home/dev/repo/.claude/graph/GH-98/run-1/review-plan-1.md"
   },
@@ -27,7 +25,6 @@ export const inputExamples = [
     ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-98/run-1/ticket.md",
     designPath: "/home/dev/repo/docs/graph/GH-98/design.md",
     planPath: "/home/dev/repo/docs/graph/GH-98/plan.md",
-    recycleMapPath: "/home/dev/repo/docs/graph/GH-98/recycle-map.md",
     headSha: "d6c8b0a1f3e5d7c9b1a3e5d7e5a9c1d0b3f7a2e4",
     findingsPath: "/home/dev/repo/.claude/graph/GH-98/run-1/review-plan-1.md",
     disputePath: "/home/dev/repo/.claude/graph/GH-98/run-1/dispute-1.md",
