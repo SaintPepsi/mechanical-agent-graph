@@ -151,7 +151,7 @@ describe("design", () => {
     const request = agent.requests[0]!
     expect(request.cwd).toBe("/repo")
     expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-    expect(request.prompt).toContain(INPUT.body)
+    expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
     expect(request.prompt).toContain("brainstorming skill")
     expect(request.prompt).toContain(`docs/graph/${INPUT.ticket}/design.md`)
     expect(request.prompt).toContain("Confirm the design doc")

@@ -87,7 +87,7 @@ export const writeTicket = make({
     model: Schema.optional(Schema.String)
   }),
   success: Schema.Struct({
-    ticket: TicketSchema,
+    /** The draft as `ticket-N.json`: the filer reads it from here, and the journal records the path, never a second copy. */
     ticketPath: Schema.String,
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)
@@ -123,6 +123,6 @@ export const writeTicket = make({
       const missing = droppedCriteria(criteria, reply.verdict.acceptanceCriteria.map((criterion) => criterion.source))
       if (missing.length > 0) return yield* Effect.fail(new TicketCriterionDropped({ missing, ticketPath }))
 
-      return { ticket: reply.verdict, ticketPath, sessions: reply.sessions, costUsd: reply.costUsd }
+      return { ticketPath, sessions: reply.sessions, costUsd: reply.costUsd }
     }).pipe(Effect.provide(platform))
 })

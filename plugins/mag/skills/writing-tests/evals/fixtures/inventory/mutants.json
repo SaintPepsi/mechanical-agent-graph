@@ -1,0 +1,74 @@
+[
+  {
+    "id": "quantity-zero",
+    "file": "src/reserve.ts",
+    "find": "quantity <= 0",
+    "replace": "quantity < 0",
+    "describes": "a quantity of 0 is accepted instead of rejected",
+    "category": "boundary"
+  },
+  {
+    "id": "availability-boundary",
+    "file": "src/reserve.ts",
+    "find": "if (row.available < quantity)",
+    "replace": "if (row.available <= quantity)",
+    "describes": "reserving exactly the available stock is refused",
+    "category": "boundary"
+  },
+  {
+    "id": "remaining-arithmetic",
+    "file": "src/reserve.ts",
+    "find": "remaining: row.available - quantity",
+    "replace": "remaining: row.available",
+    "describes": "remaining does not subtract what was reserved",
+    "category": "arithmetic"
+  },
+  {
+    "id": "unawaited-reserve",
+    "file": "src/reserve.ts",
+    "find": "await repo.reserve(sku, quantity)",
+    "replace": "repo.reserve(sku, quantity)",
+    "describes": "the write is fired and forgotten \u2014 a repository failure is never seen",
+    "category": "async"
+  },
+  {
+    "id": "unknown-sku-reason",
+    "file": "src/reserve.ts",
+    "find": "return { ok: false, reason: \"unknown-sku\" }",
+    "replace": "return { ok: false, reason: \"insufficient\", available: 0 }",
+    "describes": "a missing sku is reported as insufficient stock",
+    "category": "contract"
+  },
+  {
+    "id": "reserve-argument",
+    "file": "src/reserve.ts",
+    "find": "await repo.reserve(sku, quantity)",
+    "replace": "await repo.reserve(sku, row.available)",
+    "describes": "the whole shelf is reserved instead of the requested quantity",
+    "category": "contract"
+  },
+  {
+    "id": "error-not-wrapped",
+    "file": "src/reserve.ts",
+    "find": "throw new ReservationFailed(sku, cause)",
+    "replace": "throw cause",
+    "describes": "a storage failure escapes raw instead of wrapped",
+    "category": "error-path"
+  },
+  {
+    "id": "write-before-check",
+    "file": "src/reserve.ts",
+    "find": "  const row = await repo.find(sku)\n  if (row === null) return { ok: false, reason: \"unknown-sku\" }",
+    "replace": "  await repo.reserve(sku, quantity)\n  const row = await repo.find(sku)\n  if (row === null) return { ok: false, reason: \"unknown-sku\" }",
+    "describes": "stock is written before it is known to exist or cover the request",
+    "category": "ordering"
+  },
+  {
+    "id": "insufficient-available",
+    "file": "src/reserve.ts",
+    "find": "reason: \"insufficient\", available: row.available",
+    "replace": "reason: \"insufficient\", available: quantity",
+    "describes": "the insufficient result reports the requested amount, not what is actually there",
+    "category": "contract"
+  }
+]

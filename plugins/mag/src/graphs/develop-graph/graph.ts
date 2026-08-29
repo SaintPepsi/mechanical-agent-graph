@@ -88,14 +88,14 @@ export const resolvePolicy = (input: Input) => ({
  * with nothing kept — and before any model session, so a base that doesn't resolve still costs no
  * agent spend. The gate refuses before anything downstream spends: a missing-ACs ticket is a
  * conversation to have with the maintainer, not a gap this pipeline fills. Its success is
- * discarded — downstream reads `body` straight off `fetch-ticket`'s own success.
+ * discarded: downstream reads `ticketPath` straight off `fetch-ticket`'s own success.
  */
 const prepare = Graph.construct<{ ticket: string; base: string; remote: string; maintainer: string }>("prepare")
   .fork(
     resolveBase, (s) => ({ base: s.base, remote: s.remote }),
     fetchTicket, (s) => ({ ticket: s.ticket, maintainer: s.maintainer })
   )
-  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, body: s.body }), {})
+  .thenKeep(requireAcs, (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath }), {})
   .join(formatBranchNameNode, (s) => ({ ticket: s.ticket, title: s.title, labels: [] }))
   .finalise({
     description: "Resolve the base and fetch the ticket in parallel, then compute the branch name.",
@@ -109,12 +109,12 @@ const prepare = Graph.construct<{ ticket: string; base: string; remote: string; 
       base: Schema.String,
       ticket: Schema.String,
       title: Schema.String,
-      body: Schema.String,
+      ticketPath: Schema.String,
       branch: Schema.String
     }),
     scope: (input) => ({ ticket: input.ticket, graph: "prepare", worktree: false }),
     seed: (input) => input,
-    out: (s) => ({ base: s.base, ticket: s.ticket, title: s.title, body: s.body, branch: s.branch })
+    out: (s) => ({ base: s.base, ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, branch: s.branch })
   })
 
 /**
@@ -152,33 +152,34 @@ const checkout = Graph.construct<{
   })
 
 /**
- * The rail-sketch's `WriteBody`: `write-pr-body` describes the branch's own merge-base diff, then
- * `compose-pr-body` appends `Closes #n` and the run id. The compose step stays `runtime/pr-body.ts`'s
- * total helper rather than a node — a node needs a tagged error, and `prBody` has no failure mode
- * to name — so `.via`, not a box of its own. It reads the ticket and run id from `RunInfo`, never as
- * a parameter. write-pr-body writes no code, so it carries no agent.
+ * The rail-sketch's `WriteBody`: `write-pr-body` describes the branch's own merge-base diff into a
+ * run-root file, then `compose-pr-body` reads it and writes the body with `Closes #n` and the run id
+ * as a second file. The compose step stays `runtime/pr-body.ts`'s helper rather than a node, its
+ * one failure tagged as its own `PrBodyComposeFailed`, so `.via`, not a box of its own. It reads
+ * the ticket and run id from `RunInfo`, never as a parameter. write-pr-body writes no code, so it
+ * carries no agent.
  */
 const writeBody = Graph.construct<{ ticket: string; base: string; model: string }>("write-body")
   .thenKeep(
     writePrBody, (s) => ({ base: s.base, model: s.model }),
     {
-      description: (written) => written.description,
+      descriptionPath: (written) => written.descriptionPath,
       sessions: (written) => written.sessions,
       costUsd: (written) => written.costUsd
     }
   )
-  .via("compose-pr-body", (s) => prBody({ description: s.description }), { body: (body) => body })
+  .via("compose-pr-body", (s) => prBody({ descriptionPath: s.descriptionPath }), { bodyPath: (bodyPath) => bodyPath })
   .finalise({
     description: "Write the PR description from the merge-base diff, then compose the tracker-closing body.",
     input: Schema.Struct({ ticket: Schema.String, base: Schema.String, model: Schema.String }),
     success: Schema.Struct({
-      body: Schema.String,
+      bodyPath: Schema.String,
       sessions: Schema.Array(Schema.String),
       costUsd: Schema.NullOr(Schema.Number)
     }),
     scope: (input) => ({ ticket: input.ticket, graph: "write-body", worktree: false }),
     seed: (input) => input,
-    out: (s) => ({ body: s.body, sessions: s.sessions, costUsd: s.costUsd })
+    out: (s) => ({ bodyPath: s.bodyPath, sessions: s.sessions, costUsd: s.costUsd })
   })
 
 /**
@@ -208,7 +209,7 @@ const publishTail = Graph.construct<{
     base: s.base,
     source: s.branch,
     title: `${s.ticket}: ${s.title}`,
-    body: s.body
+    bodyPath: s.bodyPath
   }))
   .when(
     { name: "worktree to retire", reads: ["path"], test: (s) => s.path !== undefined },
@@ -265,7 +266,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
   }))
   .borrowKeep(
     designGraph,
-    (s) => ({ ticket: s.ticket, title: s.title, body: s.body, agent: s.agent, model: MODEL_DESIGN }),
+    (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, agent: s.agent, model: MODEL_DESIGN }),
     {
       designPath: (designed) => designed.designPath,
       designSessions: (designed) => designed.sessions,
@@ -277,7 +278,7 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
     (s) => ({
       ticket: s.ticket,
       title: s.title,
-      body: s.body,
+      ticketPath: s.ticketPath,
       branch: s.branch,
       command: s.verification,
       base: s.base,

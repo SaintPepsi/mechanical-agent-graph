@@ -34,16 +34,15 @@ const bitbucketPullRequestUrl = (target: RequestTarget): string =>
  * which is why `title` is input rather than generated here).
  *
  * A PR body that names the ticket it closes matters: without it, every graph-opened PR leaves its
- * ticket open on merge. This repo's graphs have no changelog step to source PR body text from, so
- * `body` is caller-supplied, formatted by nothing in this node — the same discipline `title`
- * already follows — and reaches `gh pr create --body` verbatim; deciding what it says is
- * `runtime/pr-body.ts` and the graph's business, not this node's.
+ * ticket open on merge. The body is a run-root file the caller composed (`runtime/pr-body.ts`),
+ * handed to `gh pr create --body-file` by path and read by nothing here, the same discipline
+ * `title` already follows; deciding what it says is the graph's business, not this node's.
  *
  * GitHub is the CLI arm: it asks `gh` for an open request from source to base first and returns
  * that URL rather than opening a duplicate, with `--repo` pinning the target so the whole call is
  * determined by this input alone. GitLab and Bitbucket have no assumed CLI; the proven shape
  * there is the prefilled create-request URL, which submits nothing itself — the host deduplicates
- * on submission, so no duplicate can originate here either. Both arms ignore `body` today
+ * on submission, so no duplicate can originate here either. Both arms ignore `bodyPath` today
  * (GitLab/Bitbucket accept a description param each, but no graph in this repo targets those
  * hosts). Every other host, CodeCommit included, fails named; an arm no graph hands a host into would be
  * dead code.
@@ -57,7 +56,7 @@ export const createPr = make({
     base: Schema.String,
     source: Schema.String,
     title: Schema.String,
-    body: Schema.String
+    bodyPath: Schema.String
   }),
   success: Schema.Struct({ url: Schema.String }),
   run: (input) =>
@@ -93,7 +92,7 @@ export const createPr = make({
           "--base", input.base,
           "--head", input.source,
           "--title", input.title,
-          "--body", input.body
+          "--body-file", input.bodyPath
         ])
         if (created.exitCode !== 0) {
           return yield* Effect.fail(

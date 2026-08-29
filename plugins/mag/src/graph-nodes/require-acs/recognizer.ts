@@ -38,6 +38,8 @@ export const recognizeAcceptanceCriteria = (body: string): Recognized => {
     if (heading !== null) {
       const [, hashes, text] = heading
       const title = text.trim()
+      // The ticket file opens with the ticket's own title as its one level-1 heading; the inventory names sections.
+      if (hashes.length === 1) continue
       headings.push(title)
       // Only a two-hash heading closes the section, so a `###` subsection stays inside it.
       if (hashes.length === 2) inSection = false

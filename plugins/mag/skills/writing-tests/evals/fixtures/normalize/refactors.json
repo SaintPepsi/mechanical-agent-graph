@@ -1,0 +1,9 @@
+[
+ {"id":"extract-tag-parsing","file":"src/normalize.ts","describes":"tag parsing moves into a named helper","edits":[
+   {"find":"function dedupe(","replace":"function parseTags(raw: string | undefined): string[] {\n  return (raw ?? \"\").split(\",\").map((t) => t.trim()).filter((t) => t !== \"\")\n}\n\nfunction dedupe("},
+   {"find":"    const tags = (row.tags ?? \"\")\n      .split(\",\")\n      .map((t) => t.trim())\n      .filter((t) => t !== \"\")","replace":"    const tags = parseTags(row.tags)"}]},
+ {"id":"dedupe-via-map","file":"src/normalize.ts","describes":"dedupe is reimplemented over a Map's insertion order","edits":[
+   {"find":"  const seen = new Set<string>()\n  const out: string[] = []\n  for (const v of values) {\n    if (seen.has(v)) continue\n    seen.add(v)\n    out.push(v)\n  }\n  return out","replace":"  const seen = new Map<string, true>()\n  for (const v of values) if (!seen.has(v)) seen.set(v, true)\n  return [...seen.keys()]"}]},
+ {"id":"hoist-email","file":"src/normalize.ts","describes":"the email expression is split across two statements","edits":[
+   {"find":"    const email = (row.email ?? \"\").trim().toLowerCase()","replace":"    const rawEmail = row.email ?? \"\"\n    const email = rawEmail.trim().toLowerCase()"}]}
+]

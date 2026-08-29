@@ -2,12 +2,12 @@ export const inputExamples = [
   {
     ticket: "GH-152",
     title: "A design step before build for graph work",
-    body: "## Executive Summary\n\nA new graph for tickets whose target is the graph itself."
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-152/run-1/ticket.md"
   },
   {
     ticket: "GH-152",
     title: "A design step before build for graph work",
-    body: "## Executive Summary\n\nA new graph for tickets whose target is the graph itself.",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-152/run-1/ticket.md",
     agent: "effect-expert",
     model: "opus"
   }

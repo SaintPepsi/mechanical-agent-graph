@@ -119,7 +119,7 @@ describe("envision-notation", () => {
       expect(request.agent).toBeUndefined()
       expect(request.model).toBeUndefined()
       expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-      expect(request.prompt).toContain(INPUT.body)
+      expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
       expect(request.prompt).toContain(BLIND_DRAW_RULE)
       expect(request.prompt).toContain(visionIn(repoRoot, INPUT.notation))
     }))
@@ -145,8 +145,8 @@ describe("envision-notation", () => {
       expect(calls).toHaveLength(0)
     }))
 
-  test("a declared blocked verdict fails NotationVisionBlocked immediately — no disk read past dispatch, no git call, no retry from this node", () =>
-    withRepo(async (_repoRoot, _runRoot, run) => {
+  test("a declared blocked verdict writes the reason to the run root and fails NotationVisionBlocked naming it: no vision read, no git call, no retry from this node", () =>
+    withRepo(async (_repoRoot, runRoot, run) => {
       const agent = stubAgent({ verdict: { visionPath: "x", blocked: "the ticket names no ideal shape to draw" } })
       const { calls, service: shell } = scriptedShell([])
       const result = await runWith(envisionNotation.run(INPUT), agent.service, shell, run)
@@ -156,7 +156,8 @@ describe("envision-notation", () => {
       expect(result.failure).toBeInstanceOf(NotationVisionBlocked)
       const failure = result.failure as NotationVisionBlocked
       expect(failure.notation).toBe(INPUT.notation)
-      expect(failure.reason).toBe("the ticket names no ideal shape to draw")
+      expect(failure.reasonPath).toBe(`${runRoot}/vision-blocked-1.md`)
+      expect(readFileSync(failure.reasonPath, "utf8")).toBe("the ticket names no ideal shape to draw")
       expect(calls).toHaveLength(0)
     }))
 

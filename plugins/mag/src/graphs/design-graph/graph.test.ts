@@ -16,7 +16,13 @@ import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/she
 import { removeDir, withForeignRepo } from "mag/test/node-fixture"
 
 const RUN_ID = "20260823120000-de51"
-const INPUT = { ticket: "GH-288", title: "Envision and build the design graph", body: "## Executive Summary\n\nTwo notations." }
+const TICKET = "## Executive Summary\n\nTwo notations."
+/** Stands in for `fetch-ticket`'s own write: the graph reads the ticket from disk, so every run gets a real file. */
+const inputWith = (repoRoot: string) => {
+  const ticketPath = join(repoRoot, "ticket.md")
+  writeFileSync(ticketPath, TICKET)
+  return { ticket: "GH-288", title: "Envision and build the design graph", ticketPath }
+}
 
 /**
  * Routes a `ClaudePrint` to its writer by the one marker string unique to each dispatching node's
@@ -25,9 +31,10 @@ const INPUT = { ticket: "GH-288", title: "Envision and build the design graph", 
  * `graph-node.ts`). Cheaper than threading a fourth channel through the stub, and it doubles as a
  * structural check: a route can only be told apart by text its own node actually composed.
  */
-const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" => {
+const routeOf = (prompt: string): "envision" | "discover" | "recycle" | "brainstorm" => {
   if (prompt.includes("Draw the ideal shape")) return "envision"
   if (prompt.includes("Recon this repository")) return "discover"
+  if (prompt.includes("Map what this ticket can reuse")) return "recycle"
   if (prompt.includes("Read each vision below")) return "brainstorm"
   throw new Error(`stub agent: unrecognised route in prompt: ${prompt.slice(0, 120)}`)
 }
@@ -69,6 +76,15 @@ const stubAgent = (): { readonly requests: Array<ClaudePrint<unknown>>; readonly
         writeFileSync(destination, "# Discover\n\nNothing relevant found.\n")
         return Effect.succeed(
           { verdict: { discoverPath: destination } as A, result: {}, sessions: ["session-discover"], costUsd: 0.2, attempts: 1 } as ClaudeReply<A>
+        )
+      }
+
+      if (route === "recycle") {
+        const destination = destinationOf(request.prompt, "Write the map to")
+        mkdirSync(dirname(destination), { recursive: true })
+        writeFileSync(destination, "# Recycle map\n\nNothing to reuse.\n")
+        return Effect.succeed(
+          { verdict: { recycleMapPath: destination } as A, result: {}, sessions: ["session-recycle"], costUsd: 0.1, attempts: 1 } as ClaudeReply<A>
         )
       }
 
@@ -118,7 +134,7 @@ const writeMultiStackManifest = (repoRoot: string) =>
 
 const runDesignGraph = (repoRoot: string, root: RootEnv, agent: ClaudeAgentService) =>
   Effect.runPromise(
-    designGraph.run(INPUT).pipe(
+    designGraph.run(inputWith(repoRoot)).pipe(
       Effect.provideService(RunRootEnv, root),
       Effect.provideService(RunId, RUN_ID),
       Effect.provide(shellLayer(gitShell(repoRoot))),
@@ -155,10 +171,12 @@ describe("design-graph", () => {
       expect(success.visionPaths.some((path) => path.includes("vision-effect.md"))).toBe(true)
       for (const path of success.visionPaths) expect(readFileSync(path, "utf8").length).toBeGreaterThan(0)
 
-      expect(success.discoverPath).toBe(`${repoRoot}/docs/graph/${INPUT.ticket}/discover.md`)
+      expect(success.discoverPath).toBe(`${repoRoot}/docs/graph/GH-288/discover.md`)
       expect(readFileSync(success.discoverPath, "utf8").length).toBeGreaterThan(0)
+      expect(success.recycleMapPath).toBe(`${repoRoot}/docs/graph/GH-288/recycle-map.md`)
+      expect(readFileSync(success.recycleMapPath, "utf8").length).toBeGreaterThan(0)
 
-      expect(success.designPath).toBe(join(repoRoot, "docs", "graph", INPUT.ticket, "design.md"))
+      expect(success.designPath).toBe(join(repoRoot, "docs", "graph", "GH-288", "design.md"))
       expect(readFileSync(success.designPath, "utf8")).toContain("## Vision Reconciliation")
       expect(success.headSha).toBe("abc123def4567890abc123def4567890abcdef1")
 
@@ -170,8 +188,8 @@ describe("design-graph", () => {
       // `graph-composition.test.ts` already lives with (it never asserts `fixture-host`
       // appears, only the host's children and the composed subgraph). Only a graph composed BENEATH
       // another graph's scope gets its own row, the same test's `fixture-subgraph` entry.
-      const names = journalRows(root, repoRoot, INPUT.ticket).map((row) => row.node)
-      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "assemble-brainstorm-prompt", "brainstorm"]) {
+      const names = journalRows(root, repoRoot, "GH-288").map((row) => row.node)
+      for (const name of ["detect-svelte", "detect-effect", "detect-graph-core", "resolve-notations", "envision-visions", "discover", "recycle-map", "assemble-brainstorm-prompt", "brainstorm"]) {
         expect(names).toContain(name)
       }
       // envision-visions fans out one envision-notation row per matched notation.
@@ -195,6 +213,8 @@ describe("design-graph", () => {
       // neither prompt can quote text only the other node's own dispatch composed.
       expect(envisionRequests[0]!.prompt).not.toContain("Recon this repository")
       expect(discoverRequests[0]!.prompt).not.toContain("Draw the ideal shape")
+      // Neither carries the ticket's text: every route cites the file by path.
+      for (const request of agent.requests) expect(request.prompt).not.toContain("Two notations.")
     }))
 
   // `graph.ts` keeps `scope` a constructor argument rather than a field, so the only way to read
@@ -205,6 +225,7 @@ describe("design-graph", () => {
     withRepo(async (repoRoot) => {
       if (!isSchemaHandle(designGraph.input)) throw new Error("designGraph.input is not a Schema")
       const decode = Schema.decodeUnknownSync(designGraph.input)
+      const INPUT = inputWith(repoRoot)
       expect(decode({ ...INPUT, records: "committed" })).toMatchObject({ records: "committed" })
       expect(() => decode({ ...INPUT, records: "archived" })).toThrow()
 
@@ -246,7 +267,7 @@ describe("design-graph", () => {
       const host = graph({
         name: "fixture-host",
         description: "Composes designGraph as one node among its own, unedited.",
-        input: Schema.Struct({ ticket: Schema.String, title: Schema.String, body: Schema.String }),
+        input: Schema.Struct({ ticket: Schema.String, title: Schema.String, ticketPath: Schema.String }),
         success: Schema.Struct({ marker: Schema.String, designPath: Schema.String }),
         scope: (input) => ({ ticket: input.ticket, graph: "fixture-host", worktree: false }),
         pipeline: (input) =>
@@ -258,7 +279,7 @@ describe("design-graph", () => {
       })
 
       const success = await Effect.runPromise(
-        host.run(INPUT).pipe(
+        host.run(inputWith(repoRoot)).pipe(
           Effect.provideService(RunRootEnv, root),
           Effect.provideService(RunId, RUN_ID),
           Effect.provide(shellLayer(gitShell(repoRoot))),
@@ -267,9 +288,9 @@ describe("design-graph", () => {
       )
 
       expect(success.marker).toBe("host-ran")
-      expect(success.designPath).toBe(join(repoRoot, "docs", "graph", INPUT.ticket, "design.md"))
+      expect(success.designPath).toBe(join(repoRoot, "docs", "graph", "GH-288", "design.md"))
 
-      const rows = journalRows(root, repoRoot, INPUT.ticket)
+      const rows = journalRows(root, repoRoot, "GH-288")
       const names = rows.map((row) => row.node)
       expect(names).toContain("fixture-host-node")
       expect(names).toContain("design-graph")
@@ -320,7 +341,7 @@ describe("design-graph", () => {
       const { calls, service } = trackedShell()
 
       const success = await Effect.runPromise(
-        designGraph.run(INPUT).pipe(
+        designGraph.run(inputWith(workRoot)).pipe(
           Effect.provideService(RunScoped, true),
           Effect.provideService(RunInfo, run),
           Effect.provide(shellLayer(service)),
@@ -328,7 +349,7 @@ describe("design-graph", () => {
         )
       )
 
-      for (const path of [...success.visionPaths, success.discoverPath, success.designPath]) {
+      for (const path of [...success.visionPaths, success.discoverPath, success.recycleMapPath, success.designPath]) {
         expect(path.startsWith(recordsRoot)).toBe(true)
         expect(path.startsWith(workRoot)).toBe(false)
       }

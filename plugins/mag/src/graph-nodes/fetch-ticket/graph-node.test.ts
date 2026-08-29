@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import { Effect, Result, Schema } from "effect"
 import {
   EmptyTicket,
   TicketNotAddressable,
   TicketNotMaintainerAuthored,
+  TicketWriteFailed,
   TrackerFailed,
   TrackerUnreachable
 } from "mag/graph-nodes/fetch-ticket/errors"
@@ -12,7 +14,9 @@ import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import type { Issue } from "mag/graph-nodes/fetch-ticket/render"
 import { renderBody } from "mag/graph-nodes/fetch-ticket/render"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
-import { Shell, type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
+import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
+import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
+import { testRunInfo, withRunRoot } from "mag/test/node-fixture"
 
 const ok = (stdout: string): ShellResult => ({ exitCode: 0, stdout, stderr: "" })
 
@@ -44,14 +48,17 @@ const stubShell = (issueReply: ShellResult) => {
   return { calls, service }
 }
 
-const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService) =>
-  Effect.runSync(Effect.result(effect.pipe(Effect.provide(shellLayer(service)))))
+const runWith = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService, run: RunInfoService = testRunInfo()) =>
+  Effect.runPromise(
+    Effect.result(effect.pipe(Effect.provide(shellLayer(service)), Effect.provideService(RunInfo, run)))
+  )
 
-const failureOf = <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService): E => {
-  const result = runWith(effect, service)
+const failureOf = async <A, E>(effect: Effect.Effect<A, E, never>, service: ShellService): Promise<E> => {
+  const result = await runWith(effect, service)
   if (!Result.isFailure(result)) throw new Error("expected a failure")
   return result.failure
 }
+
 
 describe("fetch-ticket", () => {
   test("the fixtures decode against fetch-ticket's own schemas", () => {
@@ -145,93 +152,111 @@ describe("fetch-ticket", () => {
   })
 
   describe("the node", () => {
-    test("the recorded argv is exactly the one gh call — no sh anywhere", () => {
-      const { calls, service } = stubShell(okIssue({ title: "Fix it", body: "body", author: "maintainer" }))
-      runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
-      expect(calls).toStrictEqual([["gh", "issue", "view", "98", "--json", "title,body,author,comments"]])
-      expect(calls.every((call) => call[0] !== "sh")).toBe(true)
-    })
+    test("the recorded argv is exactly the one gh call, no sh anywhere", () =>
+      withRunRoot("fetch-ticket", async (runRoot) => {
+        const { calls, service } = stubShell(okIssue({ title: "Fix it", body: "body", author: "maintainer" }))
+        await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service, testRunInfo({ runRoot }))
+        expect(calls).toStrictEqual([["gh", "issue", "view", "98", "--json", "title,body,author,comments"]])
+        expect(calls.every((call) => call[0] !== "sh")).toBe(true)
+      }))
 
-    test("succeeds with the ticket id echoed back beside the maintainer-authored title and rendered body", () => {
-      const { service } = stubShell(
-        okIssue({
-          title: "Fix the parser",
-          body: "## Summary",
-          author: "maintainer",
-          comments: [{ author: "maintainer", body: "still true", createdAt: "2026-08-18T12:00:00Z" }]
+    test("writes `<runRoot>/ticket.md` holding the title, body and maintainer comments, and succeeds with its path beside the id and title, never the text", () =>
+      withRunRoot("fetch-ticket", async (runRoot) => {
+        const { service } = stubShell(
+          okIssue({
+            title: "Fix the parser",
+            body: "## Summary",
+            author: "maintainer",
+            comments: [{ author: "maintainer", body: "still true", createdAt: "2026-08-18T12:00:00Z" }]
+          })
+        )
+        const result = await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service, testRunInfo({ runRoot }))
+        expect(Result.isSuccess(result)).toBe(true)
+        if (!Result.isSuccess(result)) return
+        expect(result.success).toStrictEqual({ ticket: "GH-98", title: "Fix the parser", ticketPath: `${runRoot}/ticket.md` })
+        expect(readFileSync(`${runRoot}/ticket.md`, "utf8")).toBe(
+          "# Fix the parser\n\n## Summary\n\n## Comments\n\n### 2026-08-18T12:00:00Z\n\n> still true"
+        )
+      }))
+
+    test("the maintainer is an ordinary input, not a credential this node resolves: the same issue reply succeeds or fails purely on which maintainer the caller passes, and no gh api user call ever fires (the stub throws if one does)", () =>
+      withRunRoot("fetch-ticket", async (runRoot) => {
+        const issueReply = okIssue({
+          title: "T",
+          body: "b",
+          author: "alice",
+          comments: [{ author: "alice", body: "alice's comment", createdAt: "2026-08-18T12:00:00Z" }]
         })
-      )
-      const result = runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
-      expect(Result.isSuccess(result)).toBe(true)
-      if (!Result.isSuccess(result)) return
-      expect(result.success).toStrictEqual({
-        ticket: "GH-98",
-        title: "Fix the parser",
-        body: "## Summary\n\n## Comments\n\n### 2026-08-18T12:00:00Z\n\n> still true"
-      })
-    })
 
-    test("the maintainer is an ordinary input, not a credential this node resolves — the same issue reply succeeds or fails purely on which maintainer the caller passes, and no gh api user call ever fires (the stub throws if one does)", () => {
-      const issueReply = okIssue({
-        title: "T",
-        body: "b",
-        author: "alice",
-        comments: [{ author: "alice", body: "alice's comment", createdAt: "2026-08-18T12:00:00Z" }]
-      })
+        const asMaintainer = await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "alice" }), stubShell(issueReply).service, testRunInfo({ runRoot }))
+        expect(Result.isSuccess(asMaintainer)).toBe(true)
+        if (Result.isSuccess(asMaintainer)) expect(readFileSync(asMaintainer.success.ticketPath, "utf8")).toContain("alice's comment")
 
-      const asMaintainer = runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "alice" }), stubShell(issueReply).service)
-      expect(Result.isSuccess(asMaintainer)).toBe(true)
-      if (Result.isSuccess(asMaintainer)) expect(asMaintainer.success.body).toContain("alice's comment")
+        // The pipeline could be authenticated as anyone; only input.maintainer decides here.
+        const asOther = await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "bob" }), stubShell(issueReply).service, testRunInfo({ runRoot }))
+        expect(Result.isFailure(asOther)).toBe(true)
+        if (Result.isFailure(asOther)) expect(asOther.failure).toBeInstanceOf(TicketNotMaintainerAuthored)
+      }))
 
-      // The pipeline could be authenticated as anyone; only input.maintainer decides here.
-      const asOther = runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "bob" }), stubShell(issueReply).service)
-      expect(Result.isFailure(asOther)).toBe(true)
-      if (Result.isFailure(asOther)) expect(asOther.failure).toBeInstanceOf(TicketNotMaintainerAuthored)
-    })
-
-    test("a ticket id with no trailing number is TicketNotAddressable, and gh issue view never runs", () => {
+    test("a run with no run root fails TicketWriteFailed before the tracker is ever asked", async () => {
       const { calls, service } = stubShell(ok("unused"))
-      const error = failureOf(fetchTicket.run({ ticket: "nope", maintainer: "maintainer" }), service)
+      const error = await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }).pipe(Effect.provideService(RunInfo, testRunInfo({ runRoot: "" }))), service)
+      expect(error).toBeInstanceOf(TicketWriteFailed)
+      expect((error as TicketWriteFailed).detail).toBe("run root missing")
+      expect(calls).toStrictEqual([])
+    })
+
+    test("a ticket id with no trailing number is TicketNotAddressable, and gh issue view never runs", async () => {
+      const { calls, service } = stubShell(ok("unused"))
+      const error = await failureOf(fetchTicket.run({ ticket: "nope", maintainer: "maintainer" }), service)
       expect(error).toBeInstanceOf(TicketNotAddressable)
       expect(calls).toStrictEqual([])
     })
 
-    test("gh issue view exit 4 is TrackerUnreachable — gh's own documented authentication-required code", () => {
+    test("gh issue view exit 4 is TrackerUnreachable, gh's own documented authentication-required code", async () => {
       const { service } = stubShell({ exitCode: 4, stdout: "", stderr: "gh: authentication required\n" })
-      const error = failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
+      const error = await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
       expect(error).toBeInstanceOf(TrackerUnreachable)
     })
 
-    test("gh issue view reporting no such issue is TicketNotAddressable", () => {
+    test("gh issue view reporting no such issue is TicketNotAddressable", async () => {
       const { service } = stubShell({
         exitCode: 1,
         stdout: "",
         stderr: "GraphQL: Could not resolve to an issue or pull request with the number of 98. (repository.issue)\n"
       })
-      expect(failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(TicketNotAddressable)
+      expect(await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(TicketNotAddressable)
     })
 
-    test("any other non-zero exit from gh issue view is TrackerFailed, carrying the code rather than guessing", () => {
+    test("any other non-zero exit from gh issue view is TrackerFailed, carrying the code rather than guessing", async () => {
       const { service } = stubShell({ exitCode: 42, stdout: "", stderr: "boom" })
-      const error = failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
+      const error = await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)
       expect(error).toBeInstanceOf(TrackerFailed)
       expect((error as TrackerFailed).exitCode).toBe(42)
     })
 
-    test("a foreign-authored issue is TicketNotMaintainerAuthored — nothing in it may enter a prompt", () => {
+    test("a foreign-authored issue is TicketNotMaintainerAuthored: nothing in it may enter a prompt", async () => {
       const { service } = stubShell(okIssue({ title: "T", body: "b", author: "stranger" }))
-      expect(failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(TicketNotMaintainerAuthored)
+      expect(await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(TicketNotMaintainerAuthored)
     })
 
-    test("a blank title fails rather than travelling onward as an empty string", () => {
+    test("a blank title fails rather than travelling onward as an empty string", async () => {
       const { service } = stubShell(okIssue({ title: "  ", body: "b", author: "maintainer" }))
-      expect(failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(EmptyTicket)
+      expect(await failureOf(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), service)).toBeInstanceOf(EmptyTicket)
     })
 
-    test("resolves the live Shell by default, so nothing has to be provided to run it", () => {
-      // Not an assertion about the subprocess: only that `Shell` is a Reference with a default, which
-      // is what keeps this node's R at `never` and therefore CLI-reachable (`runtime/types.ts`).
-      expect(Effect.runSync(Effect.map(Shell, (shell) => typeof shell.run))).toBe("function")
-    })
+    test("a second write into the same run root fails TicketWriteFailed at the OS, the first file untouched", () =>
+      withRunRoot("fetch-ticket", async (runRoot) => {
+        const first = stubShell(okIssue({ title: "First", body: "one", author: "maintainer" }))
+        await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), first.service, testRunInfo({ runRoot }))
+
+        const second = stubShell(okIssue({ title: "Second", body: "two", author: "maintainer" }))
+        const result = await runWith(fetchTicket.run({ ticket: "GH-98", maintainer: "maintainer" }), second.service, testRunInfo({ runRoot }))
+        expect(Result.isFailure(result)).toBe(true)
+        if (!Result.isFailure(result)) return
+        expect(result.failure).toBeInstanceOf(TicketWriteFailed)
+        expect((result.failure as TicketWriteFailed).detail).toBe("ticket file already exists")
+        expect(readFileSync(`${runRoot}/ticket.md`, "utf8")).toBe("# First\n\none")
+      }))
   })
 })

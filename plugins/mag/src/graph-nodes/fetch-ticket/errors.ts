@@ -31,3 +31,14 @@ export class TicketNotMaintainerAuthored extends Data.TaggedError("FETCH_TICKET_
 export class EmptyTicket extends Data.TaggedError("FETCH_TICKET_EMPTY")<{
   readonly ticket: string
 }> {}
+
+/**
+ * The ticket file could not land in the run root: the run has no run directory (`discover`'s own
+ * "run root missing" detail, checked before the tracker is asked), or the write itself failed.
+ * Every later node reads this file, so a run without it has nothing to work from.
+ */
+export class TicketWriteFailed extends Data.TaggedError("FETCH_TICKET_WRITE_FAILED")<{
+  readonly ticket: string
+  readonly path: string
+  readonly detail: string
+}> {}

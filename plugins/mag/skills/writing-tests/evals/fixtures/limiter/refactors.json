@@ -1,0 +1,10 @@
+[
+ {"id":"extract-denied-helper","file":"src/limiter.ts","describes":"the denied-decision construction moves into a private helper","edits":[
+   {"find":"  private live(key: string, now: number): number[] {","replace":"  private denied(kept: readonly number[], now: number): Decision {\n    return { allowed: false, remaining: 0, retryAfterMs: kept[0]! + this.windowMs - now }\n  }\n\n  private live(key: string, now: number): number[] {"},
+   {"find":"    if (kept.length >= this.limit) {\n      const oldest = kept[0]!\n      return { allowed: false, remaining: 0, retryAfterMs: oldest + this.windowMs - now }\n    }\n\n    kept.push(now)","replace":"    if (kept.length >= this.limit) return this.denied(kept, now)\n\n    kept.push(now)"}]},
+ {"id":"loop-instead-of-filter","file":"src/limiter.ts","describes":"the eviction filter becomes an explicit loop","edits":[
+   {"find":"    const kept = all.filter((t) => t > cutoff)\n    this.hits.set(key, kept)","replace":"    const kept: number[] = []\n    for (const t of all) if (t > cutoff) kept.push(t)\n    this.hits.set(key, kept)"}]},
+ {"id":"rename-private-field","file":"src/limiter.ts","describes":"the private map is renamed","edits":[
+   {"find":"  private readonly hits = new Map<string, number[]>()","replace":"  private readonly buckets = new Map<string, number[]>()"},
+   {"find":"this.hits","replace":"this.buckets","all":true}]}
+]

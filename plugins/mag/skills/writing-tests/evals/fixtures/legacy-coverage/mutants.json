@@ -1,0 +1,90 @@
+[
+  {
+    "id": "minutes-are-seconds",
+    "file": "src/duration.ts",
+    "find": "  m: 60_000,",
+    "replace": "  m: 6_000,",
+    "describes": "a minute becomes six seconds",
+    "category": "arithmetic"
+  },
+  {
+    "id": "ms-unit-shadowed",
+    "file": "src/duration.ts",
+    "find": "(ms|s|m|h|d)",
+    "replace": "(s|m|h|d|ms)",
+    "describes": "alternation order changes so \"500ms\" parses as 500s plus trailing junk",
+    "category": "boundary"
+  },
+  {
+    "id": "case-sensitivity",
+    "file": "src/duration.ts",
+    "find": "const segment = /(\\d+)\\s*(ms|s|m|h|d)/giy",
+    "replace": "const segment = /(\\d+)\\s*(ms|s|m|h|d)/gy",
+    "describes": "\"1H30M\" is no longer accepted",
+    "category": "contract"
+  },
+  {
+    "id": "trailing-junk-accepted",
+    "file": "src/duration.ts",
+    "find": "if (consumed !== trimmed.length) throw new InvalidDuration(input, \"unparsed trailing input\")",
+    "replace": "if (false) throw new InvalidDuration(input, \"unparsed trailing input\")",
+    "describes": "\"1h banana\" silently parses as 1h instead of throwing",
+    "category": "error-path"
+  },
+  {
+    "id": "empty-accepted",
+    "file": "src/duration.ts",
+    "find": "if (trimmed === \"\") throw new InvalidDuration(input, \"empty\")",
+    "replace": "if (false) throw new InvalidDuration(input, \"empty\")",
+    "describes": "an empty string returns 0 instead of throwing",
+    "category": "error-path"
+  },
+  {
+    "id": "repeated-units-overwrite",
+    "file": "src/duration.ts",
+    "find": "total += amount * UNIT_MS[unit]!",
+    "replace": "total = amount * UNIT_MS[unit]!",
+    "describes": "\"1h30m\" returns 30m \u2014 later segments replace earlier ones instead of adding",
+    "category": "arithmetic"
+  },
+  {
+    "id": "format-zero",
+    "file": "src/duration.ts",
+    "find": "if (ms === 0) return \"0ms\"",
+    "replace": "if (ms === 0) return \"\"",
+    "describes": "formatting zero returns an empty string",
+    "category": "boundary"
+  },
+  {
+    "id": "format-remainder",
+    "file": "src/duration.ts",
+    "find": "      rest -= count * size",
+    "replace": "      rest -= count * size - 1",
+    "describes": "the remainder is off by one per unit, so 90m formats as 1h30m1ms",
+    "category": "arithmetic"
+  },
+  {
+    "id": "format-negative-guard",
+    "file": "src/duration.ts",
+    "find": "if (!Number.isInteger(ms) || ms < 0) throw new InvalidDuration",
+    "replace": "if (false) throw new InvalidDuration",
+    "describes": "a negative or fractional input is formatted instead of rejected",
+    "category": "error-path"
+  },
+  {
+    "id": "format-largest-first",
+    "file": "src/duration.ts",
+    "find": "for (const unit of [\"d\", \"h\", \"m\", \"s\", \"ms\"])",
+    "replace": "for (const unit of [\"h\", \"d\", \"m\", \"s\", \"ms\"])",
+    "describes": "a duration over a day renders as 25h instead of 1h1h... losing the day unit ordering",
+    "category": "contract"
+  },
+  {
+    "id": "whitespace-between-segments",
+    "file": "src/duration.ts",
+    "find": "    while (consumed < trimmed.length && trimmed[consumed] === \" \") {",
+    "replace": "    while (false) {",
+    "describes": "\"1h 30m\" is rejected as trailing junk",
+    "category": "contract"
+  }
+]

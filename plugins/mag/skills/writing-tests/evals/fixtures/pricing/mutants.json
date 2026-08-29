@@ -1,0 +1,82 @@
+[
+  {
+    "id": "threshold-boundary",
+    "file": "src/pricing.ts",
+    "find": "if (subtotal >= 10000)",
+    "replace": "if (subtotal > 10000)",
+    "describes": "the discount threshold becomes exclusive \u2014 10000 cents exactly gets nothing",
+    "category": "boundary"
+  },
+  {
+    "id": "member-rate",
+    "file": "src/pricing.ts",
+    "find": "isMember ? 0.1 : 0.05",
+    "replace": "isMember ? 0.15 : 0.05",
+    "describes": "members get 15% instead of 10%",
+    "category": "contract"
+  },
+  {
+    "id": "nonmember-branch",
+    "file": "src/pricing.ts",
+    "find": "isMember ? 0.1 : 0.05",
+    "replace": "isMember ? 0.1 : 0",
+    "describes": "non-members silently lose their 5%",
+    "category": "branch"
+  },
+  {
+    "id": "rounding",
+    "file": "src/pricing.ts",
+    "find": "subtotal - Math.round(subtotal * rate)",
+    "replace": "subtotal - Math.floor(subtotal * rate)",
+    "describes": "discount rounds down instead of half-away-from-zero",
+    "category": "arithmetic"
+  },
+  {
+    "id": "quantity-guard",
+    "file": "src/pricing.ts",
+    "find": "if (!Number.isInteger(line.quantity) || line.quantity < 0) {",
+    "replace": "if (false) {",
+    "describes": "a negative or fractional quantity is silently accepted",
+    "category": "error-path"
+  },
+  {
+    "id": "quantity-ignored",
+    "file": "src/pricing.ts",
+    "find": "total += line.unitPriceCents * line.quantity",
+    "replace": "total += line.unitPriceCents",
+    "describes": "quantity is ignored \u2014 every line counts once",
+    "category": "arithmetic"
+  },
+  {
+    "id": "negative-sign",
+    "file": "src/pricing.ts",
+    "find": "return `${negative ? \"-\" : \"\"}$${grouped}.${fraction}`",
+    "replace": "return `$${negative ? \"-\" : \"\"}${grouped}.${fraction}`",
+    "describes": "negatives format as $-1.00 instead of -$1.00",
+    "category": "formatting"
+  },
+  {
+    "id": "fraction-padding",
+    "file": "src/pricing.ts",
+    "find": "String(abs % 100).padStart(2, \"0\")",
+    "replace": "String(abs % 100)",
+    "describes": "4 cents formats as $0.4 instead of $0.04",
+    "category": "boundary"
+  },
+  {
+    "id": "thousands-separator",
+    "file": "src/pricing.ts",
+    "find": "whole.replace(/\\B(?=(\\d{3})+(?!\\d))/g, \",\")",
+    "replace": "whole",
+    "describes": "thousands separators disappear",
+    "category": "formatting"
+  },
+  {
+    "id": "rate-range-guard",
+    "file": "src/pricing.ts",
+    "find": "if (rate < 0 || rate > 1) throw new RangeError",
+    "replace": "if (false) throw new RangeError",
+    "describes": "an out-of-range rate is accepted instead of rejected",
+    "category": "error-path"
+  }
+]

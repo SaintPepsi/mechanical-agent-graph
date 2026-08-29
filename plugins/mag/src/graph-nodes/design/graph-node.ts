@@ -7,6 +7,7 @@ import { make } from "mag/runtime/graph-node.definition"
 import { platform } from "mag/runtime/platform"
 import { record } from "mag/runtime/records"
 import { recordPath, RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 import { composeDesignPrompt } from "mag/skills/design/compose"
 import { SKILLS_TOKEN, TICKET_TOKEN } from "mag/skills/design/tokens"
 import { HEADLESS_DESIGN } from "mag/skills/design/variants"
@@ -42,13 +43,11 @@ const skillFor = (ticket: string, designPath: string): string =>
  * so there is nothing here left to out-argue it.
  */
 const promptFor = (
-  input: { readonly ticket: string; readonly title: string; readonly body: string },
+  input: { readonly ticket: string; readonly title: string; readonly ticketPath: string },
   designPath: string
 ): string =>
   [
-    `Ticket ${input.ticket}: ${input.title}`,
-    "",
-    input.body,
+    ...ticketReference(input),
     "",
     "Apply the brainstorming skill below to this ticket, and reply with the design doc's path.",
     "",
@@ -84,7 +83,7 @@ export const design = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     /** A named agent to run the session as, same convention as `build`'s field. */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */

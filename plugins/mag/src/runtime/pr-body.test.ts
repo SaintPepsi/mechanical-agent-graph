@@ -1,20 +1,24 @@
 import { describe, expect, test } from "bun:test"
-import { Effect } from "effect"
-import { issueNumber, prBody } from "mag/runtime/pr-body"
-import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { Effect, Result } from "effect"
+import { issueNumber, prBody, PrBodyComposeFailed } from "mag/runtime/pr-body"
+import { RunInfo } from "mag/runtime/run-info"
+import { testRunInfo, withRunRoot } from "mag/test/node-fixture"
 
-const runInfo = (overrides: Partial<RunInfoService> = {}): RunInfoService => ({
-  runId: "019bd0f4-3c21-7f1a-9c0e-2f0f2c1a4b77",
-  ticket: "GH-231",
-  graph: "develop-graph",
-  repoRoot: "/repo",
-  sha: "abc123",
-  pipelineSha: "def456",
-  runRoot: "/repo/.claude/graph/run-1",
-  workRoot: "/repo",
-  recordsRoot: "/repo",
-  records: "run-root",
-  ...overrides
+// Compile-time pin on `prBody`'s declared error: a public `runtime/` type ships with a pin
+// (`construct.test.ts`'s `.finalise` precedent), since nothing at runtime can observe `E`. A
+// `bun run typecheck` failure here is the whole test; the `describe` below only keeps it visible.
+type Extends<A, B> = [A] extends [B] ? true : false
+type ComposeError = Effect.Error<ReturnType<typeof prBody>>
+const _ownTagSurvives: Extends<PrBodyComposeFailed, ComposeError> = true
+const _nothingElseLeaks: Extends<ComposeError, PrBodyComposeFailed> = true
+
+describe("prBody's error union is its own tag alone", () => {
+  test("the pin is a typecheck fact; this test exists so the file names it", () => {
+    expect(_ownTagSurvives).toBe(true)
+    expect(_nothingElseLeaks).toBe(true)
+  })
 })
 
 describe("issueNumber", () => {
@@ -39,38 +43,52 @@ describe("issueNumber", () => {
 
 describe("prBody", () => {
   const DESCRIPTION = "Fixes the NUL-byte crash at the artifact writer."
+  const RUN_ID = "019bd0f4-3c21-7f1a-9c0e-2f0f2c1a4b77"
 
-  test("the whole body, by value: the description line, then Closes #<n>, then the run pointer", async () => {
-    const body = await Effect.runPromise(
-      prBody({ description: DESCRIPTION }).pipe(Effect.provideService(RunInfo, runInfo()))
-    )
-    expect(body).toBe(`${DESCRIPTION}\n\nCloses #231\n\nrun: 019bd0f4-3c21-7f1a-9c0e-2f0f2c1a4b77`)
+  /** Stands in for `write-pr-body`'s own artifact, then composes the body into the same run root and reads it back. */
+  const composed = (description: string) =>
+    withRunRoot("pr-body", async (runRoot) => {
+      const descriptionPath = join(runRoot, "pr-description-1.md")
+      writeFileSync(descriptionPath, description)
+      const bodyPath = await Effect.runPromise(
+        prBody({ descriptionPath }).pipe(Effect.provideService(RunInfo, testRunInfo({ runRoot, ticket: "GH-231", runId: RUN_ID })))
+      )
+      return { bodyPath, body: readFileSync(bodyPath, "utf8"), runRoot }
+    })
+
+  test("the whole body, as a run-root file: the description, then Closes #<n>, then the run pointer", async () => {
+    const { bodyPath, body, runRoot } = await composed(DESCRIPTION)
+    expect(bodyPath).toBe(`${runRoot}/pr-body-1.md`)
+    expect(body).toBe(`${DESCRIPTION}\n\nCloses #231\n\nrun: ${RUN_ID}`)
   })
 
   test("as properties: the description is the body's first line, and Closes #<n> stands alone on its own line", async () => {
-    const body = await Effect.runPromise(
-      prBody({ description: DESCRIPTION }).pipe(Effect.provideService(RunInfo, runInfo()))
-    )
-    const lines = body.split("\n")
+    const lines = (await composed(DESCRIPTION)).body.split("\n")
     expect(lines[0]).toBe(DESCRIPTION)
     expect(lines).toContain("Closes #231")
   })
 
   test("the body carries no review-pass count — a revert goes red", async () => {
-    const body = await Effect.runPromise(
-      prBody({ description: DESCRIPTION }).pipe(Effect.provideService(RunInfo, runInfo()))
-    )
-    expect(body).not.toContain("review passes")
+    expect((await composed(DESCRIPTION)).body).not.toContain("review passes")
   })
+
+  test("a missing description file fails PrBodyComposeFailed naming it, never a bare platform error", () =>
+    withRunRoot("pr-body", async (runRoot) => {
+      const descriptionPath = join(runRoot, "absent.md")
+      const result = await Effect.runPromise(
+        Effect.result(prBody({ descriptionPath }).pipe(Effect.provideService(RunInfo, testRunInfo({ runRoot }))))
+      )
+      expect(Result.isFailure(result)).toBe(true)
+      if (!Result.isFailure(result)) return
+      expect(result.failure).toBeInstanceOf(PrBodyComposeFailed)
+      expect(result.failure.descriptionPath).toBe(descriptionPath)
+      expect(result.failure.runRoot).toBe(runRoot)
+    }))
 
   test("a multi-line description keeps Closes #<n> isolated on its own line", async () => {
     const multiline = `${DESCRIPTION}\n\n- Renames \`ships\` to \`description\` on the review verdict.`
-    const body = await Effect.runPromise(
-      prBody({ description: multiline }).pipe(Effect.provideService(RunInfo, runInfo()))
-    )
-    const lines = body.split("\n")
+    const lines = (await composed(multiline)).body.split("\n")
     expect(lines[0]).toBe(DESCRIPTION)
-    expect(lines).toContain("Closes #231")
     expect(lines.filter((line) => line === "Closes #231")).toHaveLength(1)
   })
 })

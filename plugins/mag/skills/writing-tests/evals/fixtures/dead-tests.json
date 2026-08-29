@@ -1,0 +1,8 @@
+{
+  "limiter": ["creates a limiter and checks a key", "returns a decision", "returns the expected decision shape", "peek is stable", "expires old hits"],
+  "normalize": ["processes a batch of rows", "returns a report", "returns contacts and a rejected count", "is consistent across calls", "merges duplicate emails"],
+  "sync": ["runs a sync", "returns a report", "reports the four counters", "is repeatable", "retries a transient failure"],
+  "pricing": ["totals a cart", "returns a subtotal", "formats a price", "discount rate is deterministic", "rounds half away from zero"],
+  "inventory": ["reserves stock", "returns a result", "result carries an ok flag", "is consistent", "rejects a quantity of zero"],
+  "legacy-coverage": ["parses a duration", "returns a number", "formats", "round-trips", "rejects nonsense"]
+}

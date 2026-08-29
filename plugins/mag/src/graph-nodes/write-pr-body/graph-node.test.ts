@@ -1,17 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { Effect, FileSystem, Layer, Result, Schema } from "effect"
+import { Effect, Layer, Result, Schema } from "effect"
 import { PrBodyDiffWriteFailed, PrBodyGitFailed, PrBodyRunRootMissing } from "mag/graph-nodes/write-pr-body/errors"
 import { inputExamples, successExamples } from "mag/graph-nodes/write-pr-body/examples"
 import { writePrBody } from "mag/graph-nodes/write-pr-body/graph-node"
 import { type ClaudeAgentService, type ClaudePrint, type ClaudeReply, claudeAgentLayer } from "mag/runtime/claude/service"
 import { isSchemaHandle } from "mag/runtime/graph-node.shape"
-import { platform } from "mag/runtime/platform"
 import { RunInfo, type RunInfoService } from "mag/runtime/run-info"
 import { type ShellResult, type ShellService, shellLayer } from "mag/runtime/shell"
-import { testRunInfo } from "mag/test/node-fixture"
+import { testRunInfo, withRunRoot as withRunRootIn } from "mag/test/node-fixture"
 
 const DIFF = "diff --git a/x.ts b/x.ts\n-old\n+new\n"
 const HEAD = "e5a9c1d0b3f7a2e4d6c8b0a1f3e5d7c9b1a3e5d7"
@@ -65,26 +63,8 @@ const stubAgent = (description: string = DESCRIPTION) => {
   return { requests, service }
 }
 
-/** Deletes a fixture directory, and only a fixture directory: anything outside tmpdir is refused. */
-const removeDir = (path: string): Promise<void> => {
-  if (!path.startsWith(tmpdir())) throw new Error(`removeDir: refusing to delete outside tmpdir: ${path}`)
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem
-      yield* fs.remove(path, { recursive: true })
-    }).pipe(Effect.provide(platform))
-  )
-}
-
-/** A real, disposable run root — writing the diff artifact needs one, `review-diff/graph-node.test.ts`'s `withRunRoot` idiom. */
-const withRunRoot = async <T>(fn: (runRoot: string) => Promise<T>): Promise<T> => {
-  const runRoot = mkdtempSync(join(tmpdir(), "write-pr-body-node-"))
-  try {
-    return await fn(runRoot)
-  } finally {
-    await removeDir(runRoot)
-  }
-}
+/** Writing the diff and description artifacts needs a real run root. */
+const withRunRoot = <T>(fn: (runRoot: string) => Promise<T>): Promise<T> => withRunRootIn("write-pr-body", fn)
 
 const RUN = testRunInfo()
 const INPUT = inputExamples[0]!
@@ -160,7 +140,7 @@ describe("write-pr-body", () => {
       expect(readFileSync(`${runRoot}/diff-1.patch`, "utf8")).toBe(DIFF)
     }))
 
-  test("success carries the stub's description verbatim and the HEAD the node actually read", () =>
+  test("success names the description's run-root file, holding the stub's text verbatim, beside the HEAD the node actually read", () =>
     withRunRoot(async (runRoot) => {
       const shell = gitStub({ head: HEAD })
       const agent = stubAgent()
@@ -169,11 +149,12 @@ describe("write-pr-body", () => {
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
       expect(result.success).toStrictEqual({
-        description: DESCRIPTION,
+        descriptionPath: `${runRoot}/pr-description-1.md`,
         headSha: HEAD,
         sessions: ["write-pr-body-session"],
         costUsd: 0.12
       })
+      expect(readFileSync(result.success.descriptionPath, "utf8")).toBe(DESCRIPTION)
     }))
 
   test("an empty runRoot is a wiring bug, not a data problem — PrBodyRunRootMissing before any dispatch", async () => {

@@ -19,6 +19,7 @@ import { commitAgentLeftovers, gitRead, gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
 import { dirtyPaths } from "mag/runtime/porcelain"
 import { RunInfo, workdir } from "mag/runtime/run-info"
+import { ticketReference } from "mag/runtime/ticket"
 
 /**
  * What the agent must return; `decode` enforces the same contract `--json-schema` shows it.
@@ -49,17 +50,17 @@ const sendBackBlock = (findingsPath: string): readonly string[] => [
  * missing, not by default growth. No suite command travels here: verification is a mechanical
  * loopback owned by the caller now, not a sentence a session is trusted to act on.
  *
- * A resumed pass drops the ticket framing (title, body, branch, "implement what the ticket asks")
- * because the session already holds it, and restating it invites a re-implementation from scratch
- * rather than a fix. The standing discipline is not framing, though, so it renders on resumed
- * passes too: every caller gets the acceptance-criterion proof sentence, and every caller gets the
- * artifact-write sentence. The passes that fix a finding are the ones most in need of being
- * charged to prove the fix.
+ * A resumed pass drops the ticket framing (title, ticket reference, branch, "implement what the
+ * ticket asks") because the session already holds it, and restating it invites a re-implementation
+ * from scratch rather than a fix. The standing discipline is not framing, though, so it renders on
+ * resumed passes too: every caller gets the acceptance-criterion proof sentence, and every caller
+ * gets the artifact-write sentence. The passes that fix a finding are the ones most in need of
+ * being charged to prove the fix.
  */
 const promptFor = (input: {
   readonly ticket: string
   readonly title: string
-  readonly body: string
+  readonly ticketPath: string
   readonly branch: string
   readonly resume?: string | undefined
   readonly findingsPath?: string | undefined
@@ -67,9 +68,7 @@ const promptFor = (input: {
 }): string =>
   [
     ...(input.resume !== undefined ? [] : [
-      `Ticket ${input.ticket}: ${input.title}`,
-      "",
-      input.body,
+      ...ticketReference(input),
       "",
       `You are on branch \`${input.branch}\` in this repository's working tree. Implement what the`,
       "ticket asks for: gather your own context from the repository, make the change, and commit",
@@ -176,7 +175,7 @@ export const build = make({
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
-    body: Schema.String,
+    ticketPath: Schema.String,
     branch: Schema.String,
     /**
      * Extra instructions from whoever invokes this node, spliced into the prompt verbatim. The node
@@ -195,7 +194,7 @@ export const build = make({
     /**
      * The session this pass resumes: `--resume`, passed straight to the transport. Present means the
      * prompt carries only the standing discipline every pass carries plus this pass's own
-     * instruction, `findingsPath` and/or `addendum`, and drops the ticket triple and the branch
+     * instruction, `findingsPath` and/or `addendum`, and drops the ticket reference and the branch
      * line, because the session already holds those. Absent means an ordinary fresh dispatch.
      */
     resume: Schema.optional(Schema.String),

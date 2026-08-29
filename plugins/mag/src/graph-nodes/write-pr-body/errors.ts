@@ -23,3 +23,10 @@ export class PrBodyDiffWriteFailed extends Data.TaggedError("PR_BODY_DIFF_WRITE_
   readonly runRoot: string
   readonly detail: string
 }> {}
+
+/** `writeArtifact`'s `PlatformError` on the description write, after a real session already produced it: `sessions` travels with it because the spend already happened. */
+export class PrBodyDescriptionWriteFailed extends Data.TaggedError("PR_BODY_DESCRIPTION_WRITE_FAILED")<{
+  readonly runRoot: string
+  readonly detail: string
+  readonly sessions: readonly string[]
+}> {}
