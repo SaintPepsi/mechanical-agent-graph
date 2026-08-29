@@ -31,7 +31,7 @@ const isRecordsPolicyCheck = Schema.makeFilter<string>(
  * structural typing accepts the wider tuple, and reshaping here would be a second copy of a fact
  * the probes already state. */
 const probeVerdicts = (text: string) =>
-  Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({})], { concurrency: "unbounded" })
+  Effect.all([detectSvelte.run({ text }), detectEffect.run({ text }), detectGraphCore.run({ text })], { concurrency: "unbounded" })
 
 /** Every route this graph dispatches reads the same ticket triple and the same optional agent
  * assignment, spelled once so `envisionVisions`, `discover` and `designUnderReview`'s

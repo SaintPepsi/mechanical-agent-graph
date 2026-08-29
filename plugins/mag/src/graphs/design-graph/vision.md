@@ -6,7 +6,7 @@ graph TD
   subgraph Probes["probes · parallel, no ticket dependency"]
     PS["detect-svelte · Mechanical<br/>manifest walk for a svelte dependency"]
     PE["detect-effect · Mechanical<br/>manifest walk for an effect dependency"]
-    PG["detect-graph-core · Mechanical<br/>root manifest names this repository"]
+    PG["detect-graph-core · Mechanical<br/>root manifest names this repository and the ticket's GraphNodes line names a node"]
   end
 
   ASM["assemble-brainstorm-prompt · Mechanical<br/>compose core + matched envisioning modules, no match falls back to generic; enforce the size budget"]
