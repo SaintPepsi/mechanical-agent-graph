@@ -105,7 +105,7 @@ describe("build", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(build.success)(example)
   })
 
-  test("the prompt is near-empty, ticket and branch, and the agent runs in workRoot", () =>
+  test("the prompt is near-empty, the plan and the branch and nothing of the ticket, and the agent runs in workRoot", () =>
     withRunRoot(async (runRoot) => {
       const { calls, service } = scriptedShell([out("aaa111\n"), out(""), out(""), out("1\n"), out("bbb222\n")])
       const agent = stubAgent()
@@ -114,9 +114,11 @@ describe("build", () => {
       expect(agent.requests).toHaveLength(1)
       const request = agent.requests[0]!
       expect(request.cwd).toBe("/repo")
-      expect(request.prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
-      expect(request.prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
+      expect(request.prompt).toContain(`Work through the plan at ${INPUT.planPath} one task at a time`)
       expect(request.prompt).toContain(INPUT.branch)
+      // The plan is the whole contract: the ticket is not cited, named or titled here.
+      expect(request.prompt).not.toContain("Read the ticket at")
+      expect(request.prompt).not.toContain(`Ticket ${INPUT.ticket}`)
       // Every dispatch is charged to prove acceptance criteria through the shipped symbol.
       expect(request.prompt).toContain("executes the exported symbol that ships")
       expect(calls.map((call) => call.argv)).toStrictEqual([
@@ -718,7 +720,7 @@ describe("build", () => {
       expect(failure.stderr).toBe("")
     }))
 
-  test("`resume` reaches the transport, and the resumed prompt drops the ticket framing but keeps the standing discipline", () =>
+  test("`resume` reaches the transport, and the resumed prompt drops the framing but keeps the standing discipline", () =>
     withRunRoot(async (runRoot) => {
       const resumed = inputExamples[3]!
       const agent = stubAgent()
@@ -733,9 +735,8 @@ describe("build", () => {
       const request = agent.requests[0]!
       expect(request.resume).toBe(resumed.resume)
       expect(request.prompt).toContain(resumed.addendum!)
-      expect(request.prompt).not.toContain(resumed.ticketPath)
+      expect(request.prompt).not.toContain(resumed.planPath)
       expect(request.prompt).not.toContain(resumed.branch)
-      expect(request.prompt).not.toContain(`Ticket ${resumed.ticket}`)
       // The acceptance-criterion proof sentence and the artifact-write sentence are discipline, not
       // framing: a resumed pass is still charged to prove what it fixes, so both must survive
       // rather than being gated on a fresh pass only.

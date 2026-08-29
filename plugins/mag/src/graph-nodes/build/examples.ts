@@ -1,15 +1,13 @@
 export const inputExamples = [
   {
     ticket: "GH-98",
-    title: "NUL bytes in a ticket body abort the run",
-    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
-    branch: "fix/gh-98-nul-byte"
+    branch: "fix/gh-98-nul-byte",
+    planPath: "docs/graph/GH-98/plan.md"
   },
   {
     ticket: "GH-98",
-    title: "NUL bytes in a ticket body abort the run",
-    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
+    planPath: "docs/graph/GH-98/plan.md",
     addendum: "Address every reviewer finding below, then commit:\n- the fix misses the second NUL at line 105",
     agent: "effect-expert",
     model: "sonnet"
@@ -18,19 +16,17 @@ export const inputExamples = [
     // A send-back pass: `build-under-review` wires `findingsPath` from the review verdict, with no
     // `addendum` alongside it.
     ticket: "GH-98",
-    title: "NUL bytes in a ticket body abort the run",
-    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
+    planPath: "docs/graph/GH-98/plan.md",
     findingsPath: "/home/dev/repo/.claude/graph/GH-98/run-1/review-diff-1.md"
   },
   {
-    // A resumed repair, dispatched by the loop against a red suite's own report. The ticket
-    // reference and branch are here only because the schema keeps them required; the resumed
-    // prompt drops them, the session it resumes already holding them.
+    // A resumed repair, dispatched by the loop against a red suite's own report. The plan citation
+    // and the branch are here only because the schema keeps them required; the resumed prompt drops
+    // them, the session it resumes already holding them.
     ticket: "GH-98",
-    title: "NUL bytes in a ticket body abort the run",
-    ticketPath: "/home/dev/repo/.claude/graph/GH-98/run-1/ticket.md",
     branch: "fix/gh-98-nul-byte",
+    planPath: "docs/graph/GH-98/plan.md",
     resume: "a1b2c3",
     addendum: "Verification failed on this pass's head. Read the report at\n/home/dev/repo/.claude/graph/GH-98/run-1/verification-1.txt and fix what it names."
   }

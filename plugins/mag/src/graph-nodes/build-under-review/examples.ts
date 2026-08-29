@@ -14,14 +14,15 @@ export const inputExamples = [
     reviewModel: "opus"
   },
   {
-    // No plan step ran, no agent named — both fields simply absent.
+    // No agent and no models named — every optional field simply absent; the plan is not one of them.
     ticket: "GH-98",
     title: "Fix the NUL-byte crash",
     ticketPath: "/repo/.claude/graph/run-1/ticket.md",
     branch: "feat/GH-98-fix-the-nul-byte-crash",
     command: "bun run typecheck && bun run test",
     base: "main",
-    cap: 2
+    cap: 2,
+    planPath: "docs/graph/GH-98/plan.md"
   }
 ]
 

@@ -22,6 +22,8 @@ import { testJournalLayer, testRunInfo } from "mag/test/node-fixture"
 const SUITE = "bun run typecheck && bun run test"
 const DIFF = "diff --git a/x.ts b/x.ts\n-old\n+new\n"
 
+const PLAN = "docs/graph/GH-98/plan.md"
+
 const INPUT = {
   ticket: "GH-98",
   title: "Fix the NUL-byte crash",
@@ -29,7 +31,8 @@ const INPUT = {
   branch: "feat/GH-98-fix-the-nul-byte-crash",
   command: SUITE,
   base: "main",
-  cap: 2
+  cap: 2,
+  planPath: PLAN
 }
 
 const ok = (stdout: string) => Effect.succeed({ exitCode: 0, stdout, stderr: "" })
@@ -413,7 +416,7 @@ describe("build-under-review", () => {
   test("a clean first pass: build, verify, simplify, review once, and fold the pass's whole spend", async () => {
     const agent = loopAgent()
     const { calls, service } = loopShell()
-    const { result } = await runNode({ ...INPUT, planPath: "docs/graph/GH-98/plan.md" }, agent.service, service)
+    const { result } = await runNode(INPUT, agent.service, service)
 
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
@@ -426,7 +429,7 @@ describe("build-under-review", () => {
 
     // The first build works from the plan; the reviewer stays blind to the build's own output.
     expect(agent.requests).toHaveLength(3)
-    expect(agent.requests[0]!.prompt).toContain("Work\nthrough the plan at docs/graph/GH-98/plan.md")
+    expect(agent.requests[0]!.prompt).toContain(`Work through the plan at ${PLAN} one task at a time`)
     const reviewRequest = agent.requests.find(isReviewPrompt)!
     expect(reviewRequest.prompt).not.toContain("build 1 summary")
 
@@ -442,17 +445,15 @@ describe("build-under-review", () => {
     }
   })
 
-  test("with a plan, the first build works through it, never handed a design path; without one, no addendum at all", async () => {
+  test("the first build works through the plan alone: never a design path, never the ticket", async () => {
     const planned = loopAgent()
-    await runNode({ ...INPUT, planPath: "docs/graph/GH-98/plan.md" }, planned.service, loopShell().service)
-    expect(planned.requests[0]!.prompt).toContain("Work\nthrough the plan at docs/graph/GH-98/plan.md")
-    expect(planned.requests[0]!.prompt).not.toContain("design.md")
-    expect(planned.requests[0]!.prompt).not.toContain("Read the design at")
-
-    const bare = loopAgent()
-    await runNode(INPUT, bare.service, loopShell().service)
-    expect(bare.requests[0]!.prompt).not.toContain("Work\nthrough the plan")
-    expect(bare.requests[0]!.prompt).not.toContain("design.md")
+    await runNode(INPUT, planned.service, loopShell().service)
+    const prompt = planned.requests[0]!.prompt
+    expect(prompt).toContain(`Work through the plan at ${PLAN} one task at a time`)
+    expect(prompt).not.toContain("design.md")
+    expect(prompt).not.toContain("Read the design at")
+    expect(prompt).not.toContain(INPUT.ticketPath)
+    expect(prompt).not.toContain(INPUT.title)
   })
 
   test("a send-back: findings feed the next build, every review pass is a fresh session gated on its own build's headSha, spend folds every pass", async () => {

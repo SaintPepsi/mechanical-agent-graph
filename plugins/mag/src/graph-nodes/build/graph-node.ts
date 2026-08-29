@@ -19,7 +19,6 @@ import { commitAgentLeftovers, gitRead, gitReadRaw } from "mag/runtime/git"
 import { platform } from "mag/runtime/platform"
 import { dirtyPaths } from "mag/runtime/porcelain"
 import { RunInfo, workdir } from "mag/runtime/run-info"
-import { ticketReference } from "mag/runtime/ticket"
 
 /**
  * What the agent must return; `decode` enforces the same contract `--json-schema` shows it.
@@ -51,29 +50,30 @@ const sendBackBlock = (findingsPath: string): readonly string[] => [
  * missing, not by default growth. No suite command travels here: verification is a mechanical
  * loopback owned by the caller now, not a sentence a session is trusted to act on.
  *
- * A resumed pass drops the ticket framing (title, ticket reference, branch, "implement what the
- * ticket asks") because the session already holds it, and restating it invites a re-implementation
- * from scratch rather than a fix. The standing discipline is not framing, though, so it renders on
- * resumed passes too: every caller gets the acceptance-criterion proof sentence, and every caller
- * gets the artifact-write sentence. The passes that fix a finding are the ones most in need of
- * being charged to prove the fix.
+ * The plan is the whole brief a fresh pass gets: the ticket is never named or cited, because a
+ * builder that reads both re-derives the work from the ticket and treats the reviewed plan as a
+ * suggestion. Every acceptance criterion the build must prove is in the plan's own criteria map.
+ *
+ * A resumed pass drops the framing (the plan citation and the branch) because the session already
+ * holds it, and restating it invites a re-implementation from scratch rather than a fix. The
+ * standing discipline is not framing, though, so it renders on resumed passes too: every caller
+ * gets the acceptance-criterion proof sentence, and every caller gets the artifact-write sentence.
+ * The passes that fix a finding are the ones most in need of being charged to prove the fix.
  */
 const promptFor = (input: {
-  readonly ticket: string
-  readonly title: string
-  readonly ticketPath: string
   readonly branch: string
+  readonly planPath: string
   readonly resume?: string | undefined
   readonly findingsPath?: string | undefined
   readonly addendum?: string | undefined
 }): string =>
   [
     ...(input.resume !== undefined ? [] : [
-      ...ticketReference(input),
-      "",
-      `You are on branch \`${input.branch}\` in this repository's working tree. Implement what the`,
-      "ticket asks for: gather your own context from the repository, make the change, and commit",
-      "your work with git. Reply with a short summary of what you did."
+      `You are on branch \`${input.branch}\` in this repository's working tree. A design session thought`,
+      "this work through and a plan session cut it into tasks, both reviewed: the plan is your whole",
+      `brief. Work through the plan at ${input.planPath} one task at a time, committing each. Depart`,
+      "from the plan only where the repository proves it wrong, and say so in your summary when you do.",
+      "Reply with a short summary of what you did."
     ]),
     "Prove each acceptance criterion with a test that executes the exported symbol that ships, and",
     "name in your summary the one-line edit to the shipped module that would make that test fail.",
@@ -176,10 +176,16 @@ export const build = make({
   name: "build",
   description: "Run the coding agent on the fix branch until it has committed work.",
   input: Schema.Struct({
+    /** The run's ticket id, for the salvage commit's subject alone; this node never reads the ticket. */
     ticket: Schema.String,
-    title: Schema.String,
-    ticketPath: Schema.String,
     branch: Schema.String,
+    /**
+     * The reviewed plan, this node's whole contract: it carries the acceptance criteria it proves
+     * and the design decisions it applies, in its own words, so nothing else about the ticket is
+     * input here. A resumed pass answers findings or a report instead, and the prompt drops this
+     * citation the way it drops the branch.
+     */
+    planPath: Schema.String,
     /**
      * Extra instructions from whoever invokes this node, spliced into the prompt verbatim. The node
      * stays ignorant of why they exist, a review loop's send-back framing, a repair loop's
