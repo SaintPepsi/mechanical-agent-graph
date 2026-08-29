@@ -18,21 +18,22 @@ import { detectGraphCore } from "mag/graph-nodes/detect-graph-core/graph-node"
 import { detectSvelte } from "mag/graph-nodes/detect-svelte/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
 import { envisionMermaid } from "mag/graph-nodes/envision-mermaid/graph-node"
-import { envisionNotation } from "mag/graph-nodes/envision-notation/graph-node"
 import { envisionRailSketch } from "mag/graph-nodes/envision-rail-sketch/graph-node"
 import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import { fixConflicts } from "mag/graph-nodes/fix-conflicts/graph-node"
 import { gatherReviews } from "mag/graph-nodes/gather-reviews/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
+import { plan } from "mag/graph-nodes/plan/graph-node"
 import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
 import { publish } from "mag/graph-nodes/publish/graph-node"
 import { pushBranch } from "mag/graph-nodes/push-branch/graph-node"
-import { recycleMap } from "mag/graph-nodes/recycle-map/graph-node"
+import { recycleScan } from "mag/graph-nodes/recycle-scan/graph-node"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { resolveBase } from "mag/graph-nodes/resolve-base/graph-node"
 import { resolveConflicts } from "mag/graph-nodes/resolve-conflicts/graph-node"
 import { resumeRun } from "mag/graph-nodes/resume-run/graph-node"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
+import { reviewPlan } from "mag/graph-nodes/review-plan/graph-node"
 import { simplify } from "mag/graph-nodes/simplify/graph-node"
 import { stageShippedGraph } from "mag/graph-nodes/stage-shipped-graph/graph-node"
 import { verification } from "mag/graph-nodes/verification/graph-node"
@@ -72,10 +73,11 @@ export const registry: Registry = [
   { kind: "command", node: branch },
   { kind: "command", node: design },
   { kind: "command", node: discover },
-  { kind: "command", node: recycleMap },
+  { kind: "command", node: recycleScan },
   { kind: "command", node: promptTersenessEvaluator },
   { kind: "command", node: assembleBrainstormPrompt },
-  { kind: "command", node: envisionNotation },
+  { kind: "command", node: plan },
+  { kind: "command", node: reviewPlan },
   { kind: "command", node: designGraph },
   { kind: "command", node: build },
   { kind: "command", node: verification },
@@ -119,12 +121,14 @@ export const registry: Registry = [
 ]
 
 /**
- * `format-branch-name`, `resolve-notations`, `envision-visions` and `brainstorm` are deliberately
- * absent. Their `labels`/`verdicts`/`notations`/`visionPaths` fields are arrays, and
+ * `format-branch-name` and `envision-shell` are deliberately absent. Their `labels`/`notations`
+ * fields are arrays, and
  * `schema-flags.ts` derives flags for `string`/`number`/`boolean` only — registering any of them
  * would fail the whole CLI build with `UNSUPPORTED_INPUT_SCHEMA`, not just its own subcommand,
  * because `build-cli.ts` folds the registry with `Result.all`. Shaping the field as a comma-joined
  * string purely to make it CLI-representable would bend the node's contract to suit a tool, and the
  * node's input schema is its whole contract. They run through `design-graph` and through their own
- * tests instead. `assemble-brainstorm-prompt` has no such field and registers above.
+ * tests instead. `brainstorm` and `design-under-review` are absent for a different reason: each
+ * resumes the session `envision-shell` opened, so neither has a standalone run to offer a CLI.
+ * `assemble-brainstorm-prompt` has no such field and registers above.
  */

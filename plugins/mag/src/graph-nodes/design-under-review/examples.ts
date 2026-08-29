@@ -1,0 +1,43 @@
+export const inputExamples = [
+  {
+    ticket: "GH-288",
+    title: "Envision and build the design graph",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
+    prompt: "Complete the design around the shell...",
+    discoverPath: "docs/graph/GH-288/discover.md",
+    resume: "session-shell-1",
+    cap: 1
+  },
+  {
+    ticket: "GH-288",
+    title: "Envision and build the design graph",
+    ticketPath: "/home/dev/.claude/graph/mechanical-agent-graph-091d09d6/GH-288/run-1/ticket.md",
+    prompt: "Complete the design around the shell...",
+    discoverPath: "docs/graph/GH-288/discover.md",
+    resume: "session-shell-1",
+    cap: 1,
+    agent: "effect-expert",
+    model: "opus"
+  }
+]
+
+export const successExamples = [
+  {
+    designPath: "/home/dev/repo/docs/graph/GH-288/design.md",
+    planPath: "/home/dev/repo/docs/graph/GH-288/plan.md",
+    headSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    reviewPasses: 1,
+    sessions: ["session-brainstorm-1", "session-plan-1", "session-review-plan-1"],
+    costUsd: 0.9
+  },
+  {
+    // The loop settled on a dispute an adjudicating review pass accepted.
+    designPath: "/home/dev/repo/docs/graph/GH-288/design.md",
+    planPath: "/home/dev/repo/docs/graph/GH-288/plan.md",
+    headSha: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    reviewPasses: 2,
+    disputePath: "/home/dev/repo/.claude/graph/GH-288/run-1/dispute-1.md",
+    sessions: ["session-brainstorm-1", "session-plan-1", "session-review-plan-1", "session-brainstorm-1", "session-review-plan-2"],
+    costUsd: null
+  }
+]

@@ -16,31 +16,37 @@ import { GRAPH_CORE } from "mag/skills/design/envisioning"
 const REPOSITORY_NAME = "mechanical-agent-graph"
 
 /**
- * A mechanical stack probe — no agent, no model session. Unlike `detect-svelte`/`detect-effect`
+ * The ticket's own declaration that it touches GraphNodes (`PRINCIPLES.md`, "Tickets that touch
+ * GraphNodes name them up top"): a `GraphNodes:` line carrying at least one backticked name. A
+ * line with none names no node, and the probe does not match on it.
+ */
+const namesGraphNodes = (text: string): boolean => /^GraphNodes:.*`[^`\n]+`/m.test(text)
+
+/**
+ * A mechanical stack probe, no agent, no model session. Unlike `detect-svelte`/`detect-effect`
  * this isn't a dependency lookup: it asks whether the root manifest's own `name` is this
  * repository's, which is why it picks the manifest at `package.json` (the walk finds nested
  * manifests too, and only the root's name states identity) rather than `declaring`. Runs at
- * `RunInfo.workRoot` (`workdir`), read from context rather than taken as a parameter, which is
- * also why `input` is empty.
+ * `RunInfo.workRoot` (`workdir`), read from context rather than taken as a parameter.
  *
- * `detect-svelte`/`detect-effect` carry a `text` input to scope which manifest a
- * dependency-declaration can match against (`runtime/manifest.ts`'s `candidates`), because a
- * second, unrelated manifest declaring the same dependency anywhere in the checkout would
- * otherwise match every ticket. This node isn't subject to that problem: it already looks at
- * exactly one manifest, the workspace root, by construction — no `text` to scope against, so its
- * input stays `{}`.
+ * `text` is the ticket's own title+body, `detect-svelte`'s field, but it scopes the ticket rather
+ * than the manifest: a match needs this repository AND a `GraphNodes:` line naming at least one
+ * node. A ticket in this repository that names none is not a GraphNode ticket, and the graph-core
+ * envisioning notation it would select drew nothing useful on the two trial runs that had no
+ * GraphNode to draw, so the repository's identity alone is not a match.
  */
 export const detectGraphCore = make({
   name: "detect-graph-core",
-  description: "Probe whether the target repo IS mechanical-agent-graph itself, mechanically, with no agent.",
-  input: Schema.Struct({}),
+  description: "Probe whether the target repo IS mechanical-agent-graph and the ticket names a GraphNode, mechanically, with no agent.",
+  input: Schema.Struct({ text: Schema.String }),
   success: Schema.Struct({
     stack: Schema.Literal(GRAPH_CORE),
     matched: Schema.Boolean,
     manifests: Schema.Array(Schema.String)
   }),
-  run: () =>
+  run: (input) =>
     Effect.gen(function* () {
+      if (!namesGraphNodes(input.text)) return { stack: GRAPH_CORE, matched: false, manifests: [] }
       const runInfo = yield* RunInfo
       const root = workdir(runInfo)
       const manifests = yield* readManifests(

@@ -5,7 +5,7 @@ import { envisionGeneric } from "mag/skills/design/envision-generic"
 import { envisionGraphCore } from "mag/skills/design/envision-graph-core"
 import { envisionSvelte } from "mag/skills/design/envision-svelte"
 import { EFFECT, GENERIC, GRAPH_CORE, NOTATIONS, SVELTE } from "mag/skills/design/envisioning"
-import { BLIND_DRAW_RULE, compileEnvisionNotation, visionDestination } from "mag/skills/envision/notation"
+import { BLIND_DRAW_RULE, compileEnvisionNotation, compileEnvisionShell, SHELL_SECTION } from "mag/skills/envision/notation"
 
 /** Every notation's own rendered body, keyed the same way `NOTATIONS` orders them. */
 const BODIES: Readonly<Record<string, string>> = {
@@ -15,45 +15,55 @@ const BODIES: Readonly<Record<string, string>> = {
   [GENERIC]: envisionGeneric.section!.body(null)
 }
 
-const DESTINATION = "/repo/docs/graph/GH-288/vision-svelte.md"
+const DESTINATION = "/repo/docs/graph/GH-288/design.md"
 
-describe("visionDestination", () => {
-  test("one notation's relative destination, the artifact name this dispatch and the check both read", () => {
-    expect(visionDestination("GH-288", "svelte")).toBe("docs/graph/GH-288/vision-svelte.md")
-    expect(visionDestination("GH-1", "generic")).toBe("docs/graph/GH-1/vision-generic.md")
+describe("compileEnvisionShell carries the blind-draw discipline once, every named notation's body, and one destination", () => {
+  for (const notation of NOTATIONS) {
+    test(`${notation}: BLIND_DRAW_RULE renders once, the prompt names the destination and the shell section once`, () => {
+      const result = compileEnvisionShell({ notations: [notation], destination: DESTINATION })
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success.prompt.split(BLIND_DRAW_RULE).length - 1).toBe(1)
+      expect(result.success.prompt.split(DESTINATION).length - 1).toBe(1)
+      expect(result.success.prompt).toContain(SHELL_SECTION)
+    })
+  }
+
+  test("two notations render both bodies in the order given, the rule still once, the modules in the same order", () => {
+    const result = compileEnvisionShell({ notations: [SVELTE, EFFECT], destination: DESTINATION })
+    expect(Result.isSuccess(result)).toBe(true)
+    if (!Result.isSuccess(result)) return
+    expect(result.success.prompt.split(BLIND_DRAW_RULE).length - 1).toBe(1)
+    expect(result.success.prompt.indexOf(BODIES[SVELTE]!)).toBeLessThan(result.success.prompt.indexOf(BODIES[EFFECT]!))
+    expect(result.success.modules).toEqual([envisionSvelte.id, envisionEffect.id])
+  })
+
+  test("an id no NOTATIONS entry carries fails, naming the id, before the node ever turns it into UnknownNotation", () => {
+    const result = compileEnvisionShell({ notations: [SVELTE, "cobol"], destination: DESTINATION })
+    expect(Result.isFailure(result)).toBe(true)
+    if (!Result.isFailure(result)) return
+    expect(result.failure).toBe("cobol")
   })
 })
 
-describe("every notation's compiled prompt carries the blind-draw discipline, once, in identical words", () => {
-  for (const notation of NOTATIONS) {
-    test(`${notation}: BLIND_DRAW_RULE renders verbatim, and the prompt names exactly one destination`, () => {
-      const result = compileEnvisionNotation({ notation, destination: DESTINATION })
-      expect(Result.isSuccess(result)).toBe(true)
-      if (!Result.isSuccess(result)) return
-      expect(result.success.prompt).toContain(BLIND_DRAW_RULE)
-      expect(result.success.prompt.split(DESTINATION).length - 1).toBe(1)
-    })
-  }
-})
-
 /**
- * Provenance proof: `compileEnvisionNotation` composes one envisioning module per dispatch, so a
- * notation's prompt must carry that notation's body and no sibling's. `envision-graph-core`'s own
- * boundary rule (FR-11, `docs/requirements/graph-envisioning.md`) has no named constant in
+ * Provenance proof: `compileEnvisionNotation` composes one envisioning module per notation, so a
+ * notation's body must be that notation's and no sibling's. `envision-graph-core`'s own boundary
+ * rule (FR-11, `docs/requirements/graph-envisioning.md`) has no named constant in
  * `envision-graph-core.ts` to assert against, so this proves its provenance the same structural way
  * every other notation's is proved: its body renders and no sibling's does.
  */
-describe("each notation's prompt carries that notation's module body and none of the other three's", () => {
+describe("each notation's body is that notation's module body and none of the other three's", () => {
   for (const notation of NOTATIONS) {
     test(`${notation}: carries its own body, and no other notation's`, () => {
-      const result = compileEnvisionNotation({ notation, destination: DESTINATION })
+      const result = compileEnvisionNotation(notation)
       expect(Result.isSuccess(result)).toBe(true)
       if (!Result.isSuccess(result)) return
 
-      expect(result.success.prompt).toContain(BODIES[notation]!)
+      expect(result.success.body).toBe(BODIES[notation]!)
       for (const other of NOTATIONS) {
         if (other === notation) continue
-        expect(result.success.prompt).not.toContain(BODIES[other]!)
+        expect(result.success.body).not.toContain(BODIES[other]!)
       }
     })
   }
@@ -61,24 +71,22 @@ describe("each notation's prompt carries that notation's module body and none of
 
 describe("compileEnvisionNotation's module field", () => {
   test("names the concern id it composed, distinct from the notation id (svelte → envision-svelte)", () => {
-    const result = compileEnvisionNotation({ notation: SVELTE, destination: DESTINATION })
+    const result = compileEnvisionNotation(SVELTE)
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
     expect(result.success.module).toBe(envisionSvelte.id)
     expect(result.success.module).not.toBe(SVELTE)
   })
 
-  test("generic resolves to envision-generic — the one id with no probe behind it", () => {
-    const result = compileEnvisionNotation({ notation: GENERIC, destination: DESTINATION })
+  test("generic resolves to envision-generic, the one id with no probe behind it", () => {
+    const result = compileEnvisionNotation(GENERIC)
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
     expect(result.success.module).toBe(envisionGeneric.id)
   })
-})
 
-describe("an id no NOTATIONS entry carries fails, naming the id — before the node ever turns it into UnknownNotation", () => {
-  test("fails with the notation itself", () => {
-    const result = compileEnvisionNotation({ notation: "cobol", destination: DESTINATION })
+  test("a fifth id fails named, carrying the id itself", () => {
+    const result = compileEnvisionNotation("cobol")
     expect(Result.isFailure(result)).toBe(true)
     if (!Result.isFailure(result)) return
     expect(result.failure).toBe("cobol")

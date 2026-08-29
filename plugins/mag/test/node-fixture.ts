@@ -40,51 +40,6 @@ export const removeDir = (path: string): Promise<void> => {
   )
 }
 
-/** A real, disposable run root for a node whose dispatch writes an artifact into it. `prefix` names the temp dir after the node under test. */
-export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string) => Promise<T>): Promise<T> => {
-  const runRoot = mkdtempSync(join(tmpdir(), `${prefix}-`))
-  try {
-    return await fn(runRoot)
-  } finally {
-    await removeDir(runRoot)
-  }
-}
-
-/**
- * A disposable checkout plus a disposable run root for a record-writing node under the home-run
- * policy (`recordsRoot === workRoot`): every success path copies into `runRoot` for real
- * (`records.ts`'s `record`). `prefix` names the temp dir after the node under test.
- */
-export const withRecordRepo = async <T>(
-  prefix: string,
-  fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>
-): Promise<T> => {
-  const base = mkdtempSync(join(tmpdir(), `${prefix}-`))
-  const repoRoot = join(base, "repo")
-  const runRoot = join(base, "run")
-  mkdirSync(repoRoot, { recursive: true })
-  mkdirSync(runRoot, { recursive: true })
-  try {
-    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
-  } finally {
-    await removeDir(base)
-  }
-}
-
-/** In-order scripted shell: one canned reply per call, recording every argv; an unscripted call throws. */
-export const scriptedShell = (replies: readonly ShellResult[]) => {
-  const calls: string[][] = []
-  const service: ShellService = {
-    run: (argv) => {
-      calls.push([...argv])
-      const reply = replies[calls.length - 1]
-      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
-      return Effect.succeed(reply)
-    }
-  }
-  return { calls, service }
-}
-
 /** Records every prompt dispatched, whatever the node asks for, answering one canned reply generalised to any verdict shape. */
 export const recordingAgent = () => {
   const prompts: string[] = []
@@ -92,7 +47,7 @@ export const recordingAgent = () => {
     prompt: <A>(request: ClaudePrint<A>) => {
       prompts.push(request.prompt)
       return Effect.succeed({
-        verdict: { summary: "did the work", visionPath: "ignored", blocking: [] } as A,
+        verdict: { summary: "did the work", visionPath: "ignored", blocking: [], notes: [] } as A,
         result: {},
         sessions: ["stub-session"],
         costUsd: 0.1,
@@ -274,6 +229,78 @@ export const withForeignRepo = async <T>(
     await removeDir(workRoot)
     await removeDir(recordsRoot)
   }
+}
+
+/**
+ * A disposable repo checkout plus a disposable run root, for a record-writing node's own test
+ * (`brainstorm`, `plan`): every success path copies into `runRoot` for real (`records.ts`'s
+ * `record`), so both have to be real directories. `prefix` names the temp tree after the node.
+ */
+export const withRecordRepo = async <T>(
+  prefix: string,
+  fn: (repoRoot: string, runRoot: string, run: RunInfoService) => Promise<T>
+): Promise<T> => {
+  const base = mkdtempSync(join(tmpdir(), `${prefix}-`))
+  const repoRoot = join(base, "repo")
+  const runRoot = join(base, "run")
+  mkdirSync(repoRoot, { recursive: true })
+  mkdirSync(runRoot, { recursive: true })
+  try {
+    return await fn(repoRoot, runRoot, testRunInfo({ repoRoot, workRoot: repoRoot, runRoot }))
+  } finally {
+    await removeDir(base)
+  }
+}
+
+/** A real, disposable run root alone, for a node whose only write is an artifact into it (`review-plan`, `fetch-ticket`). `prefix` names the temp dir after the node under test. */
+export const withRunRoot = async <T>(prefix: string, fn: (runRoot: string, run: RunInfoService) => Promise<T>): Promise<T> => {
+  const runRoot = mkdtempSync(join(tmpdir(), `${prefix}-run-`))
+  try {
+    return await fn(runRoot, testRunInfo({ runRoot }))
+  } finally {
+    await removeDir(runRoot)
+  }
+}
+
+/** In-order scripted shell: reply N answers call N, and a call past the script throws, naming the argv. */
+export const scriptedShell = (replies: readonly ShellResult[]) => {
+  const calls: string[][] = []
+  const cwds: Array<string | undefined> = []
+  const service: ShellService = {
+    run: (argv, options) => {
+      calls.push([...argv])
+      cwds.push(options?.cwd)
+      const reply = replies[calls.length - 1]
+      if (reply === undefined) throw new Error(`scriptedShell: unexpected call ${calls.length}: ${argv.join(" ")}`)
+      return Effect.succeed(reply)
+    }
+  }
+  return { calls, cwds, service }
+}
+
+/**
+ * Records every request and answers with one canned reply; `write` fires inside `prompt`, standing
+ * in for the real session's own write of the record the node then verifies. `verdict` is whatever
+ * the node's own schema expects, never trusted by a record-writing node, which uses its own
+ * computed path.
+ */
+export const stubAgent = (verdict: unknown, reply: Partial<ClaudeReply<unknown>> = {}, write?: () => void) => {
+  const requests: Array<ClaudePrint<unknown>> = []
+  const service: ClaudeAgentService = {
+    prompt: <A>(request: ClaudePrint<A>) => {
+      requests.push(request as ClaudePrint<unknown>)
+      write?.()
+      return Effect.succeed({
+        verdict: verdict as A,
+        result: {},
+        sessions: ["stub-session"],
+        costUsd: 0.42,
+        attempts: 1,
+        ...reply
+      } as ClaudeReply<A>)
+    }
+  }
+  return { requests, service }
 }
 
 /**

@@ -1,10 +1,11 @@
 import { Data } from "effect"
 
 /**
- * The session ended but `design.md` it was told to write is absent, empty after trim, or
- * byte-identical to its pre-dispatch snapshot — the same "trust nothing, verify the file" rule
- * `discover`'s `DiscoverNoteMissing` and `envision-notation`'s `NotationVisionMissing` already
- * apply. `sessions` travels with it because the spend already happened by this point.
+ * The session ended but `design.md` it was told to complete is absent, empty after trim, or
+ * byte-identical to its pre-dispatch snapshot (the shell pass's own document, untouched): the
+ * same "trust nothing, verify the file" rule `discover`'s `DiscoverNoteMissing` and
+ * `envision-shell`'s `ShellMissing` already apply. `sessions` travels with it because the spend
+ * already happened by this point.
  */
 export class DesignMissing extends Data.TaggedError("DESIGN_MISSING")<{
   readonly path: string
@@ -12,9 +13,10 @@ export class DesignMissing extends Data.TaggedError("DESIGN_MISSING")<{
 }> {}
 
 /**
- * `commitPath`'s git-failure constructor (`git add` failed), plus the final `git rev-parse HEAD`
- * that stamps `headSha` — today's `design/errors.ts`'s `DesignGitFailed` shape, reused at both call
- * sites. Under `records: "committed"` that `rev-parse` reads the HEAD the commit just made; under
+ * A failed git read, nothing spent: the design pass's `git ls-files` for the rulings files,
+ * `commitPath`'s git-failure constructor (`git add` failed), and the final `git rev-parse HEAD`
+ * that stamps `headSha`, today's `design/errors.ts`'s `DesignGitFailed` shape, reused at every call
+ * site. Under `records: "committed"` that `rev-parse` reads the HEAD the commit just made; under
  * the default `run-root`, nothing here commits, so it reads the tree's HEAD as it already stood.
  * `commitPath`'s own `onGitFailure` constructor needs the identical three-field shape for the
  * identical reason (a failed git read, nothing spent), so it reuses the same tag rather than mint a
@@ -30,8 +32,8 @@ export class BrainstormGitFailed extends Data.TaggedError("BRAINSTORM_GIT_FAILED
  * `commitPath`'s commit-failure constructor: `git commit` failed after a real design session
  * already produced `design.md`.
  * `commitPath`'s own contract requires one distinct from {@link BrainstormGitFailed} (`sessions` and
- * `stdout` ride only here), so this follows `NotationVisionCommitFailed`/`DiscoverCommitFailed`'s
- * naming convention rather than leave the call unconstructable.
+ * `stdout` ride only here), so this follows `DiscoverCommitFailed`'s naming convention rather than
+ * leave the call unconstructable.
  */
 export class BrainstormCommitFailed extends Data.TaggedError("BRAINSTORM_COMMIT_FAILED")<{
   readonly argv: string
@@ -42,7 +44,7 @@ export class BrainstormCommitFailed extends Data.TaggedError("BRAINSTORM_COMMIT_
 }> {}
 
 /**
- * The mechanical copy of `design.md` into the run root failed — the run dir couldn't be made, or
+ * The mechanical copy of `design.md` into the run root failed: the run dir couldn't be made, or
  * the copy couldn't be written, after a real session already produced it. `design/errors.ts`'s
  * `DesignCopyFailed` precedent, generalised by `records.ts`'s `record`.
  */

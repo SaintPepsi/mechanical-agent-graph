@@ -99,7 +99,7 @@ export const primaryDir = (run: RunInfoService): string | undefined => nonEmpty(
 export const recordsDir = (run: RunInfoService): string | undefined => nonEmpty(run.recordsRoot)
 
 /**
- * The one composer every record writer and reader calls — `discover`, `envision-notation`,
+ * The one composer every record writer and reader calls — `discover`, `envision-shell`,
  * `brainstorm` and registry-only `design` each drop their own private `workRoot === "" ? relative :
  * ...` ternary onto this. String concatenation, not `Path.join`, `run-root.ts`'s own reason: these
  * values feed shell globs and git pathspecs downstream, where a backslash silently matches nothing.

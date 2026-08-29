@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { brainstorm } from "mag/graph-nodes/brainstorm/graph-node"
 import { discover } from "mag/graph-nodes/discover/graph-node"
-import { envisionVisions } from "mag/graph-nodes/envision-visions/graph-node"
+import { envisionShell } from "mag/graph-nodes/envision-shell/graph-node"
 import { DESIGN_LANE } from "mag/skills/design/lane"
 
 /**
@@ -15,6 +15,6 @@ import { DESIGN_LANE } from "mag/skills/design/lane"
 describe("DESIGN_LANE names the live design-graph nodes, in dispatch order", () => {
   test("the flattened node strings equal the three nodes' own .name, in the order graph.ts's pipeline dispatches them", () => {
     const nodes = DESIGN_LANE.flat().map((step) => step.node)
-    expect(nodes).toEqual([envisionVisions.name, discover.name, brainstorm.name])
+    expect(nodes).toEqual([envisionShell.name, discover.name, brainstorm.name])
   })
 })

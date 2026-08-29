@@ -143,10 +143,42 @@ maintainer rules otherwise.
   budget-checked by `assemble-brainstorm-prompt`) and the caller-authored addenda
   (`build.addendum`, `review-diff.addendum`). Precedent: v1's ingest step
   wrote the immutable ticket doc once and every later step read it as the fixed baseline.
+- **An autonomous design decides.** Every ambiguity becomes a ruling with a basis; a user-visible
+  choice the ticket does not settle keeps existing behaviour and says so. A run that cannot decide
+  has failed, not asked. Reason: the two trial runs' open questions were hedges already answered in
+  the same document, each costing a design, plan and review pass.
+- **Two channels, one gate.** A review verdict is two lists: blocking and notes. Only blocking
+  gates; notes land in the findings record and never send anything back. Blocking is an acceptance
+  criterion unmet or behaviour wrong, cited; a note is everything else, including whatever the
+  toolchain catches. There is no questions channel: nobody in an autonomous run answers one, so the
+  reviewer judges instead. Reason: the GH-332 trial's reviewer asked the same two questions on both
+  passes, each already ruled in the design, and the plan resume answered neither (`skills/review-brief.ts`).
+- **A finding is a defect, a dispute is a denial.** A finding states the defect and its evidence,
+  never a fix; the author owns the remedy. A dispute is for a finding whose defect is denied; an
+  accepted defect is fixed, whatever the reviewer suggested. An adjudicating pass rules on the
+  disputed findings alone, and everything else it blocks on routes as on any pass. Reason: the
+  GH-373 trial's reviewer proposed a mechanism, the design accepted the defect and disputed the
+  mechanism, the adjudicating pass upheld it and the run still died `PLAN_DISPUTE_REJECTED` on two
+  fresh findings (`graph-nodes/review-plan`, `graph-nodes/design-under-review`).
+- **A node's required inputs are the ticket plus the one artifact of the stage before it; a second
+  artifact needs a ruling naming why, listed in the conformance rule's exceptions.** Loop state
+  (`findingsPath`, `disputePath`, `priorFindingsPath`, `resume`) is not a stage input. The rule is
+  `input-boundary` (`graph-nodes/conformance/rules.ts`): it walks every node, counts the required
+  `...Path` fields beside `ticketPath`, and fails a second one unless the node is in
+  `INPUT_BOUNDARY_EXCEPTIONS` with its ruling: `plan` (the plan resolves names against the repo,
+  v1's Resolution Table position) and `review-plan` (a reviewer reads only what it judges: the plan
+  and the design it was built from). Reason: both trial designs paid a reconciliation tax for a
+  second artifact, a nine-row Vision Reconciliation table on one and three invented nodes refused
+  on the other; the shell drawn as a section of the design, in the design's own session, got the
+  value without it.
+- **Quiet on green.** A green run reports the PR and nothing else; a failure gets the full report.
+  Passing detail in a transcript is re-read on every later turn, pure context burn, and a gate's
+  evidence never needs more than the count line.
 - **One concern per session.** A node's prompt asks one question and the session writes one
   artifact; a second question is a second node. A session given two concerns degrades on both, in
-  the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) and
-  `recycle-map` (what this task reuses) are two nodes, not two sections of one note.
+  the maintainer's words the agent goes BONK mode. Precedent: `discover` (what exists) is one
+  node and one note; what a design reuses is `recycle-scan`, a script over the design's own names,
+  never a second section of that note.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one
   line, scope stated exactly. Enforced before build by `prompt-terseness-evaluator`.

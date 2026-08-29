@@ -11,8 +11,8 @@ import { preamble } from "mag/skills/design/preamble"
  * order: a concern's checklist position and its template position are different facts about it (
  * `principles-stack` reads early, before approaches are proposed, but its "Principles Applied"
  * section records the outcome and belongs at the template's end; `design-doc-template` itself opens
- * the template with Problem/Constraints and closes it with Open Questions, a split no single list
- * position can reproduce). `A` states one variant's own audience once; `Concern<A | "any">` is the
+ * the template with Problem/Constraints and places its technical sections after the decisions, a
+ * split no single list position can reproduce). `A` states one variant's own audience once; `Concern<A | "any">` is the
  * gate on `concerns`, not a runtime filter: listing a concern of a different audience here is a
  * compile error at the list, in both directions. */
 export interface Variant<A extends Audience = "headless"> {

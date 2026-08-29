@@ -73,7 +73,7 @@ const runShell = (options: {
   return { calls, service }
 }
 
-/** Extracts the backticked destination `envision-notation`/`discover` splice into their own prompt (`graphs/design-graph/graph.test.ts`'s own convention). */
+/** Extracts the backticked destination `envision-shell`/`discover`/`brainstorm` splice into their own prompt (`graphs/design-graph/graph.test.ts`'s own convention). */
 const destinationOf = (prompt: string, marker: string): string => {
   const match = prompt.match(new RegExp(`${marker} \`([^\`]+)\``))
   if (match === null || match[1] === undefined) throw new Error(`no destination for "${marker}" in prompt`)
@@ -93,7 +93,7 @@ const writeAt = (destination: string, text: string): string => {
 
 /**
  * One stub for every agent dispatch, routed by the marker text unique to each dispatching node's own
- * prompt — design-graph's three (`envision-notation`, `discover`, `brainstorm`) replace develop-graph's
+ * prompt: design-graph's three (`envision-shell`, `discover`, `brainstorm`) replace develop-graph's
  * single `design` route entirely: this graph never dispatches `design`, only the subgraph that
  * replaces it.
  */
@@ -105,28 +105,29 @@ const runAgent = (root: string) => {
       const prompt = request.prompt
 
       if (prompt.includes("Draw the ideal shape")) {
-        const path = writeAt(destinationOf(prompt, "Write the vision to"), "graph TD\n  A --> B\n")
-        return reply<A>({ visionPath: path }, "session-envision", 0.1)
+        const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Envisioned Shell\n\ngraph TD\n  A --> B\n")
+        return reply<A>({ designPath: path }, "session-envision", 0.1)
       }
       if (prompt.includes("Recon this repository")) {
         const path = writeAt(destinationOf(prompt, "Write your findings to"), "# Discover\n\nNothing relevant found.\n")
         return reply<A>({ discoverPath: path }, "session-discover", 0.15)
       }
-      if (prompt.includes("Map what this ticket can reuse")) {
-        const path = writeAt(destinationOf(prompt, "Write the map to"), "# Recycle map\n\nNothing to reuse.\n")
-        return reply<A>({ recycleMapPath: path }, "session-recycle", 0.1)
-      }
-      if (prompt.includes("Read each vision below")) {
+      if (prompt.includes("holds the Envisioned Shell you drew")) {
         // brainstorm's write step backtick-quotes the path it resolved through `recordPath`,
         // so the stub reads it back the way `design-graph/graph.test.ts` does rather than composing
         // its own from `root` and silently agreeing with a placement the node no longer makes.
-        const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Vision Reconciliation\n\nNo collisions.\n")
+        const path = writeAt(destinationOf(prompt, "Write the design doc to"), "# Design\n\n## Envisioned Shell\n\ngraph TD\n  A --> B\n\n## Seams & Ownership\n\nNone.\n")
         return reply<A>({ designPath: path }, "session-brainstorm", 0.2)
       }
+      if (prompt.includes("Read the design below")) {
+        const path = writeAt(destinationOf(prompt, "Write the plan to"), "# Plan\n\n### Task 1\n")
+        return reply<A>({ planPath: path }, "session-plan", 0.25)
+      }
+      if (prompt.includes("Review the design at")) return reply<A>({ blocking: [], notes: [] }, "session-review-plan", 0.1)
       if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0 }, "session-terseness", 0.02)
       // No blocking findings, so the review loop settles on its first pass: `build-under-review`'s
       // own test owns the send-back path, this one owns the spine.
-      if (prompt.includes("reply with only the blocking findings")) return reply<A>({ blocking: [] }, "session-review-1", 0.1)
+      if (prompt.includes("Review the diff at")) return reply<A>({ blocking: [], notes: [] }, "session-review-1", 0.1)
       if (prompt.includes("Reduce this diff to the same behaviour in less code")) return reply<A>({}, "session-simplify", 0.05)
       if (prompt.includes("Write the pull request description for the diff at")) {
         return reply<A>({ description: "Reticulates the splines." }, "session-write-pr-body", 0.05)
@@ -239,7 +240,7 @@ describe("develop-graph", () => {
       // and the publish tail runs as the sketch's boxes — never the fused `publish` composite.
       for (const name of [
         "prepare", "require-acs", "checkout", "write-body", "publish-tail",
-        "resolve-notations", "envision-visions", "discover", "recycle-map", "brainstorm", "build-under-review", "push-branch", "create-pr"
+        "envision-shell", "discover", "design-under-review", "brainstorm", "recycle-scan", "plan", "review-plan", "build-under-review", "push-branch", "create-pr"
       ]) {
         expect(names).toContain(name)
       }

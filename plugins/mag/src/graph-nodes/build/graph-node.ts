@@ -27,7 +27,7 @@ import { ticketReference } from "mag/runtime/ticket"
  * output: `optional` would show the model `anyOf: [string, null]` on every ordinary pass, inviting
  * an explicit null where there is nothing to say.
  */
-const SUMMARY = verdictSchema(Schema.Struct({ summary: Schema.String, dispute: Schema.optionalKey(Schema.String) }))
+const SUMMARY = verdictSchema(Schema.Struct({ summary: Schema.String, dispute: Schema.optionalKey(Schema.Array(Schema.String)) }))
 
 /**
  * Build stays design-ignorant: no design diff belongs here regardless of caller. The framing treats
@@ -37,12 +37,13 @@ const sendBackBlock = (findingsPath: string): readonly string[] => [
   "",
   "A reviewer examined this branch's previous attempt and found blocking problems, recorded at",
   `${findingsPath}. Read that file and address every finding: commit a fix for each one that needs`,
-  "a change, and for any that need none — already fixed, or wrong — say why in your reply's",
-  "`dispute` field instead of inventing a change to satisfy it. A single pass may commit fixes and",
-  "dispute the rest.",
+  "a change, and for any that need none (already fixed, or wrong) quote the finding in your",
+  "reply's `dispute` list with the reason, instead of inventing a change to satisfy it. An empty",
+  "list means nothing is disputed. A single pass may commit fixes and dispute the rest.",
+  "Dispute a finding only when its defect is not there; fix a defect you accept your own way, whatever the reviewer suggested.",
   "When addressing a finding adds an input or a failure condition, re-derive the contract in the",
-  "same commit — the declared inputs and failure modes the change widens, and the documents that",
-  "record them — and say so in your reply."
+  "same commit: the declared inputs and failure modes the change widens, and the documents that",
+  "record them, and say so in your reply."
 ]
 
 /**
@@ -84,11 +85,11 @@ const promptFor = (input: {
 
 /**
  * The dispute artifact's content: the findings file it answers, named on the first line so the
- * document is self-describing to whoever reads it next — the adjudicating review pass, or a human
- * — without having to infer which verdict this is a reply to.
+ * document is self-describing to whoever reads it next, the adjudicating review pass, or a human
+ *, without having to infer which verdict this is a reply to.
  */
-const disputeContentFor = (findingsPath: string, dispute: string): string =>
-  [`Disputes ${findingsPath}`, "", dispute].join("\n")
+const disputeContentFor = (findingsPath: string, dispute: readonly string[]): string =>
+  [`Disputes ${findingsPath}`, "", ...dispute.map((line) => `- ${line}`)].join("\n")
 
 /**
  * The dispute gate and write, shared by both of `build`'s endings; `commits === 0` is not this
@@ -99,7 +100,7 @@ const disputeContentFor = (findingsPath: string, dispute: string): string =>
 const recordDispute = (
   runRoot: string,
   findingsPath: string | undefined,
-  dispute: string | undefined,
+  dispute: readonly string[] | undefined,
   sessions: readonly string[]
 ): Effect.Effect<
   { readonly findingsPath: string; readonly disputePath: string } | undefined,
@@ -107,9 +108,11 @@ const recordDispute = (
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (findingsPath === undefined || dispute === undefined || dispute.trim() === "") return undefined
+    // Blank entries are silence, not an argument: only a quoted finding counts as disputed.
+    const quoted = (dispute ?? []).filter((line) => line.trim() !== "")
+    if (findingsPath === undefined || quoted.length === 0) return undefined
     const fs = yield* FileSystem.FileSystem
-    const disputePath = yield* writeArtifact(fs, runRoot, "dispute", disputeContentFor(findingsPath, dispute)).pipe(
+    const disputePath = yield* writeArtifact(fs, runRoot, "dispute", disputeContentFor(findingsPath, quoted)).pipe(
       Effect.catch((error) => Effect.fail(new BuildSummaryWriteFailed({ runRoot, detail: String(error), sessions })))
     )
     return { findingsPath, disputePath }
@@ -120,7 +123,7 @@ const recordDispute = (
  * the mechanism that wrote the message: the emitted string ships into a consuming repo's git
  * history, where this pipeline's own ticket number carries no meaning. The body names the node as
  * author. One `Claude-Session` trailer per session in the reply carries the same attribution the
- * journal row does — the same convention manual salvage commits already use, reused rather than
+ * journal row does, the same convention manual salvage commits already use, reused rather than
  * invented here.
  */
 const commitMessageFor = (ticket: string, sessions: readonly string[]): string =>
@@ -137,9 +140,9 @@ const commitMessageFor = (ticket: string, sessions: readonly string[]): string =
  * Runs the coding agent on the checked-out fix branch, then verifies mechanically that it actually
  * committed something: the reply's own summary is a map, the branch is the territory. The baseline
  * is measured here, immediately before the agent runs, rather than piped in from the `branch`
- * node — a replayed predecessor row would carry a stale sha, and a stale baseline miscounts. The
+ * node, a replayed predecessor row would carry a stale sha, and a stale baseline miscounts. The
  * resulting `headSha` is measured the same way, immediately after: a caller chaining `verification`
- * straight after this node needs the tree it just produced, not the tree `before` names — see
+ * straight after this node needs the tree it just produced, not the tree `before` names, see
  * `verification/graph-node.ts`'s doc comment for the failure this prevents.
  *
  * The reply's `sessions` and `costUsd` pass straight into the success value, so the journal row
@@ -158,15 +161,15 @@ const commitMessageFor = (ticket: string, sessions: readonly string[]): string =
  * write leaves the tree exactly as today's failure leaves it, and before `commits`/`headSha` so both
  * measurements are downstream of the commit by position, which is what keeps them honest. Scoped to
  * the whole tree rather than a path list because this node's reply schema is `{ summary }` and
- * always has been — asking the session a second question it already ended without answering would
+ * always has been, asking the session a second question it already ended without answering would
  * be the exact map-for-territory substitution this node exists to avoid.
  *
  * The summary is a run-root artifact, not inline prose: the node writes `reply.verdict.summary` to
  * its own computed path and returns the reference, so the journal row and any downstream prompt
- * carry a path instead of a duplicated copy of the text — an oversized prompt otherwise dies at
+ * carry a path instead of a duplicated copy of the text, an oversized prompt otherwise dies at
  * `execve`. Unlike `design`, this node authors the content itself from a reply it already holds, so
  * the mechanical guarantee this needs is "the string was non-empty before the write, and the write
- * effect itself didn't fail" — re-reading a file this same process just wrote would prove nothing a
+ * effect itself didn't fail", re-reading a file this same process just wrote would prove nothing a
  * successful `Effect` didn't already prove.
  */
 export const build = make({
@@ -179,7 +182,7 @@ export const build = make({
     branch: Schema.String,
     /**
      * Extra instructions from whoever invokes this node, spliced into the prompt verbatim. The node
-     * stays ignorant of why they exist — a review loop's send-back framing, a repair loop's
+     * stays ignorant of why they exist, a review loop's send-back framing, a repair loop's
      * verification report, or anything else a graph needs to say, so the caller owns the words, and
      * the words are journal-recorded because they travel as input.
      */
@@ -200,8 +203,8 @@ export const build = make({
     resume: Schema.optional(Schema.String),
     /**
      * A named agent from the target repo's `.claude/agents/` to run the session as, passed through
-     * to the dispatch verbatim. The graph wires it — develop-graph hardwires effect-expert, other
-     * graphs pass nothing — so this node stays one node, not a fork per agent.
+     * to the dispatch verbatim. The graph wires it, develop-graph hardwires effect-expert, other
+     * graphs pass nothing, so this node stays one node, not a fork per agent.
      */
     agent: Schema.optional(Schema.String),
     /** `--model`, same convention as `agent`: absent preserves today's behaviour. */
@@ -213,7 +216,7 @@ export const build = make({
     costUsd: Schema.NullOr(Schema.Number),
     commits: Schema.Int,
     /**
-     * The commit this pass left `HEAD` on, measured the same way as `before` — immediately, by
+     * The commit this pass left `HEAD` on, measured the same way as `before`, immediately, by
      * this node, never piped in. A caller that runs `verification` straight after this node
      * (`build-under-review`) needs this to identify the tree it is about to verify:
      * `verification`'s journaled input has to carry it, or a resumed run can replay a stale
@@ -299,12 +302,12 @@ export const build = make({
         }
         const headSha = yield* gitRead(["git", "rev-parse", "HEAD"], cwd, (fields) => new BuildGitFailed(fields))
         // `git rev-list --count before..HEAD === 0` means HEAD is not ahead of `before`, not that
-        // HEAD is `before` — a session that moved HEAD backward (e.g. `git reset --hard HEAD~1`)
+        // HEAD is `before`, a session that moved HEAD backward (e.g. `git reset --hard HEAD~1`)
         // still counts zero forward commits while leaving a different tree than the one this run's
         // previous pass verified. The assumption that a pass with zero commits leaves HEAD where the
         // previous pass left it only holds when `headSha` equals `before`, so that is checked here
         // rather than assumed: a mismatch is `BuildHeadMoved`, named for what happened rather than
-        // folded into `BuildNoCommits` — the branch lost commits and the previously-verified tree is
+        // folded into `BuildNoCommits`, the branch lost commits and the previously-verified tree is
         // gone, the opposite of "the agent did nothing," and a human reading the escalated failure
         // needs to be able to tell the two apart.
         if (headSha !== before) {

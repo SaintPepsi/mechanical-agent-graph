@@ -11,7 +11,7 @@ Turn a software idea into a fully-formed design through collaborative dialogue, 
 
 Create a task for each item and complete in order:
 
-1. **Envision** — draw the ideal shape of the built thing, once per matched stack, blind to what exists today → `docs/graph/<TICKET>/vision-<notation>.md`
+1. **Envision** — draw the ideal shape of the built thing, one shell per matched stack, blind to what exists today, as the design doc's Envisioned Shell section and nothing else yet → `docs/graph/<TICKET>/design.md`
 2. **Discover** — recon what the codebase already has, cited by path, never assumed → `docs/graph/<TICKET>/discover.md`
 3. **Explore project context** — files, docs, recent commits, relevant types
 4. **Read `./principles/index.md`** — engineering principles stack (leaf files load just-in-time)
@@ -25,11 +25,11 @@ Create a task for each item and complete in order:
 
 ## The Design Lane
 
-This design follows one spine, **Envision ∥ Discover → Brainstorm**: draw the ideal shape of the built thing blind to what exists, recon the codebase for what already covers this ground, then join the two into a design. Envision and Discover (checklist items 1 and 2) open together; enter from either side. Brainstorm joins them:
+This design follows one spine, **Envision ∥ Discover → Brainstorm**: draw the ideal shape of the built thing blind to what exists, as the design doc's first section, recon the codebase for what already covers this ground, then complete the design around the shell. Envision and Discover (checklist items 1 and 2) open together; enter from either side. Brainstorm joins them:
 
-**Brainstorm** — join the visions to discover's recon and this checklist's own design into one design doc → `docs/graph/<TICKET>/design.md`
+**Brainstorm** — complete the design doc around its shell, over discover's recon and this checklist → `docs/graph/<TICKET>/design.md`
 
-`<TICKET>` above and below is this session's ticket id; use a short kebab-case slug instead when none exists, the same slug everywhere it appears. `<notation>` stands for whichever matched stack's vision this design cites (svelte, effect, graph-core, or generic) — one path per matched stack, not a single fill.
+`<TICKET>` above and below is this session's ticket id; use a short kebab-case slug instead when none exists, the same slug everywhere it appears.
 
 If the work is **not** primarily code (article, talk, naming, life decision), this engineering mode isn't the right fit — stop and brainstorm it conversationally instead.
 
@@ -81,7 +81,7 @@ Pick the notation the change actually deserves — prose, a diagram, pseudo-code
 
 ## What You May Decide vs What the User Sees
 
-Pragmatic calls cover **how it's built** — structure, seams, placement, data flow. They never cover **what the user sees relative to what already exists**. If a choice would make an existing concept look or behave differently from how it renders today — dropping a label, changing an affordance, restyling a shared element — that is a product decision, not a design decision: ask the user, or when running autonomously, record it in Open Questions and **default to the existing behavior**. "The requirements don't mention it" argues **for** the status quo, never against it (principle: Same Concept, Same Rendering — silence in the ACs is not permission to diverge).
+Pragmatic calls cover **how it's built**: structure, seams, placement, data flow. They never cover **what the user sees relative to what already exists**. If a choice would make an existing concept look or behave differently from how it renders today (dropping a label, changing an affordance, restyling a shared element), that is a product decision, not a design decision: ask the user, or when running autonomously, **keep the existing behavior** and record it under Interpretation Rulings with that as its basis. "The requirements don't mention it" argues **for** the status quo, never against it (principle: Same Concept, Same Rendering, silence in the ACs is not permission to diverge).
 
 ## Presenting the Design
 
@@ -91,7 +91,7 @@ Ask after each section whether it looks right, and be ready to revise. Cap dialo
 
 ## Interpretation Rulings
 
-Every AC ambiguity you resolve is a recorded ruling, never a silent choice. Where the design commits to a reading of an AC whose wording allows more than one, the design doc's **Interpretation Rulings** section records the AC id, the chosen reading, and its basis. A ruling about user-visible behaviour with no basis in the ticket or its attachments is not yours to make — it goes under Open Questions instead.
+Every AC ambiguity you resolve is a recorded ruling, never a silent choice. Where the design commits to a reading of an AC whose wording allows more than one, the design doc's **Interpretation Rulings** section records the AC id, the chosen reading, and its basis. A ruling about user-visible behaviour with no basis in the ticket or its attachments keeps the existing behaviour and names that as its basis.
 
 ## Convention Rulings
 
@@ -171,7 +171,7 @@ What gets tested at which layer (unit / integration / e2e).
 
 ## Interpretation Rulings
 
-Present when an AC's wording allows more than one reading. One row per ruling: the AC id, the chosen reading, and its basis.
+Present when an AC's wording allows more than one reading. One row per ruling: the AC id, the chosen reading, and its basis: a ticket line, a rulings file, the code as it stands, or the existing behaviour kept.
 
 | AC | Reading | Basis |
 | --- | --- | --- |
@@ -182,9 +182,5 @@ Present when the design creates a new surface. One row per convention settled: t
 
 | Topic | Ruling | Precedent |
 | --- | --- | --- |
-
-## Open Questions
-
-Anything unresolved.
 ```
 

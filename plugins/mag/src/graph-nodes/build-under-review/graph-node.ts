@@ -1,5 +1,5 @@
 import { Effect, Option, Result, Schema } from "effect"
-import { designAddendum, verificationAddendum } from "mag/graph-nodes/build-under-review/addenda"
+import { designAddendum, planAddendum, verificationAddendum } from "mag/graph-nodes/build-under-review/addenda"
 import { build } from "mag/graph-nodes/build/graph-node"
 import type { ReviewBlocked, ReviewDisputeRejected } from "mag/graph-nodes/review-diff/errors"
 import { reviewDiff } from "mag/graph-nodes/review-diff/graph-node"
@@ -93,6 +93,8 @@ export const buildUnderReview = make({
      * the reviewer's findings — the review verdict outranks the plan it reviewed against.
      */
     designPath: Schema.optional(Schema.String),
+    /** A repo-relative reviewed plan for the first build pass to work through, task by task; present makes it the task list and `designPath` the record of why. */
+    planPath: Schema.optional(Schema.String),
     /** A named agent for every session this node dispatches — same convention as `build`'s field. */
     agent: Schema.optional(Schema.String),
     /**
@@ -122,8 +124,11 @@ export const buildUnderReview = make({
       const buildModelField = input.buildModel === undefined ? {} : { model: input.buildModel }
       const simplifyModelField = input.simplifyModel === undefined ? {} : { model: input.simplifyModel }
       const reviewModelField = input.reviewModel === undefined ? {} : { model: input.reviewModel }
-      const firstAddendum =
-        input.designPath === undefined ? {} : { addendum: designAddendum(input.designPath) }
+      const firstAddendum = input.planPath !== undefined && input.designPath !== undefined
+        ? { addendum: planAddendum(input.planPath, input.designPath) }
+        : input.designPath === undefined
+        ? {}
+        : { addendum: designAddendum(input.designPath) }
 
       let prior = Option.none<ReviewBlocked | ReviewDisputeRejected>()
       let spent: Spend = { costUsd: 0, sessions: [] }
@@ -258,9 +263,10 @@ export const buildUnderReview = make({
           ? yield* verified(reduced.headSha, reduced.sessionRef)
           : { headSha: reduced.headSha, commits: 0 }
 
-        // Present only when this pass produced a dispute.
+        // Present only when this pass produced a dispute; otherwise a send-back pass hands the
+        // reviewer the prior findings, so pass 2 judges the delta instead of re-hunting the diff.
         const adjudication = built.success.findingsPath === undefined || built.success.disputePath === undefined
-          ? {}
+          ? Option.match(prior, { onNone: () => ({}), onSome: (blocked) => ({ priorFindingsPath: blocked.findingsPath }) })
           : { findingsPath: built.success.findingsPath, disputePath: built.success.disputePath }
 
         const reviewed = yield* Effect.result(
