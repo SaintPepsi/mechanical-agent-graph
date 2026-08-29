@@ -16,10 +16,10 @@ import { RunInfo, workdir } from "mag/runtime/run-info"
 import { ticketReference } from "mag/runtime/ticket"
 import { compileReviewBrief, PLAN_REVIEW_VERDICT, renderFindings, targetedFinding } from "mag/skills/review-brief"
 
-/** The target, then the charter; the diff is not named because this node never reads one. */
-const targetBlock = (designPath: string, planPath: string, priorFindingsPath: string | undefined): readonly string[] => [
+/** The target, then the charter; the diff is not named because this node never reads one, and neither is the design: the plan is what this node reads, and what it judges from. */
+const targetBlock = (planPath: string, priorFindingsPath: string | undefined): readonly string[] => [
   "",
-  `Review the design at ${designPath} and the plan at ${planPath}, before any code exists. Read both whole.`,
+  `Review the plan at ${planPath}, before any code exists.`,
   "",
   ...compileReviewBrief("plan", priorFindingsPath)
 ]
@@ -39,7 +39,7 @@ const disputeBlock = (findingsPath: string, disputePath: string): readonly strin
   "A previous review pass raised blocking findings on this design and plan, recorded at",
   `${findingsPath}. The design pass that followed is recorded at ${disputePath}: it names the`,
   "finding(s) it disputes rather than fixed. This session has no memory of either pass, read both",
-  "files alongside the design and the plan named above. Decide each disputed finding in `disputed`,",
+  "files alongside the plan named above. Decide each disputed finding in `disputed`,",
   "quoted: upheld true when the dispute is right and the defect is not there, false when the defect",
   "stands. A disputed finding goes there and nowhere else. Every other finding from the findings",
   "document, and anything new, stands or falls on the documents as shown: blocking or a note, as on",
@@ -51,7 +51,6 @@ const promptFor = (
     readonly ticket: string
     readonly title: string
     readonly ticketPath: string
-    readonly designPath: string
     readonly planPath: string
     readonly priorFindingsPath?: string | undefined
     readonly dispute?: { readonly findingsPath: string; readonly disputePath: string } | undefined
@@ -60,31 +59,33 @@ const promptFor = (
 ): string =>
   [
     ...ticketReference(input),
-    ...targetBlock(input.designPath, input.planPath, input.priorFindingsPath),
+    ...targetBlock(input.planPath, input.priorFindingsPath),
     ...blockingBlock,
     ...rulingsBlock(rulings),
     ...(input.dispute === undefined ? [] : disputeBlock(input.dispute.findingsPath, input.dispute.disputePath))
   ].join("\n")
 
 /**
- * Reviews the design record and the plan against the ticket, at plan altitude: acceptance-criteria
- * coverage, undecided or baseless rulings, and collisions with the repository's own rulings. Read-only by
- * contract, `review-diff`'s precedent: it reports findings and changes nothing, so a blocking
- * finding routes to the producer (`brainstorm`), never back here.
+ * Reviews the plan against the ticket, at plan altitude: acceptance-criteria coverage, undecided or
+ * baseless rulings (quoted from the plan's own citation of them), and collisions with the
+ * repository's own rulings. Read-only by contract, `review-diff`'s precedent: it reports findings
+ * and changes nothing, so a blocking finding routes to the producer (`brainstorm`), never back here.
  *
- * No `base` and no diff read: the input schema has no way to name a diff, so the reviewer's
- * blindness to code is a property of the schema, not a promise kept in prose. `headSha` is carried
- * onto the findings and the failure, not gated: the artifacts under review are the two files named
- * by path, and the sha says which tree they were written against.
+ * No `base`, no diff and no `designPath`: the input schema has no way to name any of them, so the
+ * reviewer's blindness to code and to the design record is a property of the schema, not a promise
+ * kept in prose. The design is the plan's input and nothing else's — the plan is what this node
+ * judges from, and it carries whatever design decisions and principles it applies, in its own
+ * words; a decision the plan never states is a plan finding on that ground alone. `headSha` is
+ * carried onto the findings and the failure, not gated: the artifact under review is the one file
+ * named by path, and the sha says which tree it was written against.
  */
 export const reviewPlan = make({
   name: "review-plan",
-  description: "Review the design and the plan against the ticket before any build; block on findings that must be settled.",
+  description: "Review the plan against the ticket before any build; block on findings that must be settled.",
   input: Schema.Struct({
     ticket: Schema.String,
     title: Schema.String,
     ticketPath: Schema.String,
-    designPath: Schema.String,
     planPath: Schema.String,
     /** The tree the plan was written against (`plan`'s own `headSha`), stamped on the findings and any failure. */
     headSha: Schema.String,

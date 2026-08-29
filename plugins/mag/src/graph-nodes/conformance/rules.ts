@@ -210,8 +210,7 @@ const importSurface = pure("import-surface", (subject, flag) =>
  * the stage before it"). A third row here is a ruling first, an entry second.
  */
 export const INPUT_BOUNDARY_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
-  ["plan", "the plan resolves names against the repo, v1's Resolution Table position"],
-  ["review-plan", "a reviewer reads only what it judges: the plan and the design it was built from"]
+  ["plan", "the plan resolves names against the repo, v1's Resolution Table position"]
 ])
 
 /** The one field every ticket-driven node carries, the ruling's own baseline; a node without it is not a stage of a ticket's pipeline and is outside the ruling. */

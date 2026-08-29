@@ -56,15 +56,20 @@ export interface ReviewVerdict {
 
 /** What the pass is judging, and the one question it answers about it. */
 const TARGET: Record<ReviewTarget, string> = {
-  plan: "Target: the design and the plan named above. Question: does the plan, built exactly as written, satisfy every acceptance criterion?",
+  plan: "Target: the plan named above. Question: does the plan, built exactly as written, satisfy every acceptance criterion?",
   diff: "Target: the diff named above. Question: does the code as written do what the ticket requires? Finish with one fresh-eyes skim of the whole branch for what the diff view hides: dead files, stale docs, commits that do not read as one change."
 }
 
-/** The plan target's two extra hunts: a design seam the plan lost, and prior art the plan rebuilds. */
+/**
+ * The plan target's two extra hunts. The design is the plan's input and nothing else's: the plan
+ * carries whatever seams and principles it applies, in its own words, so both audits judge the
+ * plan's own statement of them rather than a design file the reviewer never reads. A plan that
+ * applies a seam or a principle without stating it is a plan finding on that ground alone.
+ */
 const PLAN_AUDITS: readonly string[] = [
   "",
-  "Structure audit: every seam the design's Envisioned Shell and Seams & Ownership name has a task in the plan with an exact path. A seam collapsed into another file, or an extract resolved as a copy, is blocking; so is a created module whose responsibility re-implements logic that already exists elsewhere, unless the plan quotes a principle that licenses the duplication.",
-  "Principles audit: the design's Principles Applied section was written by the design session. Check the plan honours each rule it claims, and that every deviation quotes a real escape clause from the file it names.",
+  "Structure audit: the plan states the seams it commits to, each with an exact path, and a task builds every one there. A seam the plan never states, one collapsed into another file, or an extract resolved as a copy, is blocking; so is a created module whose responsibility re-implements logic that already exists elsewhere, unless the plan quotes a principle that licenses the duplication.",
+  "Principles audit: the plan states the principles it applies and cites where each comes from. Check it honours every rule it claims, that a deviation quotes a real escape clause from the file it names, and that a plan naming no principles at all is blocking on that ground alone.",
   "Prior-art hunt: for every symbol, module or capability the plan introduces, derive search terms from its own nouns (name variants across kebab, camel and snake case, filenames, concepts) and search the repo. Prior art covering it is blocking, cited path:line."
 ]
 

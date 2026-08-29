@@ -58,14 +58,17 @@ describe("review-plan", () => {
     for (const example of successExamples) Schema.decodeUnknownSync(reviewPlan.success)(example)
   })
 
-  test("the input schema has no base and no diff field: the reviewer cannot be handed code", () => {
+  test("the input schema has no base, diff or designPath field: the reviewer cannot be handed code or the design", () => {
     if (!isSchemaHandle(reviewPlan.input)) throw new Error("reviewPlan.input is not a Schema")
-    const fields = Object.keys(Schema.decodeUnknownSync(reviewPlan.input)({ ...INPUT, base: "main", diffPath: "/x.patch" }))
+    const fields = Object.keys(
+      Schema.decodeUnknownSync(reviewPlan.input)({ ...INPUT, base: "main", diffPath: "/x.patch", designPath: "/x/design.md" })
+    )
     expect(fields).not.toContain("base")
     expect(fields).not.toContain("diffPath")
+    expect(fields).not.toContain("designPath")
   })
 
-  test("the prompt names the design and the plan, carries the plan charter, states the four blocking conditions, and the one git read is the rulings ls-files", () =>
+  test("the prompt names the plan, carries the plan charter, states the four blocking conditions, and the one git read is the rulings ls-files", () =>
     withRunRoot(async (runRoot, run) => {
       const shell = rulingsShell()
       const agent = reviewAgent([])
@@ -77,7 +80,7 @@ describe("review-plan", () => {
       const prompt = agent.requests[0]!.prompt
       expect(prompt).toContain(`Ticket ${INPUT.ticket}: ${INPUT.title}`)
       expect(prompt).toContain(`Read the ticket at \`${INPUT.ticketPath}\`.`)
-      expect(prompt).toContain(`Review the design at ${INPUT.designPath} and the plan at ${INPUT.planPath}`)
+      expect(prompt).toContain(`Review the plan at ${INPUT.planPath}`)
       expect(prompt).toContain("You are an adversarial reviewer. Find where the target fails to meet the ticket.")
       expect(prompt).toContain("The target does not get to define what done means.")
       expect(prompt).toContain("does the plan, built exactly as written, satisfy every acceptance criterion?")
