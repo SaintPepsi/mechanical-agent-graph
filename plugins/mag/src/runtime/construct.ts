@@ -3,7 +3,7 @@ import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
 import type { RunScope } from "mag/runtime/run-layers"
-import { schemaFieldNames } from "mag/runtime/schema-fields"
+import { objectAstOf, schemaFieldNames } from "mag/runtime/schema-fields"
 
 /**
  * The rail-sketch's `Graph.construct` notation made real, so a graph's source reads the way its
@@ -379,6 +379,16 @@ const projectNode = (
   }
 }
 
+/** A keep-less stage's contributed fields, or `undefined` when they cannot stand as an exhaustive
+ *  list: an index-signature schema (`Schema.Record`, a struct with a rest field) may carry fields at
+ *  run time beyond the ones it names, so treating its named set as the whole truth would let a real
+ *  field's read silently resolve to the entry instead of refusing. `schemaFieldNames` alone cannot
+ *  make this call — `isEmptyStructSchema` (`graph-node.shape.ts`) depends on it answering `[]` for a
+ *  bare `Schema.Record`, a different question (does this schema declare fields at all) than the
+ *  walk's (can this schema's field list be trusted as complete). */
+const enumeratedFields = (ast: Parameters<typeof objectAstOf>[0]): readonly string[] | undefined =>
+  (objectAstOf(ast)?.indexSignatures.length ?? 0) > 0 ? undefined : schemaFieldNames(ast)
+
 /** The shape's sibling to `foldSteps`: same union, same exhaustive switch, but wires elements and
  *  edges instead of an Effect, and never runs a node. `containerId` is the enclosing box's id, so
  *  every element minted at one level of this fold shares one `parent` — a fork's branches and a
@@ -442,7 +452,7 @@ export const projectSteps = (
         const projected = projectNode(containerId, primary, step.node)
         elements.push(...projected.elements)
         edges.push(...projected.edges)
-        contribute(step.keep ? Object.keys(step.keep) : schemaFieldNames(step.node.success.ast), primary)
+        contribute(step.keep ? Object.keys(step.keep) : enumeratedFields(step.node.success.ast), primary)
         break
       }
       case "via":
@@ -463,8 +473,8 @@ export const projectSteps = (
           ...left.edges,
           ...right.edges
         )
-        contribute(schemaFieldNames(step.left.success.ast), leftId)
-        contribute(schemaFieldNames(step.right.success.ast), rightId)
+        contribute(enumeratedFields(step.left.success.ast), leftId)
+        contribute(enumeratedFields(step.right.success.ast), rightId)
         break
       }
       case "when": {

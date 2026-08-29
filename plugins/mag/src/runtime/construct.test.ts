@@ -101,6 +101,14 @@ const unenumerable = make({
   run: () => Effect.succeed({ x: "x" })
 })
 
+const indexSigned = make({
+  name: "fixture-index-signed",
+  description: "Its success carries an index signature, so its named fields are not an exhaustive list — also opaque.",
+  input: Schema.Struct({}),
+  success: Schema.Record(Schema.String, Schema.String),
+  run: () => Effect.succeed({ x: "x" })
+})
+
 class FixtureNotifyError extends Data.TaggedError("FIXTURE_NOTIFY_ERROR")<{ readonly reason: string }> {}
 
 const widerErrorNotify = make({
@@ -802,6 +810,24 @@ describe("Graph.shapeOf / projectSteps", () => {
 
     expect(error.field).toBe("x")
     expect(error.opaque).toEqual(["fixture-root/0:node:fixture-unenumerable"])
+  })
+
+  test("disconfirming: an index-signature success is also opaque — its named fields are not an exhaustive list", () => {
+    const steps: readonly Step[] = [
+      { kind: "node", node: indexSigned, wire: () => ({}), modifiers: [] },
+      {
+        kind: "when",
+        decision: { name: "x is set", reads: ["x"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const error = thrown(FieldHasNoProducer, () => projectSteps("fixture-root", steps))
+
+    expect(error.field).toBe("x")
+    expect(error.opaque).toEqual(["fixture-root/0:node:fixture-index-signed"])
   })
 
   test("two decisions sharing a name in one container refuse: a name is an address", () => {
