@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem, Option, Predicate } from "effect"
+import { Context, Data, Effect, FileSystem, Option, Predicate } from "effect"
 import { decodeJournalLines } from "mag/runtime/journal/decode"
 import { carriesSuccess, type JournalRow } from "mag/runtime/journal/row"
 import { platform } from "mag/runtime/platform"
@@ -25,6 +25,18 @@ export const RESUME_NODE = "resume-run"
  */
 export const RESUME_RULE =
   "the prior run of this ticket with the most replayable nodes for this graph, its own resume record excluded, newest run id on ties"
+
+/**
+ * Whether a recorded success would replay today: `journaled.ts` replays a row only after it decodes
+ * against the node's *current* success schema, so the ranking below must count with the same
+ * question or it picks a run whose rows are all stale (the GH-332 resume that chose a pre-`ticketPath`
+ * run over last night's, replayed nothing and redid the whole design). The composition root provides
+ * the registry-backed probe (`run-cli.ts`); the default counts every success, the runtime's own
+ * schemas being unavailable here without an import cycle.
+ */
+export const ReplayProbe = Context.Reference<(node: string, success: unknown) => boolean>("mag/runtime/ReplayProbe", {
+  defaultValue: () => () => true
+})
 
 export interface ResumeSelection {
   readonly predecessorRunId: string
@@ -67,12 +79,16 @@ interface RankedRun extends RunRows {
  * (`row.ts`'s `attempt`), so a row count would let a retry-heavy run with fewer distinct nodes outrank a
  * longer single-pass run that actually replays more work.
  */
-export const mostReplayable = (runs: readonly RunRows[], graph: string): Option.Option<RankedRun> => {
+export const mostReplayable = (
+  runs: readonly RunRows[],
+  graph: string,
+  replays: (node: string, success: unknown) => boolean = () => true
+): Option.Option<RankedRun> => {
   let best: RankedRun | undefined
   for (const run of runs) {
     const replayable = new Set(
       run.rows
-        .filter((row) => row.graph === graph && row.node !== RESUME_NODE && carriesSuccess(row))
+        .filter((row) => row.graph === graph && row.node !== RESUME_NODE && carriesSuccess(row) && replays(row.node, row.success))
         .map((row) => row.node)
     ).size
     if (replayable === 0) continue
@@ -121,7 +137,7 @@ export const selectPredecessor = Effect.fn("selectPredecessor")(function* (optio
     { concurrency: "unbounded" }
   )
 
-  const chosen = mostReplayable(runs, options.graph)
+  const chosen = mostReplayable(runs, options.graph, yield* ReplayProbe)
   if (Option.isNone(chosen)) {
     return yield* Effect.fail(new ResumeWithoutPredecessor({ ticket, graph: options.graph, inspected: entries.length }))
   }

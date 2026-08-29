@@ -41,6 +41,17 @@ describe("mostReplayable", () => {
     expect(chosen.pipe(Option.map((run) => run.runId))).toStrictEqual(Option.some("run-a"))
   })
 
+  test("a success the probe refuses is not replayable work: a fuller run of stale rows loses to a newer run whose rows decode", () => {
+    const runs = [
+      { runId: "run-a", rows: [done("run-a", "node-1"), done("run-a", "node-2"), done("run-a", "node-3")] },
+      { runId: "run-b", rows: [done("run-b", "node-1"), done("run-b", "node-4"), done("run-b", "node-5")] }
+    ]
+
+    const chosen = mostReplayable(runs, "develop-graph", (node) => node !== "node-2" && node !== "node-3")
+
+    expect(chosen.pipe(Option.map((run) => run.runId))).toStrictEqual(Option.some("run-b"))
+  })
+
   test("counted by distinct node, not by row: a retry-heavy run with fewer nodes loses to a longer single-pass run", () => {
     // run-single: 12 distinct nodes, one row each (12 rows, 12 nodes) — a clean single pass.
     const runSingle = {
