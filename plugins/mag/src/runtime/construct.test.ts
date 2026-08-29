@@ -8,6 +8,7 @@ import {
   applyModifiers,
   type Blueprint,
   DecisionNameCollides,
+  DecisionNameUnaddressable,
   FieldHasNoProducer,
   Graph,
   type Modifier,
@@ -858,6 +859,23 @@ describe("Graph.shapeOf / projectSteps", () => {
 
     expect(error.container).toBe("fixture-root")
     expect(error.decision).toBe("flag is set")
+  })
+
+  test("a decision named with the id grammar's own separators refuses: a name reads as English, not as a path", () => {
+    const steps: readonly Step[] = [
+      {
+        kind: "when",
+        decision: { name: "checkout/0:decision:run wants a worktree", reads: ["flag"], test: () => true },
+        node: guarded,
+        wire: () => ({}),
+        keep: {}
+      }
+    ]
+
+    const error = thrown(DecisionNameUnaddressable, () => projectSteps("fixture-root", steps))
+
+    expect(error.container).toBe("fixture-root")
+    expect(error.decision).toBe("checkout/0:decision:run wants a worktree")
   })
 
   test("a construct whose decisions cannot be drawn refuses at .finalise, before any run", () => {

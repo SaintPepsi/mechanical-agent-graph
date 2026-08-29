@@ -36,7 +36,10 @@ type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
 type Reads<Ctx> = readonly [keyof Ctx & string, ...Array<keyof Ctx & string>]
 
 /** A decision as data: what it is called, what it reads, what it tests. `test` sees the declared
- *  fields and nothing else, so the list and the test cannot drift — there is only one list. */
+ *  fields and nothing else, so the list and the test cannot drift — there is only one list. `name`
+ *  becomes an element id's own path segment, so it must avoid `/` and `:` (`.finalise` refuses one
+ *  that doesn't, `DecisionNameUnaddressable`), and it must be unique within its own construct
+ *  (`DecisionNameCollides`). */
 type Decision<Ctx, R extends Reads<Ctx>> = {
   readonly name: string
   readonly reads: R
@@ -175,6 +178,15 @@ export class FieldHasNoProducer extends Data.TaggedError("FIELD_HAS_NO_PRODUCER"
  *  `Data.TaggedError` assigns every payload key as an own property, so a member called `name` would
  *  shadow the tag and print the decision's own name where `DECISION_NAME_COLLIDES` belongs. */
 export class DecisionNameCollides extends Data.TaggedError("DECISION_NAME_COLLIDES")<{
+  readonly container: string
+  readonly decision: string
+}> {}
+
+/** A decision's name becomes an element id's own path segment (`${at}:decision:${name}`): one
+ *  carrying `/` or `:`, the grammar's own separators, could mint an id indistinguishable from a
+ *  different, deeper element. Refused rather than escaped: a decision's name reads as English, not
+ *  as a path. */
+export class DecisionNameUnaddressable extends Data.TaggedError("DECISION_NAME_UNADDRESSABLE")<{
   readonly container: string
   readonly decision: string
 }> {}
@@ -433,6 +445,9 @@ export const projectSteps = (
   /** Called before the step records its own contributions, so a decision only ever resolves against
    *  stages above it. */
   const resolveReads = (decision: AnyDecision, to: string): void => {
+    if (/[/:]/.test(decision.name)) {
+      throw new DecisionNameUnaddressable({ container: containerId, decision: decision.name })
+    }
     if (named.has(decision.name)) {
       throw new DecisionNameCollides({ container: containerId, decision: decision.name })
     }
