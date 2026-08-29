@@ -57,7 +57,8 @@ const DesignGraph = Graph.construct("design")
     // { visionPaths[], discoverPath, recycleMapPath } → { designPath, planPath, headSha }
     //   brainstorm → plan → review-plan; a blocking finding resumes the session that owns the artifact it names
     //   (design → brainstorm, then plan fresh if the design changed; plan only → the plan session), at most cap times per producer
-    //   !DesignMissing !PlanMissing !PlanBlocked (cap spent) !PlanDisputeRejected
+    //   an adjudicating pass decides the disputed findings only; its other blocking findings route as above
+    //   !DesignMissing !PlanMissing !PlanBlocked (cap spent) !PlanDisputeRejected (a disputed finding rejected)
   .finalise()
     // outside: { ticket, title, body } → { designPath, planPath, headSha, visionPaths, discoverPath, recycleMapPath }
     //   !DesignPromptOversized | NotationDeclaredFailure | VisionUnverified | DiscoverNoteMissing | RecycleMapMissing

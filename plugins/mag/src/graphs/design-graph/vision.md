@@ -63,7 +63,7 @@ graph TD
   BS -. "verdict = disputed: findingsPath, disputePath → findingsPath, disputePath" .-> RP
   BS -. "design missing or unchanged and silent: designPath → designPath" .-> DEADLOOP[/"die: DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected<br/>kept: worktree, the records so far"/]
   RP -. "verdict = blocked, cap exhausted: findingsPath → (escalates)" .-> DEADLOOP
-  RP -. "adjudicating pass rejected: PlanDisputeRejected → (escalates)" .-> DEADLOOP
+  RP -. "adjudicating pass rejects a disputed finding: PlanDisputeRejected → (escalates); its other blocking findings route as above" .-> DEADLOOP
 
   RP -- "verdict = clean: designPath, planPath, headSha → designPath, planPath, headSha" --> OUT
 ```

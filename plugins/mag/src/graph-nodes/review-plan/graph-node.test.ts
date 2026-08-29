@@ -23,13 +23,18 @@ const ADJUDICATING = inputExamples[2]!
 /** The one git read this node makes: `ls-files` for the rulings files, NUL-separated. */
 const rulingsShell = (declared = "") => scriptedShell([{ exitCode: 0, stdout: declared, stderr: "" }])
 
-/** A bare string is a design finding, the common case; a plan finding names its target. */
+/** A bare string is a design finding, the common case; a plan finding names its target. `disputed` is an adjudicating pass's rulings. */
 const reviewAgent = (
   blocking: readonly (string | { readonly target: "design" | "plan"; readonly finding: string })[],
-  notes: readonly string[] = []
+  notes: readonly string[] = [],
+  disputed?: readonly { readonly finding: string; readonly upheld: boolean }[]
 ) =>
   stubAgent(
-    { blocking: blocking.map((entry) => (typeof entry === "string" ? { target: "design", finding: entry } : entry)), notes },
+    {
+      blocking: blocking.map((entry) => (typeof entry === "string" ? { target: "design", finding: entry } : entry)),
+      notes,
+      ...(disputed === undefined ? {} : { disputed })
+    },
     { sessions: ["review-session"], costUsd: 0.31 }
   )
 
@@ -163,26 +168,51 @@ describe("review-plan", () => {
       expect(readFileSync(blocked.findingsPath, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\n- plan: AC.02 has no task\n- design: Interpretation Rulings AC.04: no basis named\n\nNotes:\nNone.`)
     }))
 
-  test("an adjudicating pass names both files in the prompt, and a blocking verdict is PlanDisputeRejected carrying disputePath", () =>
+  test("an adjudicating pass names both files in the prompt, and a rejected disputed finding is PlanDisputeRejected carrying disputePath", () =>
     withRunRoot(async (runRoot, run) => {
-      const agent = reviewAgent(["still stands"])
+      const agent = reviewAgent([], [], [{ finding: "AC.02 has no task", upheld: false }])
       const result = await runWith(reviewPlan.run(ADJUDICATING), rulingsShell().service, agent.service, run)
 
       const prompt = agent.requests[0]!.prompt
       expect(prompt).toContain(ADJUDICATING.findingsPath!)
       expect(prompt).toContain(ADJUDICATING.disputePath!)
       expect(prompt).toContain("This session has no memory of either pass")
+      expect(prompt).toContain("Decide each disputed finding in `disputed`")
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(PlanDisputeRejected)
       expect(result.failure).toMatchObject({ findingsPath: `${runRoot}/review-plan-1.md`, disputePath: ADJUDICATING.disputePath, headSha: ADJUDICATING.headSha })
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(
+        `Reviewed at ${ADJUDICATING.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.\n\nDispute:\n- rejected: AC.02 has no task`
+      )
     }))
 
-  test("an adjudicating pass that passes is an ordinary success", () =>
+  test("an adjudicating pass that upholds the dispute and blocks on another finding is PlanBlocked with that finding's target, the ruling on record", () =>
+    withRunRoot(async (runRoot, run) => {
+      const agent = reviewAgent([{ target: "plan", finding: "T8 flags its own rule" }], [], [{ finding: "AC.02 has no task", upheld: true }])
+      const result = await runWith(reviewPlan.run(ADJUDICATING), rulingsShell().service, agent.service, run)
+
+      expect(Result.isFailure(result)).toBe(true)
+      if (!Result.isFailure(result)) return
+      expect(result.failure).toBeInstanceOf(PlanBlocked)
+      expect((result.failure as PlanBlocked).targets).toStrictEqual(["plan"])
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(
+        `Reviewed at ${ADJUDICATING.headSha}\n\n- plan: T8 flags its own rule\n\nNotes:\nNone.\n\nDispute:\n- upheld: AC.02 has no task`
+      )
+    }))
+
+  test("an adjudicating pass that upholds the dispute and finds nothing else is an ordinary success", () =>
     withRunRoot(async (_runRoot, run) => {
-      const result = await runWith(reviewPlan.run(ADJUDICATING), rulingsShell().service, reviewAgent([]).service, run)
+      const result = await runWith(reviewPlan.run(ADJUDICATING), rulingsShell().service, reviewAgent([], [], [{ finding: "AC.02 has no task", upheld: true }]).service, run)
       expect(Result.isSuccess(result)).toBe(true)
+    }))
+
+  test("rulings in an ordinary pass's reply are ignored: no dispute was handed to it, so nothing is rejected and the record shows no dispute section", () =>
+    withRunRoot(async (runRoot, run) => {
+      const result = await runWith(reviewPlan.run(INPUT), rulingsShell().service, reviewAgent([], [], [{ finding: "unsolicited", upheld: false }]).service, run)
+      expect(Result.isSuccess(result)).toBe(true)
+      expect(readFileSync(`${runRoot}/review-plan-1.md`, "utf8")).toBe(`Reviewed at ${INPUT.headSha}\n\nNo blocking findings.\n\nNotes:\nNone.`)
     }))
 
   test("a half-set dispute pair is PlanDisputeIncomplete before any read or dispatch", () =>

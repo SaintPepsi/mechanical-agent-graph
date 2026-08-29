@@ -27,11 +27,20 @@ export const REVIEW_VERDICT = verdictSchema(
   })
 )
 
-/** The plan target has two artifacts, so every blocking finding names the one that must change. */
+/** An adjudicating pass's ruling on one disputed finding: upheld means the dispute is right and the finding is settled. */
+const DISPUTE_RULING = Schema.Struct({ finding: Schema.String, upheld: Schema.Boolean })
+export type DisputeRuling = typeof DISPUTE_RULING.Type
+
+/**
+ * The plan target has two artifacts, so every blocking finding names the one that must change.
+ * `disputed` is filled by an adjudicating pass only, one ruling per finding the dispute names;
+ * `optionalKey` so an ordinary pass is shown no key at all rather than a nullable union.
+ */
 export const PLAN_REVIEW_VERDICT = verdictSchema(
   Schema.Struct({
     blocking: Schema.Array(Schema.Struct({ target: Schema.Literals(FINDING_TARGETS), finding: Schema.String })),
-    notes: Schema.Array(Schema.String)
+    notes: Schema.Array(Schema.String),
+    disputed: Schema.optionalKey(Schema.Array(DISPUTE_RULING))
   })
 )
 
@@ -41,6 +50,8 @@ export const targetedFinding = (target: FindingTarget, finding: string): string 
 export interface ReviewVerdict {
   readonly blocking: readonly string[]
   readonly notes: readonly string[]
+  /** Present on an adjudicating pass's record, so the run's own files say how the dispute went. */
+  readonly disputed?: readonly DisputeRuling[]
 }
 
 /** What the pass is judging, and the one question it answers about it. */
@@ -109,6 +120,7 @@ const list = (items: readonly string[], empty: string): string =>
 /**
  * The findings record, one file per pass. The first line names the sha the pass judged, the shape
  * `gather-reviews` matches on; blocking comes first because it is the only channel a consumer routes on.
+ * The dispute section appears only on an adjudicating pass, so every other record keeps its shape.
  */
 export const renderFindings = (headSha: string, verdict: ReviewVerdict): string =>
   [
@@ -117,5 +129,8 @@ export const renderFindings = (headSha: string, verdict: ReviewVerdict): string 
     list(verdict.blocking, "No blocking findings."),
     "",
     "Notes:",
-    list(verdict.notes, "None.")
+    list(verdict.notes, "None."),
+    ...(verdict.disputed === undefined || verdict.disputed.length === 0
+      ? []
+      : ["", "Dispute:", list(verdict.disputed.map(({ finding, upheld }) => `${upheld ? "upheld" : "rejected"}: ${finding}`), "")])
   ].join("\n")

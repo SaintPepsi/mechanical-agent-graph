@@ -22,6 +22,12 @@ const isReviewPrompt = (request: ClaudePrint<unknown>) => request.prompt.include
 /** A bare string is a design finding, the common case; a plan finding names its target. */
 type Finding = string | { readonly target: "design" | "plan"; readonly finding: string }
 const targeted = (entry: Finding) => (typeof entry === "string" ? { target: "design", finding: entry } : entry)
+/** A pass's script: its blocking findings alone, or those plus an adjudicating pass's rulings. */
+type Review = readonly Finding[] | { readonly blocking: readonly Finding[]; readonly disputed: readonly { readonly finding: string; readonly upheld: boolean }[] }
+const verdictOf = (review: Review) =>
+  "blocking" in review
+    ? { blocking: review.blocking.map(targeted), notes: [], disputed: review.disputed }
+    : { blocking: review.map(targeted), notes: [] }
 
 /** Extracts the backticked destination a record-writing node spliced into its own prompt. */
 const destinationOf = (prompt: string, marker: string): string => {
@@ -42,7 +48,7 @@ const writeAt = (path: string, text: string): void => {
  * the design with its own pass number, so the record check sees a changed file. A plan pass,
  * fresh or resumed, always rewrites the plan with its own pass number.
  */
-const loopAgent = (reviews: readonly (readonly Finding[])[] = [], disputing: ReadonlySet<number> = new Set()) => {
+const loopAgent = (reviews: readonly Review[] = [], disputing: ReadonlySet<number> = new Set()) => {
   const requests: Array<ClaudePrint<unknown>> = []
   let brainstorms = 0
   let plans = 0
@@ -54,7 +60,7 @@ const loopAgent = (reviews: readonly (readonly Finding[])[] = [], disputing: Rea
       requests.push(request as ClaudePrint<unknown>)
       if (isReviewPrompt(request as ClaudePrint<unknown>)) {
         reviewsRun += 1
-        return reply<A>({ blocking: (reviews[reviewsRun - 1] ?? []).map(targeted), notes: [] }, `session-review-plan-${reviewsRun}`, 0.1)
+        return reply<A>(verdictOf(reviews[reviewsRun - 1] ?? []), `session-review-plan-${reviewsRun}`, 0.1)
       }
       if (isPlanPrompt(request as ClaudePrint<unknown>)) {
         plans += 1
@@ -268,15 +274,40 @@ describe("design-under-review", () => {
       expect(adjudicating.prompt).toContain(join(runRoot, "dispute-1.md"))
     }))
 
-  test("an adjudicating pass that still blocks is PlanDisputeRejected, never routed back, whatever the cap", () =>
+  test("an adjudicating pass that rejects a disputed finding is PlanDisputeRejected, never routed back, whatever the cap", () =>
     withRepo(async (_repoRoot, _runRoot, run) => {
-      const agent = loopAgent([["AC.02 has no task"], ["still stands"]], new Set([2]))
+      const agent = loopAgent([["AC.02 has no task"], { blocking: [], disputed: [{ finding: "AC.02 has no task", upheld: false }] }], new Set([2]))
       const result = await runNode({ ...INPUT, cap: 5 }, agent.service, loopShell().service, run)
 
       expect(Result.isFailure(result)).toBe(true)
       if (!Result.isFailure(result)) return
       expect(result.failure).toBeInstanceOf(PlanDisputeRejected)
       expect(agent.requests.filter(isBrainstormPrompt)).toHaveLength(2)
+    }))
+
+  test("dispute upheld, one new plan finding: the plan session is resumed over it, the run does not end, and the settling success names the upheld dispute", () =>
+    withRepo(async (_repoRoot, runRoot, run) => {
+      const agent = loopAgent(
+        [["AC.02 has no task"], { blocking: [{ target: "plan", finding: "T8 flags its own rule" }], disputed: [{ finding: "AC.02 has no task", upheld: true }] }],
+        new Set([2])
+      )
+      const result = await runNode({ ...INPUT, cap: 1 }, agent.service, loopShell().service, run)
+
+      expect(Result.isSuccess(result)).toBe(true)
+      if (!Result.isSuccess(result)) return
+      expect(result.success).toMatchObject({ reviewPasses: 3, disputePath: join(runRoot, "dispute-1.md") })
+      expect(kindsOf(agent.requests)).toStrictEqual(["brainstorm", "plan", "review", "brainstorm", "review", "plan", "review"])
+
+      const plans = agent.requests.filter(isPlanPrompt)
+      expect(plans[1]!.resume).toBe("session-plan-1")
+      expect(plans[1]!.prompt).toContain(join(runRoot, "review-plan-2.md"))
+      expect(readFileSync(join(runRoot, "review-plan-2.md"), "utf8")).toBe(
+        "Reviewed at abc123\n\n- plan: T8 flags its own rule\n\nNotes:\nNone.\n\nDispute:\n- upheld: AC.02 has no task"
+      )
+      // Pass 3 is an ordinary re-review over pass 2's findings, the dispute no longer in front of it.
+      const reviews = agent.requests.filter(isReviewPrompt)
+      expect(reviews[2]!.prompt).toContain(`A prior pass raised blocking findings, recorded at ${join(runRoot, "review-plan-2.md")},`)
+      expect(reviews[2]!.prompt).not.toContain("dispute-1.md")
     }))
 
   test("a non-blocking reviewer error ends the loop at once, unconsumed", () =>

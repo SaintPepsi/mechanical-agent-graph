@@ -17,7 +17,7 @@ export class PlanBlocked extends Data.TaggedError("PLAN_BLOCKED")<{
   readonly costUsd: number | null
 }> {}
 
-/** Raised by an adjudicating pass that still blocks: the design's dispute did not settle the findings, and the run ends rather than routing back. */
+/** Raised by an adjudicating pass that rejects a disputed finding: the defect the design denied stands, and the run ends rather than routing back. Findings it upholds or raises afresh are {@link PlanBlocked}, as on any pass. */
 export class PlanDisputeRejected extends Data.TaggedError("PLAN_DISPUTE_REJECTED")<{
   readonly findingsPath: string
   readonly disputePath: string

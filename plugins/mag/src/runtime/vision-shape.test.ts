@@ -56,7 +56,7 @@ describe("readShape", () => {
       "brainstorm -> review-plan when verdict = disputed",
       "brainstorm -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when design missing or unchanged and silent",
       "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when verdict = blocked, cap exhausted",
-      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when adjudicating pass rejected"
+      "review-plan -> DesignMissing | PlanMissing | PlanBlocked (cap spent) | PlanDisputeRejected when adjudicating pass rejects a disputed finding"
     ])
   })
 

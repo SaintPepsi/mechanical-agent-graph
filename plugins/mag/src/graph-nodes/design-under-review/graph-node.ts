@@ -55,9 +55,11 @@ interface PlanState {
  *
  * The reviewer is blind to code by the schema of `review-plan` itself (no `base`, no diff), and
  * fresh every pass; the one exception is an adjudicating pass, handed the design's own dispute of
- * the findings it is re-reviewing. That pass's verdict is terminal either way: clean settles the
- * loop, blocked is `PlanDisputeRejected`, which escalates, there is no design work a third pass
- * could invent over documents that did not change. No build node is reachable from here.
+ * the findings it is re-reviewing. That pass decides the disputed findings only: one rejected is
+ * `PlanDisputeRejected`, which escalates, there is no design work a third pass could invent over a
+ * defect the design already denied. Every other blocking finding of that pass, new or carried,
+ * routes to its target under the cap as on any pass; an upheld dispute is remembered so the
+ * settling success still names it. No build node is reachable from here.
  */
 export const designUnderReview = make({
   name: "design-under-review",
@@ -85,7 +87,7 @@ export const designUnderReview = make({
     /** The tree the settling plan was written against. */
     headSha: Schema.String,
     reviewPasses: Schema.Int,
-    /** Present when the loop settled on a dispute a review pass accepted. */
+    /** Present when a review pass upheld a dispute on the way to settling, on that pass or a later one. */
     disputePath: Schema.optional(Schema.String),
     sessions: Schema.Array(Schema.String),
     costUsd: Schema.NullOr(Schema.Number)
@@ -102,6 +104,7 @@ export const designUnderReview = make({
       const sendbacks = { design: 0, plan: 0 }
       let designed: DesignState | undefined = undefined
       let planned: PlanState | undefined = undefined
+      let upheldDispute: string | undefined = undefined
 
       for (let passes = 1; ; passes += 1) {
         const producer = Option.map(prior, (blocked) => producerOf(blocked.targets))
@@ -174,6 +177,11 @@ export const designUnderReview = make({
           })
         )
 
+        // Any outcome but a rejection means the adjudicating pass upheld the dispute it was handed.
+        if (currentDesign.disputePath !== undefined && !(Result.isFailure(reviewed) && reviewed.failure._tag === "PLAN_DISPUTE_REJECTED")) {
+          upheldDispute = currentDesign.disputePath
+        }
+
         if (Result.isSuccess(reviewed)) {
           spent = charge(spent, reviewed.success.sessions, reviewed.success.costUsd)
           return {
@@ -181,7 +189,7 @@ export const designUnderReview = make({
             planPath: currentPlan.planPath,
             headSha: currentPlan.headSha,
             reviewPasses: passes,
-            ...(currentDesign.disputePath === undefined ? {} : { disputePath: currentDesign.disputePath }),
+            ...(upheldDispute === undefined ? {} : { disputePath: upheldDispute }),
             sessions: spent.sessions,
             costUsd: spent.costUsd
           }

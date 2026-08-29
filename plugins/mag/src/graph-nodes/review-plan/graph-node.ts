@@ -40,10 +40,11 @@ const disputeBlock = (findingsPath: string, disputePath: string): readonly strin
   "A previous review pass raised blocking findings on this design and plan, recorded at",
   `${findingsPath}. The design pass that followed is recorded at ${disputePath}: it names the`,
   "finding(s) it disputes rather than fixed. This session has no memory of either pass, read both",
-  "files alongside the design and the plan named above. Judge every finding from the findings",
-  "document against what the design and plan show now: a finding the dispute answers is settled if",
-  "the dispute is right, and every other finding stands or falls on the documents as shown. Block on",
-  "anything that still stands, as you would any other finding."
+  "files alongside the design and the plan named above. Decide each disputed finding in `disputed`,",
+  "quoted: upheld true when the dispute is right and the defect is not there, false when the defect",
+  "stands. A disputed finding goes there and nowhere else. Every other finding from the findings",
+  "document, and anything new, stands or falls on the documents as shown: blocking or a note, as on",
+  "any pass."
 ]
 
 const promptFor = (
@@ -95,7 +96,7 @@ export const reviewPlan = make({
     priorFindingsPath: Schema.optional(Schema.String),
     /** The findings a disputed design pass was answering, present alongside `disputePath`, `review-diff`'s pair, same reasoning. */
     findingsPath: Schema.optional(Schema.String),
-    /** The design pass's dispute of the previous verdict. Present makes this pass the decider: a blocking verdict is {@link PlanDisputeRejected}, which ends the run. */
+    /** The design pass's dispute of the previous verdict. Present makes this pass the decider of the disputed findings only: one rejected is {@link PlanDisputeRejected}, which ends the run; every other blocking finding is {@link PlanBlocked} as on any pass. */
     disputePath: Schema.optional(Schema.String),
     /** A named agent to run the session as, same convention as `review-diff`'s field. */
     agent: Schema.optional(Schema.String),
@@ -133,9 +134,12 @@ export const reviewPlan = make({
         ...(input.model === undefined ? {} : { model: input.model })
       })
 
+      // Rulings count only on an adjudicating pass: an ordinary pass was handed no dispute to rule on.
+      const disputed = dispute === undefined ? [] : reply.verdict.disputed ?? []
       const rendered = {
-        ...reply.verdict,
-        blocking: reply.verdict.blocking.map(({ target, finding }) => targetedFinding(target, finding))
+        blocking: reply.verdict.blocking.map(({ target, finding }) => targetedFinding(target, finding)),
+        notes: reply.verdict.notes,
+        disputed
       }
       const findingsPath = yield* writeArtifact(fs, runInfo.runRoot, "review-plan", renderFindings(input.headSha, rendered)).pipe(
         Effect.catch((error) =>
@@ -143,15 +147,18 @@ export const reviewPlan = make({
         )
       )
 
+      // A rejected disputed finding ends the run; an upheld dispute leaves this pass an ordinary
+      // one, whose blocking findings route to their targets as on any pass.
+      if (dispute !== undefined && disputed.some((ruling) => !ruling.upheld)) {
+        return yield* Effect.fail(
+          new PlanDisputeRejected({ findingsPath, disputePath: dispute.disputePath, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
+        )
+      }
       if (reply.verdict.blocking.length > 0) {
         // The targets ride the failure so the loop can resume the session that owns the artifact,
         // without re-reading the findings file it just wrote.
         const targets = reply.verdict.blocking.map(({ target }) => target)
-        return yield* Effect.fail(
-          dispute === undefined
-            ? new PlanBlocked({ findingsPath, targets, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
-            : new PlanDisputeRejected({ findingsPath, disputePath: dispute.disputePath, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd })
-        )
+        return yield* Effect.fail(new PlanBlocked({ findingsPath, targets, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd }))
       }
       return { findingsPath, headSha: input.headSha, sessions: reply.sessions, costUsd: reply.costUsd }
     }).pipe(Effect.provide(platform))
