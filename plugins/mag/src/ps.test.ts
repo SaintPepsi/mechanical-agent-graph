@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Option, Schema } from "effect"
-import { decodeJournalLines, presentRows, renderTable, STALE_THRESHOLD_MS, summarizeJournal } from "mag/ps"
+import { decodeJournalLines, presentRows, processAlive, renderTable, STALE_THRESHOLD_MS, summarizeJournal } from "mag/ps"
 import { JournalRowSchema } from "mag/runtime/journal/row"
 
 /**
@@ -187,6 +187,22 @@ describe("summarizeJournal — stale marker on a silent file", () => {
     const mtimeMs = NOW - STALE_THRESHOLD_MS - 1
     const row = summarizeJournal([startRow()], "proj-abc", mtimeMs, NOW).pipe(Option.getOrThrow)
     expect(row.stale).toBe(true)
+  })
+
+  test("a live process outranks a silent journal: a long single-session node is not stale", () => {
+    const mtimeMs = NOW - STALE_THRESHOLD_MS - 1
+    const row = summarizeJournal([startRow()], "proj-abc", mtimeMs, NOW, Option.some(true)).pipe(Option.getOrThrow)
+    expect(row.stale).toBe(false)
+  })
+
+  test("a dead process is stale at once, however fresh the journal", () => {
+    const row = summarizeJournal([startRow()], "proj-abc", NOW, NOW, Option.some(false)).pipe(Option.getOrThrow)
+    expect(row.stale).toBe(true)
+  })
+
+  test("processAlive: this process is alive, a pid nothing owns is not", () => {
+    expect(processAlive(process.pid)).toBe(true)
+    expect(processAlive(2 ** 22 - 1)).toBe(false)
   })
 })
 

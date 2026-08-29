@@ -13,6 +13,7 @@ import {
   RecordsTempDirFailed,
   RepoRootUnavailable,
   RepositoryIdentityUnavailable,
+  PID_FILE,
   type RootEnv,
   RunRootEnv,
   runScopedLayers,
@@ -183,6 +184,8 @@ describe("runScopedLayers", () => {
       // RunInfo carries the same run directory the journal writes into, so a node can place
       // an artifact there without recomputing the path.
       expect(info.runRoot).toBe(dirname(path))
+      // The pidfile beside the journal names this process: `ps` reads liveness off it.
+      expect(readFileSync(join(dirname(path), PID_FILE), "utf8")).toBe(String(process.pid))
     } finally {
       await cleanup()
     }
