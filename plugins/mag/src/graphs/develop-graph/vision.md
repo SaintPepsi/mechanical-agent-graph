@@ -42,15 +42,15 @@ graph TD
   PTE -. "fails: TersenessWorkdirDirty | TersenessHeadMoved | TersenessCommitFailed | TersenessGitFailed" .-> DEADTREE
 
   subgraph Loop["build-under-review · loop, cap = REVIEW_CAP send-backs"]
-    B["build · Model<br/>implement the design, or answer the standing findings"]
+    B["build · Model<br/>implement the plan, or answer the standing findings"]
     V["verification · Mechanical<br/>the repo's declared suite; exit code is the verdict"]
-    S["simplify · Model<br/>remove what build added but the design never asked for"]
+    S["simplify · Model<br/>remove what build added but the plan never asked for"]
     RD["review-diff · Model<br/>adversarial read of the diff, or adjudicate a build's own dispute"]
   end
   DG -- "headSha → (gate: build starts from the designed tree)" --> B
   FT -- "ticket, title, body → ticket, title, body" --> B
   FBN -- "branch → branch" --> B
-  DG -- "designPath, planPath → designPath, planPath (first pass only)" --> B
+  DG -- "planPath → planPath (first pass only, never designPath: the design is the plan's input and nothing else's)" --> B
   B -- "headSha → headSha" --> V
   IN -- "verification? → command" --> V
   V -- "command → (gate: tree is green)" --> S

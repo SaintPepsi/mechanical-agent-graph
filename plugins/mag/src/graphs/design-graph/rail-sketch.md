@@ -35,7 +35,7 @@ const DesignUnderReview = Graph.construct("design-under-review")
     // { ticket, title, ticketPath, designPath, recycleScanPath } → { planPath, headSha, sessionRef }   !PlanMissing
     //   the second artifact by ruling: the plan resolves the design's names against the repo
   .then(ReviewPlan)
-    // { ticket, title, ticketPath, designPath, planPath, headSha } → { findingsPath }
+    // { ticket, title, ticketPath, planPath, headSha } → { findingsPath }, never designPath: the design is the plan's input and nothing else's
     //   !PlanBlocked (a blocking finding, tagged design or plan; the loop resumes that artifact's session, at most cap times per producer)
     //   !PlanDisputeRejected (an adjudicating pass rejected a disputed finding; never routed back)
     // a design finding resumes Brainstorm over the findings, then RecycleScan and Plan fresh when the design changed

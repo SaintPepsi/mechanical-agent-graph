@@ -36,7 +36,7 @@ const routeOf = (prompt: string): "envision" | "discover" | "brainstorm" | "plan
   if (prompt.includes("Recon this repository")) return "discover"
   if (prompt.includes("holds the Envisioned Shell you drew")) return "brainstorm"
   if (prompt.includes("Read the design below")) return "plan"
-  if (prompt.includes("Review the design at")) return "review-plan"
+  if (prompt.includes("Review the plan at")) return "review-plan"
   throw new Error(`stub agent: unrecognised route in prompt: ${prompt.slice(0, 120)}`)
 }
 

@@ -58,8 +58,10 @@ interface PlanState {
  * send-backs and plan send-backs each count against `cap` on their own, so one fix of each fits
  * under `cap: 1`, and `reviewPasses` stays the total.
  *
- * The reviewer is blind to code by the schema of `review-plan` itself (no `base`, no diff), and
- * fresh every pass; the one exception is an adjudicating pass, handed the design's own dispute of
+ * The reviewer is blind to code and to the design by the schema of `review-plan` itself (no
+ * `base`, no diff, no `designPath`): the design is the plan's input and nothing else's, so this
+ * loop hands review-plan the plan alone, and fresh every pass; the one exception is an
+ * adjudicating pass, handed the design's own dispute of
  * the findings it is re-reviewing. That pass decides the disputed findings only: one rejected is
  * `PlanDisputeRejected`, which escalates, there is no design work a third pass could invent over a
  * defect the design already denied. Every other blocking finding of that pass, new or carried,
@@ -174,7 +176,6 @@ export const designUnderReview = make({
         const reviewed = yield* Effect.result(
           reviewPlan.run({
             ...ticketFields,
-            designPath: currentDesign.designPath,
             planPath: currentPlan.planPath,
             headSha: currentPlan.headSha,
             ...adjudication,

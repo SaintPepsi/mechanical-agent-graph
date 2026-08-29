@@ -413,7 +413,7 @@ describe("build-under-review", () => {
   test("a clean first pass: build, verify, simplify, review once, and fold the pass's whole spend", async () => {
     const agent = loopAgent()
     const { calls, service } = loopShell()
-    const { result } = await runNode({ ...INPUT, designPath: "docs/graph/GH-98/design.md" }, agent.service, service)
+    const { result } = await runNode({ ...INPUT, planPath: "docs/graph/GH-98/plan.md" }, agent.service, service)
 
     expect(Result.isSuccess(result)).toBe(true)
     if (!Result.isSuccess(result)) return
@@ -424,9 +424,9 @@ describe("build-under-review", () => {
       sessions: ["session-build-1", "session-simplify-1", "session-review-1"]
     })
 
-    // The first build works from the design; the reviewer stays blind to the build's own output.
+    // The first build works from the plan; the reviewer stays blind to the build's own output.
     expect(agent.requests).toHaveLength(3)
-    expect(agent.requests[0]!.prompt).toContain("Read the design at docs/graph/GH-98/design.md")
+    expect(agent.requests[0]!.prompt).toContain("Work\nthrough the plan at docs/graph/GH-98/plan.md")
     const reviewRequest = agent.requests.find(isReviewPrompt)!
     expect(reviewRequest.prompt).not.toContain("build 1 summary")
 
@@ -442,17 +442,17 @@ describe("build-under-review", () => {
     }
   })
 
-  test("with a plan, the first build works through the plan and reads the design for reasons; without one, the design alone", async () => {
+  test("with a plan, the first build works through it, never handed a design path; without one, no addendum at all", async () => {
     const planned = loopAgent()
-    await runNode({ ...INPUT, designPath: "docs/graph/GH-98/design.md", planPath: "docs/graph/GH-98/plan.md" }, planned.service, loopShell().service)
+    await runNode({ ...INPUT, planPath: "docs/graph/GH-98/plan.md" }, planned.service, loopShell().service)
     expect(planned.requests[0]!.prompt).toContain("Work\nthrough the plan at docs/graph/GH-98/plan.md")
-    expect(planned.requests[0]!.prompt).toContain("the design at docs/graph/GH-98/design.md")
+    expect(planned.requests[0]!.prompt).not.toContain("design.md")
     expect(planned.requests[0]!.prompt).not.toContain("Read the design at")
 
-    const designed = loopAgent()
-    await runNode({ ...INPUT, designPath: "docs/graph/GH-98/design.md" }, designed.service, loopShell().service)
-    expect(designed.requests[0]!.prompt).toContain("Read the design at docs/graph/GH-98/design.md")
-    expect(designed.requests[0]!.prompt).not.toContain("plan.md")
+    const bare = loopAgent()
+    await runNode(INPUT, bare.service, loopShell().service)
+    expect(bare.requests[0]!.prompt).not.toContain("Work\nthrough the plan")
+    expect(bare.requests[0]!.prompt).not.toContain("design.md")
   })
 
   test("a send-back: findings feed the next build, every review pass is a fresh session gated on its own build's headSha, spend folds every pass", async () => {

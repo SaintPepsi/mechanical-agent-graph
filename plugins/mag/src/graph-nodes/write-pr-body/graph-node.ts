@@ -29,7 +29,12 @@ import { compileChangelog, PR_BODY_PARAMS } from "mag/skills/changelog"
  */
 const DESIGN_RECORD_EXCLUSION = `:(exclude)${DESIGN_DESTINATION.slice(0, DESIGN_DESTINATION.indexOf(TICKET_TOKEN))}**`
 
-/** What the session must return: the description, and nothing that duplicates the diff. */
+/**
+ * What the session must return: the description, and nothing that duplicates the diff. The prompt
+ * says outright that the field holds the description's own markdown: a GH-332 run wrote the real
+ * description as chat text and filled this field with a one-paragraph report of having written it,
+ * which `create-pr` then published verbatim.
+ */
 const VERDICT = verdictSchema(Schema.Struct({ description: Schema.String }))
 
 /** Compiled fresh at dispatch, inside this node's own runtime — never at module load, never materialized as a file. */
@@ -57,7 +62,7 @@ interface DiffRef {
  * --porcelain` still reports.
  */
 const promptFor = (diffRef: DiffRef): string =>
-  `Write the pull request description for the diff at ${diffRef.path} (${diffRef.lines} lines): read every line, paging past any truncation notice. Change nothing.\n\n${standardFor()}`
+  `Write the pull request description for the diff at ${diffRef.path} (${diffRef.lines} lines): read every line, paging past any truncation notice. Change nothing.\n\nReturn the description itself in the \`description\` field, as the markdown that will be pasted into the pull request unchanged. A report of what you wrote, or a summary of the description, is not the description.\n\n${standardFor()}`
 
 /**
  * Writes the PR body from the branch's own diff, the last dispatch before `publish`. The session

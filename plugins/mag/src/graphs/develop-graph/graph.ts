@@ -268,7 +268,6 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
     designGraph,
     (s) => ({ ticket: s.ticket, title: s.title, ticketPath: s.ticketPath, agent: s.agent, model: MODEL_DESIGN }),
     {
-      designPath: (designed) => designed.designPath,
       planPath: (designed) => designed.planPath,
       designSessions: (designed) => designed.sessions,
       designCost: (designed) => designed.costUsd
@@ -284,7 +283,6 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       command: s.verification,
       base: s.base,
       cap: REVIEW_CAP,
-      designPath: s.designPath,
       planPath: s.planPath,
       agent: s.agent,
       buildModel: MODEL_BUILD,
