@@ -71,11 +71,11 @@ const promptFor = (diffRef: DiffRef): string =>
  * the patch is materialized, so the contract holds against what the session can actually read, not
  * just against this node's input schema.
  *
- * No head gate. `review-diff` and `prompt-terseness-evaluator` both require a declared `headSha`
- * because a caller who cannot name the tree does not know what it is asking about, but
- * `build-under-review` holds no settled head to declare. Widening two success schemas to enable a
- * guard for a failure no run has exhibited is what "no guards for failures never experienced"
- * rules out — this node reads `HEAD` itself instead, the same tree `push-branch` is about to push,
+ * No head gate. `review-diff` requires a declared `headSha` because a caller who cannot name the
+ * tree does not know what it is asking about, but `build-under-review` holds no settled head to
+ * declare. Widening a success schema to enable a guard for a failure no run has exhibited is what
+ * "no guards for failures never experienced" rules out — this node reads `HEAD` itself instead,
+ * the same tree `push-branch` is about to push,
  * and returns the sha it diffed in its own success, so the journal records which tree the body
  * describes.
  */

@@ -124,7 +124,6 @@ const runAgent = (root: string) => {
         return reply<A>({ planPath: path }, "session-plan", 0.25)
       }
       if (prompt.includes("Review the plan at")) return reply<A>({ blocking: [], notes: [] }, "session-review-plan", 0.1)
-      if (prompt.includes("terse one-liner")) return reply<A>({ rewritten: 0 }, "session-terseness", 0.02)
       // No blocking findings, so the review loop settles on its first pass: `build-under-review`'s
       // own test owns the send-back path, this one owns the spine.
       if (prompt.includes("Review the diff at")) return reply<A>({ blocking: [], notes: [] }, "session-review-1", 0.1)
@@ -428,7 +427,7 @@ describe("develop-graph", () => {
       // The four borrowed constructs, each a group with its own id derived from the root.
       const prepareId = "develop-graph/0:group:prepare"
       const checkoutId = "develop-graph/1:group:checkout"
-      const publishTailId = "develop-graph/6:group:publish-tail"
+      const publishTailId = "develop-graph/4:group:publish-tail"
       const writeBodyId = `${publishTailId}/0:left:write-body`
       for (const [id, label] of [
         [prepareId, "prepare"],
@@ -482,29 +481,6 @@ describe("develop-graph", () => {
       expect(shape.edges).toContainEqual({ kind: "branch", from: decisionId, to: guardedId, label: "true" })
     })
 
-    test("the decision \"terseness changed HEAD\" draws one data edge per declared field, from the stage that produced it", () => {
-      const decisionId = "develop-graph/5:decision:terseness changed HEAD"
-      expect(byId.get(decisionId)).toEqual({
-        kind: "decision",
-        id: decisionId,
-        label: "terseness changed HEAD",
-        parent: "develop-graph"
-      })
-
-      expect(shape.edges).toContainEqual({
-        kind: "data",
-        from: "develop-graph/3:node:build-under-review",
-        to: decisionId,
-        field: "builtHeadSha"
-      })
-      expect(shape.edges).toContainEqual({
-        kind: "data",
-        from: "develop-graph/4:node:prompt-terseness-evaluator",
-        to: decisionId,
-        field: "tersenedHeadSha"
-      })
-    })
-
     test("a seeded field's data edge starts at the entry: checkout's decision reads its own group", () => {
       expect(shape.edges).toContainEqual({
         kind: "data",
@@ -515,7 +491,7 @@ describe("develop-graph", () => {
     })
 
     test("write-body's group is parented to publish-tail's group id, three levels deep from the root", () => {
-      const publishTailId = "develop-graph/6:group:publish-tail"
+      const publishTailId = "develop-graph/4:group:publish-tail"
       const writeBodyId = `${publishTailId}/0:left:write-body`
       const writeBody = byId.get(writeBodyId)
       expect(writeBody?.parent).toBe(publishTailId)

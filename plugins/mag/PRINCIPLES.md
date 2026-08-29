@@ -183,7 +183,7 @@ maintainer rules otherwise.
   never a second section of that note.
 - **Prompts are terse one-liners.** A prompt is written by a model, for models, and terse,
   concise language is the only style observed to survive a model change: one instruction, one
-  line, scope stated exactly. Enforced before build by `prompt-terseness-evaluator`.
+  line, scope stated exactly. Enforced by `simplify`.
 - **Per-repo commands reach a run as launch inputs, never as files this pipeline seeds into the
   target.** A run's verification suite and worktree setup command are per-repository facts:
   `develop-graph` keeps `VERIFICATION_COMMAND`/`WORKTREE_SETUP` as its own default (unchanged for

@@ -14,11 +14,12 @@ describe("compileSubtraction", () => {
     for (const limit of SIMPLIFY_PARAMS.limits) expect(compiled).toContain(limit)
   })
 
-  test("the four reduction categories are present", () => {
+  test("the five reduction categories are present", () => {
     expect(compiled).toContain("Reuse over duplication")
     expect(compiled).toContain("Dead branches removed")
     expect(compiled).toContain("Needless indirection collapsed")
     expect(compiled).toContain("Comments that don't earn their place deleted")
+    expect(compiled).toContain("Prompt text compressed to terse one-liners")
   })
 
   test("the specimen: a justification comment excusing a duplicate is itself a finding", () => {

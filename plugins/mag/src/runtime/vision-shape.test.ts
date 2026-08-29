@@ -135,7 +135,7 @@ describe("readShape", () => {
       "review-diff -> build when verdict = blocked, sendbacks < cap",
       "review-diff -> checkout-through-publish error, uncaught when verdict = blocked, cap exhausted",
       "review-diff -> checkout-through-publish error, uncaught when adjudicating pass rejected",
-      "review-diff -> prompt-terseness-evaluator when verdict = clean",
+      "review-diff -> write-pr-body when verdict = clean",
       "create-pr -> worktree-remove when worktree = true"
     ])
   })
