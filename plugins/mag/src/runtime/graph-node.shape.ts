@@ -1,5 +1,6 @@
 import { join } from "node:path"
-import { Option, Predicate, Schema, SchemaAST } from "effect"
+import { Option, Predicate, Schema } from "effect"
+import { schemaFieldNames } from "mag/runtime/schema-fields"
 
 /**
  * Every file a GraphNode directory must contain. The four are mandatory, and extra node-private
@@ -316,11 +317,9 @@ export const taggedErrorTag = (candidate: unknown): string | undefined => {
   return undefined
 }
 
-/** An empty struct is `Schema.Struct({})` — an `Objects` AST node with zero property signatures. */
-export const isEmptyStructSchema = (schema: unknown): boolean => {
-  const ast = (schema as Schema.Codec<unknown> | undefined)?.ast
-  return ast !== undefined && SchemaAST.isObjects(ast) && ast.propertySignatures.length === 0
-}
+/** An empty struct is `Schema.Struct({})` — an object schema that declares no fields at all. */
+export const isEmptyStructSchema = (schema: unknown): boolean =>
+  schemaFieldNames((schema as Schema.Codec<unknown> | undefined)?.ast)?.length === 0
 
 /**
  * A scaffold-placeholder value on `input`/`success` (e.g. `{}`) is not a `Schema` at all, and

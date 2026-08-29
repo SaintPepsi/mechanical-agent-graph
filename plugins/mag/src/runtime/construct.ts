@@ -3,6 +3,7 @@ import { graph } from "mag/runtime/graph"
 import type { GraphNode } from "mag/runtime/graph-node.definition"
 import { type GraphShape, SHAPE_SCHEMA, type ShapeEdge, type ShapeElement } from "mag/runtime/graph-shape"
 import type { RunScope } from "mag/runtime/run-layers"
+import { objectAstOf, schemaFieldNames } from "mag/runtime/schema-fields"
 
 /**
  * The rail-sketch's `Graph.construct` notation made real, so a graph's source reads the way its
@@ -26,15 +27,36 @@ import type { RunScope } from "mag/runtime/run-layers"
  */
 
 type Wire<Ctx, I> = (ctx: Ctx) => I
-type Keep<A, B extends object> = (a: A) => B
+/** One picker per field: what a stage renames its node's success into, and, because the keys are
+ *  data, the list of fields that stage contributes to the context. */
+type Keep<A, B extends object> = { readonly [K in keyof B]: (a: A) => B[K] }
+
+/** The fields a decision declares, as a non-empty tuple of the context's own keys: a decision that
+ *  reads nothing is not one the shape can draw an edge for. */
+type Reads<Ctx> = readonly [keyof Ctx & string, ...Array<keyof Ctx & string>]
+
+/** A decision as data: what it is called, what it reads, what it tests. `test` sees the declared
+ *  fields and nothing else, so the list and the test cannot drift — there is only one list. `name`
+ *  becomes an element id's own path segment, so it must avoid `/` and `:` (`.finalise` refuses one
+ *  that doesn't, `DecisionNameUnaddressable`), and it must be unique within its own construct
+ *  (`DecisionNameCollides`). */
+type Decision<Ctx, R extends Reads<Ctx>> = {
+  readonly name: string
+  readonly reads: R
+  readonly test: (fields: Pick<Ctx, R[number]>) => boolean
+}
 
 /** The step list's existential types: the list is heterogeneous, so its element types cannot be
  *  named per-Construct. The public `Construct<Seed, Ctx, E, R>` generics stay exact; these are
  *  confined to `Step`, the fold, and the modifier machinery below. */
 type AnyNode = GraphNode<any, any, any, any>
 type AnyWire = (ctx: any) => any
-type AnyKeep = (a: any) => any
-type AnyCondition = (ctx: any) => boolean
+type AnyKeep = Record<string, (a: any) => any>
+type AnyDecision = {
+  readonly name: string
+  readonly reads: readonly string[]
+  readonly test: (ctx: any) => boolean
+}
 type AnyVia = (ctx: any) => Effect.Effect<any, any, any>
 
 /** `removeWhen` / `replaceNode` as data, targeted by node value — the borrowing site's declared
@@ -64,17 +86,23 @@ export type Step =
   }
   | {
     readonly kind: "when"
-    readonly condition: AnyCondition
+    readonly decision: AnyDecision
     readonly node: AnyNode
     readonly wire: AnyWire
     readonly keep: AnyKeep
   }
-  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia }
+  | { readonly kind: "via"; readonly name: string; readonly f: AnyVia; readonly keep: AnyKeep }
 
 /** The one `node` step builder: every stage that runs a single node, and the unconditional step
  *  `removeWhen` rewrites a `when` into. */
 const nodeStep = (node: AnyNode, wire: AnyWire, keep?: AnyKeep): Step =>
   ({ kind: "node", node, wire, keep, modifiers: [] })
+
+/** A keep applied: a stage merges exactly the fields its keep names, each from its own picker. Not
+ *  `effect`'s `Record` module: importing that name would shadow the global `Record<K, V>` utility
+ *  type `AnyKeep` uses in this same file. */
+const applyKeep = (keep: AnyKeep, a: unknown): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(keep).map(([field, pick]) => [field, pick(a)]))
 
 /** A finalised construct's published shape: its step list, and how to re-close a possibly-bent
  *  variant of it into a fresh `graph()` without restating any `.finalise` option. Held in a
@@ -135,6 +163,33 @@ export class TooConvoluted extends Data.TaggedError("TOO_CONVOLUTED")<{
   }
 }
 
+/** A declared read that resolves to nothing, below a stage whose contributed fields could not be
+ *  enumerated: the type promised the field exists, so falling back to the entry would draw an edge
+ *  that may be false. `opaque` names the stages that made the fallback unsafe. */
+export class FieldHasNoProducer extends Data.TaggedError("FIELD_HAS_NO_PRODUCER")<{
+  readonly container: string
+  readonly decision: string
+  readonly field: string
+  readonly opaque: readonly string[]
+}> {}
+
+/** Two decisions at one address in one container. Carried as `decision`, never as `name`:
+ *  `Data.TaggedError` assigns every payload key as an own property, so a member called `name` would
+ *  shadow the tag and print the decision's own name where `DECISION_NAME_COLLIDES` belongs. */
+export class DecisionNameCollides extends Data.TaggedError("DECISION_NAME_COLLIDES")<{
+  readonly container: string
+  readonly decision: string
+}> {}
+
+/** A decision's name becomes an element id's own path segment (`${at}:decision:${name}`): one
+ *  carrying `/` or `:`, the grammar's own separators, could mint an id indistinguishable from a
+ *  different, deeper element. Refused rather than escaped: a decision's name reads as English, not
+ *  as a path. */
+export class DecisionNameUnaddressable extends Data.TaggedError("DECISION_NAME_UNADDRESSABLE")<{
+  readonly container: string
+  readonly decision: string
+}> {}
+
 /** Every node slot a modifier of this kind could have meant: `removeWhen`'s candidates are guarded
  *  nodes only, `replaceNode`'s are every node any step runs. `describe` is what
  *  `ModifierTargetAmbiguous.matched` reports: the occurrence's position, not a repeat of the name
@@ -185,8 +240,8 @@ const tallyApplications = (graphName: string, steps: readonly Step[]): number =>
     return Math.max(heaviest, applications)
   }, 0)
 
-/** `removeWhen` keeps the matched `when` step's wire and keep, dropping only its condition: the
- *  guarded node now runs unconditionally. */
+/** `removeWhen` keeps the matched `when` step's wire and keep, dropping the whole decision — its
+ *  name and declared reads included: the guarded node now runs unconditionally. */
 const rewrite = (step: Step, modifier: Modifier): Step => {
   if (modifier.kind === "removeWhen") {
     if (step.kind !== "when") throw new Error("rewrite: removeWhen matched a non-when step")
@@ -287,7 +342,7 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
         return acc.pipe(
           Effect.flatMap((flowed) =>
             step.node.run(step.wire(flowed)).pipe(
-              Effect.map((a) => ({ ...flowed, ...(step.keep ? step.keep(a) : a) }))
+              Effect.map((a) => ({ ...flowed, ...(step.keep ? applyKeep(step.keep, a) : a) }))
             )
           )
         )
@@ -302,15 +357,17 @@ const foldSteps = (steps: readonly Step[]) => (seed: unknown): Effect.Effect<any
       case "when":
         return acc.pipe(
           Effect.flatMap((flowed) =>
-            step.condition(flowed)
-              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...step.keep(a) })))
+            step.decision.test(flowed)
+              ? step.node.run(step.wire(flowed)).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
               : // The skipped branch adds none of `keep`'s fields, matching `.when`'s `Partial<B>` result.
                 Effect.succeed(flowed)
           )
         )
       case "via":
         return acc.pipe(
-          Effect.flatMap((flowed) => step.f(flowed).pipe(Effect.map((b) => ({ ...flowed, ...b }))))
+          Effect.flatMap((flowed) =>
+            step.f(flowed).pipe(Effect.map((a) => ({ ...flowed, ...applyKeep(step.keep, a) })))
+          )
         )
     }
   }, Effect.succeed(seed))
@@ -338,6 +395,15 @@ const projectNode = (
   }
 }
 
+/** A keep-less stage's contributed fields, or `undefined` when they cannot stand as an exhaustive
+ *  list: an index-signature schema (`Schema.Record`, a struct with a rest field) may carry fields at
+ *  run time beyond the ones it names, so treating its named set as the whole truth would let a real
+ *  field's read silently resolve to the entry instead of refusing. Asked here rather than inside
+ *  `schemaFieldNames`, which answers a different question (does this schema declare fields at all)
+ *  that `isEmptyStructSchema` depends on. */
+const enumeratedFields = (ast: Parameters<typeof objectAstOf>[0]): readonly string[] | undefined =>
+  (objectAstOf(ast)?.indexSignatures.length ?? 0) > 0 ? undefined : schemaFieldNames(ast)
+
 /** The shape's sibling to `foldSteps`: same union, same exhaustive switch, but wires elements and
  *  edges instead of an Effect, and never runs a node. `containerId` is the enclosing box's id, so
  *  every element minted at one level of this fold shares one `parent` — a fork's branches and a
@@ -354,6 +420,46 @@ export const projectSteps = (
   const edges: ShapeEdge[] = []
   let previous: string | undefined
 
+  /** One slot per field, overwritten as the walk descends: a field produced twice belongs to the
+   *  nearest producer above the decision, the one whose value actually reached it. */
+  const producers = new Map<string, string>()
+  /** Stages whose contributed fields could not be enumerated. While this is empty, "not produced
+   *  above" is evidence of "seeded", because a context field has exactly two origins and every stage
+   *  kind declares or derives its own; once it is not, the walk refuses rather than draw an edge from
+   *  the entry that may be a lie. */
+  const opaque: string[] = []
+  /** Decision names already seen in this container: a name is an address, so a repeat is a target
+   *  a later lifecycle change could not resolve unambiguously. */
+  const named = new Set<string>()
+
+  const contribute = (fields: readonly string[] | undefined, from: string): void => {
+    if (fields === undefined) {
+      opaque.push(from)
+      return
+    }
+    for (const field of fields) producers.set(field, from)
+  }
+
+  /** Called before the step records its own contributions, so a decision only ever resolves against
+   *  stages above it. */
+  const resolveReads = (decision: AnyDecision, to: string): void => {
+    if (/[/:]/.test(decision.name)) {
+      throw new DecisionNameUnaddressable({ container: containerId, decision: decision.name })
+    }
+    if (named.has(decision.name)) {
+      throw new DecisionNameCollides({ container: containerId, decision: decision.name })
+    }
+    named.add(decision.name)
+
+    for (const field of new Set(decision.reads)) {
+      const from = producers.get(field)
+      if (from === undefined && opaque.length > 0) {
+        throw new FieldHasNoProducer({ container: containerId, decision: decision.name, field, opaque })
+      }
+      edges.push({ kind: "data", from: from ?? containerId, to, field })
+    }
+  }
+
   steps.forEach((step, index) => {
     const at = `${containerId}/${index}`
     let primary: string
@@ -364,11 +470,13 @@ export const projectSteps = (
         const projected = projectNode(containerId, primary, step.node)
         elements.push(...projected.elements)
         edges.push(...projected.edges)
+        contribute(step.keep ? Object.keys(step.keep) : enumeratedFields(step.node.success.ast), primary)
         break
       }
       case "via":
         primary = `${at}:node:${step.name}`
         elements.push({ kind: "node", id: primary, label: step.name, parent: containerId })
+        contribute(Object.keys(step.keep), primary)
         break
       case "fork": {
         primary = `${at}:fork`
@@ -383,16 +491,21 @@ export const projectSteps = (
           ...left.edges,
           ...right.edges
         )
+        contribute(enumeratedFields(step.left.success.ast), leftId)
+        contribute(enumeratedFields(step.right.success.ast), rightId)
         break
       }
       case "when": {
-        primary = `${at}:decision:${step.node.name}`
+        primary = `${at}:decision:${step.decision.name}`
         const guardedId = `${at}:node:${step.node.name}`
         elements.push(
-          { kind: "decision", id: primary, label: step.node.name, parent: containerId },
+          { kind: "decision", id: primary, label: step.decision.name, parent: containerId },
           { kind: "node", id: guardedId, label: step.node.name, parent: containerId }
         )
         edges.push({ kind: "branch", from: primary, to: guardedId, label: "true" })
+        resolveReads(step.decision, primary)
+        // A `when` records the guarded node's id: the node is what produced the field.
+        contribute(Object.keys(step.keep), guardedId)
         break
       }
     }
@@ -460,6 +573,9 @@ const closeSteps = <Seed extends object, Ctx extends object, E, R, SI, SA>(
     applied,
     close: (newSteps, newApplied) => closeSteps(name, options, newSteps, newApplied)
   })
+  // The shape is not an afterthought of a construct: one that cannot be drawn refuses here, at
+  // import, rather than at whatever later moment first asks for its shape.
+  projectSteps(name, steps)
   return node
 }
 
@@ -500,21 +616,25 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
   ) => Borrowed<Seed, Ctx & B, E | E2, R | R2>
-  /** The sketch's `.when`: the node runs only when the condition holds on the context; skipped, the
-   *  context flows on unchanged, so `keep`'s fields arrive `Partial` downstream. */
-  readonly when: <I, A, B extends object, E2, R2>(
-    condition: (ctx: Ctx) => boolean,
+  /** The sketch's `.when`: a named decision over the context fields it declares, guarding a node that
+   *  runs only when the test holds; skipped, the context flows on unchanged, so `keep`'s fields
+   *  arrive `Partial` downstream. The declared reads are what the shape draws a data edge for, one
+   *  per field, from the stage that produced it. */
+  readonly when: <const F extends Reads<Ctx>, I, A, B extends object, E2, R2>(
+    decision: Decision<Ctx, F>,
     node: GraphNode<I, A, E2, R2>,
     wire: Wire<Ctx, I>,
     keep: Keep<A, B>
   ) => Construct<Seed, Ctx & Partial<B>, E | E2, R | R2>
   /** A total helper between nodes — the compose-pr-body case, ruled a `runtime/` helper rather than a
-   *  node: a node needs a tagged error, and `prBody` carries its own. `name`
-   *  is the stage's own declared handle: with no node behind it, a `.via` stage would otherwise have
-   *  none to draw in the shape. */
-  readonly via: <B extends object, E2, R2>(
+   *  node: a node needs a tagged error, and `prBody` carries its own. `name` is the
+   *  stage's own declared handle: with no node behind it, a `.via` stage would otherwise have none to
+   *  draw in the shape, and `keep` is how it declares the fields it contributes, since no schema can
+   *  answer for a plain Effect's success. */
+  readonly via: <A, B extends object, E2, R2>(
     name: string,
-    f: (ctx: Ctx) => Effect.Effect<B, E2, R2>
+    f: (ctx: Ctx) => Effect.Effect<A, E2, R2>,
+    keep: Keep<A, B>
   ) => Construct<Seed, Ctx & B, E | E2, R | R2>
   /** Close the construct into an ordinary `graph()`: schemas, scope, the success picked off the final
    *  context. `seed` turns the graph's input into the first context — resolve per-repo policy here.
@@ -529,9 +649,10 @@ interface Construct<Seed extends object, Ctx extends object, E, R> {
  *  is impossible; every failure mode lives in `.finalise`, the one beat holding the borrowed graph
  *  and the modifiers at once. */
 interface Borrowed<Seed extends object, Ctx extends object, E, R> extends Construct<Seed, Ctx, E, R> {
-  /** Strips the borrowed subgraph's `when` condition at this borrowing site: the finalised graph
-   *  runs the guarded node unconditionally. Targets the guarded node itself, because a `.when`
-   *  condition is an anonymous closure with no other handle. */
+  /** Strips the borrowed subgraph's `when` decision at this borrowing site: the finalised graph
+   *  runs the guarded node unconditionally. Targets the guarded node itself: a decision now has a
+   *  handle of its own, its name, but targeting stays by node because decision names are what a
+   *  later lifecycle change will target, not this one. */
   readonly removeWhen: <I, A, E2, R2>(target: GraphNode<I, A, E2, R2>) => Borrowed<Seed, Ctx, E, R>
   /** Swaps a node inside the borrowed subgraph for a replacement at this borrowing site. `NoInfer`
    *  pins every parameter to the target's, so the replacement must accept what the target accepted,
@@ -554,9 +675,9 @@ const makeConstruct = <Seed extends object, Ctx extends object, E, R>(
   join: (node, wire) => makeConstruct(name, [...steps, nodeStep(node, wire)]),
   borrow: (node, wire) => makeBorrowed(name, [...steps, nodeStep(node, wire)]),
   borrowKeep: (node, wire, keep) => makeBorrowed(name, [...steps, nodeStep(node, wire, keep)]),
-  when: (condition, node, wire, keep) =>
-    makeConstruct(name, [...steps, { kind: "when", condition, node, wire, keep }]),
-  via: (stageName, f) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f }]),
+  when: (decision, node, wire, keep) =>
+    makeConstruct(name, [...steps, { kind: "when", decision, node, wire, keep }]),
+  via: (stageName, f, keep) => makeConstruct(name, [...steps, { kind: "via", name: stageName, f, keep }]),
   finalise: (options) => {
     // Tallied on the unresolved steps: resolveBorrows zeroes `modifiers`, so this is the only
     // place the tally is readable.
