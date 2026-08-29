@@ -10,5 +10,6 @@
     "resolveJsonModule": true
   },
   "include": ["**/*"],
-  "exclude": ["skills/**/evals/**"]
+  "//": "projects/** are their own packages: graph-viewer resolves `$lib` and `./$types` through SvelteKit, so its own `check` (svelte-check, run by the root typecheck) is what type-checks it.",
+  "exclude": ["skills/**/evals/**", "projects/**"]
 }
