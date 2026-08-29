@@ -162,12 +162,14 @@ maintainer rules otherwise.
   fresh findings (`graph-nodes/review-plan`, `graph-nodes/design-under-review`).
 - **A node's required inputs are the ticket plus the one artifact of the stage before it; a second
   artifact needs a ruling naming why, listed in the conformance rule's exceptions.** Loop state
-  (`findingsPath`, `disputePath`, `priorFindingsPath`, `resume`) is not a stage input. The rule is
+  (`findingsPath`, `disputePath`, `priorFindingsPath`, `resume`) is not a stage input. The design is
+  the plan's input and nothing else's: the plan is the reviewer's input and the builder's, and it
+  carries whatever design decisions and principles it applies, in its own words — a decision the
+  plan never states is a plan finding on that ground alone. The rule is
   `input-boundary` (`graph-nodes/conformance/rules.ts`): it walks every node, counts the required
   `...Path` fields beside `ticketPath`, and fails a second one unless the node is in
   `INPUT_BOUNDARY_EXCEPTIONS` with its ruling: `plan` (the plan resolves names against the repo,
-  v1's Resolution Table position) and `review-plan` (a reviewer reads only what it judges: the plan
-  and the design it was built from). Reason: both trial designs paid a reconciliation tax for a
+  v1's Resolution Table position). Reason: both trial designs paid a reconciliation tax for a
   second artifact, a nine-row Vision Reconciliation table on one and three invented nodes refused
   on the other; the shell drawn as a section of the design, in the design's own session, got the
   value without it.

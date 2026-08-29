@@ -30,7 +30,7 @@ graph TD
     BS["brainstorm · Model<br/>resume the shell's session over the discover note and complete the design around the shell in place; every ambiguity a ruling with a basis, or answer the design-tagged findings"]
     RS["recycle-scan · Mechanical<br/>grep the repo for every backticked name in the design, kebab, camel and snake case; the table the plan resolves against"]
     PL["plan · Model<br/>the build as small ordered tasks over the design; fresh when the design changed, resumed over plan-tagged findings otherwise"]
-    RP["review-plan · Model<br/>adversarial read of design and plan against the ticket, no code; or adjudicate the design's own dispute"]
+    RP["review-plan · Model<br/>adversarial read of the plan against the ticket, no code, no design record; or adjudicate the design's own dispute"]
   end
   ES -- "sessionRef → resume" --> BS
   DISC -- "discoverPath → discoverPath" --> BS

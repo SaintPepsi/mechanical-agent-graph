@@ -52,8 +52,9 @@ const WriteBody = Graph.construct("write-body")
 
 const BuildUnderReview = Graph.construct("build-under-review")
   .loop(Build, Verification, Simplify, ReviewDiff, {
-    // Build: { headSha, ticket, title, body, branch, designPath (first pass only) } → { headSha }
-    //   implements the design, or answers ReviewDiff's own standing findings on a send-back
+    // Build: { headSha, ticket, title, body, branch, planPath (first pass only) } → { headSha }
+    //   implements the plan, or answers ReviewDiff's own standing findings on a send-back;
+    //   never designPath — the design is the plan's input and nothing else's
     //   !BuildWorkdirDirty !BuildNoCommits !BuildHeadMoved !BuildGitFailed !BuildCommitFailed !BuildSummaryEmpty
     //   (verdict not disputed)
     skip: {
@@ -67,7 +68,7 @@ const BuildUnderReview = Graph.construct("build-under-review")
     //   this loop's own cap); cap spent or no session to resume: !VerificationFailed
     // Simplify: { headSha, base } → { headSha }, re-verified only when it moved HEAD (a condition on
     //   this edge alone), a red re-verify repairs the same way, resuming Simplify's own session
-    //   strips what Build added but the design never asked for
+    //   strips what Build added but the plan never asked for
     // ReviewDiff: { headSha, base, ticket, title, body } → verdict
     //   or, on Build's dispute: { headSha, findingsPath, disputePath } → verdict, adjudicating instead of reviewing
     //   clean: { summaryPath, commits, reviewPasses, sessions, costUsd } → exits the loop
@@ -80,7 +81,7 @@ const BuildUnderReview = Graph.construct("build-under-review")
   .onCap(die(SendbacksExhausted))
     // blocked, cap exhausted, not disputed: findingsPath stays uncommitted on the tree
   .finalise()
-    // outside: { headSha, ticket, title, body, branch, designPath, command } →
+    // outside: { headSha, ticket, title, body, branch, planPath, command } →
     //   { headSha, summaryPath, commits, reviewPasses, sessions, costUsd }
     //   !BuildWorkdirDirty | BuildNoCommits | BuildHeadMoved | BuildGitFailed | BuildCommitFailed | BuildSummaryEmpty
     //   | VerificationFailed | ReviewDisputeRejected | SendbacksExhausted
@@ -117,7 +118,7 @@ const DevelopGraph = Graph.construct("develop-graph")
     //   !TersenessWorkdirDirty | TersenessHeadMoved | TersenessCommitFailed | TersenessGitFailed
     // rewrites verbose prompt text the design step wrote and commits the repair; headSha moves only if it rewrote something
   .borrow(BuildUnderReview)
-    // { headSha, ticket, title, body, branch, designPath, command } → { headSha, summaryPath, commits, reviewPasses, sessions, costUsd }
+    // { headSha, ticket, title, body, branch, planPath, command } → { headSha, summaryPath, commits, reviewPasses, sessions, costUsd }
     //   !BuildWorkdirDirty | BuildNoCommits | BuildHeadMoved | BuildGitFailed | BuildCommitFailed | BuildSummaryEmpty
     //   | VerificationFailed | ReviewDisputeRejected | SendbacksExhausted
   .borrow(PublishTail)
