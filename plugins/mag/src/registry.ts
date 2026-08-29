@@ -24,7 +24,6 @@ import { fixConflicts } from "mag/graph-nodes/fix-conflicts/graph-node"
 import { gatherReviews } from "mag/graph-nodes/gather-reviews/graph-node"
 import { githubTicketCreate } from "mag/graph-nodes/github-ticket-create/graph-node"
 import { plan } from "mag/graph-nodes/plan/graph-node"
-import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
 import { publish } from "mag/graph-nodes/publish/graph-node"
 import { pushBranch } from "mag/graph-nodes/push-branch/graph-node"
 import { recycleScan } from "mag/graph-nodes/recycle-scan/graph-node"
@@ -74,7 +73,6 @@ export const registry: Registry = [
   { kind: "command", node: design },
   { kind: "command", node: discover },
   { kind: "command", node: recycleScan },
-  { kind: "command", node: promptTersenessEvaluator },
   { kind: "command", node: assembleBrainstormPrompt },
   { kind: "command", node: plan },
   { kind: "command", node: reviewPlan },

@@ -4,11 +4,9 @@ import { buildUnderReview } from "mag/graph-nodes/build-under-review/graph-node"
 import { createPr } from "mag/graph-nodes/create-pr/graph-node"
 import { fetchTicket } from "mag/graph-nodes/fetch-ticket/graph-node"
 import { formatBranchNameNode } from "mag/graph-nodes/format-branch-name/graph-node"
-import { promptTersenessEvaluator } from "mag/graph-nodes/prompt-terseness-evaluator/graph-node"
 import { pushBranch } from "mag/graph-nodes/push-branch/graph-node"
 import { requireAcs } from "mag/graph-nodes/require-acs/graph-node"
 import { resolveBase } from "mag/graph-nodes/resolve-base/graph-node"
-import { verification } from "mag/graph-nodes/verification/graph-node"
 import { worktreeAdd } from "mag/graph-nodes/worktree-add/graph-node"
 import { worktreeRemove } from "mag/graph-nodes/worktree-remove/graph-node"
 import { writePrBody } from "mag/graph-nodes/write-pr-body/graph-node"
@@ -241,17 +239,11 @@ const publishTail = Graph.construct<{
 
 /**
  * develop-graph: the north star host, drawn as the rail-sketch draws it — borrow `prepare`, borrow
- * `checkout`, borrow `design-graph`, borrow `build-under-review`, then `prompt-terseness-evaluator`,
- * re-verify when it moved the head, borrow `publish-tail`. Each borrowed graph journals as one row
- * plus its children; the host's scope wins by construction, so the sub-graphs' own `scope`
- * declarations are inert here and honest when run alone. Every per-repo fact `resolvePolicy` would
- * otherwise hardwire is an optional launch input instead — the same run against this repository
- * when every field is absent, a different target when it isn't.
- *
- * Terseness sweeps the whole branch diff — the build's own prompt text included, which is why it
- * sits after the loop rather than between design and build. Its repair commit lands after the
- * loop's green, so a moved head re-runs the declared suite — the same only-when-moved rule
- * `simplify` already follows inside the loop.
+ * `checkout`, borrow `design-graph`, borrow `build-under-review`, borrow `publish-tail`. Each
+ * borrowed graph journals as one row plus its children; the host's scope wins by construction, so
+ * the sub-graphs' own `scope` declarations are inert here and honest when run alone. Every per-repo
+ * fact `resolvePolicy` would otherwise hardwire is an optional launch input instead — the same run
+ * against this repository when every field is absent, a different target when it isn't.
  */
 export const developGraph = Graph.construct<{ ticket: string } & ReturnType<typeof resolvePolicy>>(
   "develop-graph"
@@ -293,28 +285,9 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       summaryPath: (built) => built.summaryPath,
       commits: (built) => built.commits,
       reviewPasses: (built) => built.reviewPasses,
-      builtHeadSha: (built) => built.headSha,
       buildSessions: (built) => built.sessions,
       buildCost: (built) => built.costUsd
     }
-  )
-  .thenKeep(
-    promptTersenessEvaluator,
-    (s) => ({ ticket: s.ticket, base: s.base, headSha: s.builtHeadSha, agent: s.agent, model: MODEL_DESIGN }),
-    {
-      tersenedHeadSha: (tersened) => tersened.headSha,
-      terseSessions: (tersened) => tersened.sessions,
-      terseCost: (tersened) => tersened.costUsd
-    }
-  )
-  .when(
-    {
-      name: "terseness changed HEAD",
-      reads: ["tersenedHeadSha", "builtHeadSha"],
-      test: (s) => s.tersenedHeadSha !== s.builtHeadSha
-    },
-    verification, (s) => ({ command: s.verification, headSha: s.tersenedHeadSha as string }),
-    {}
   )
   .borrowKeep(
     publishTail,
@@ -360,10 +333,10 @@ export const developGraph = Graph.construct<{ ticket: string } & ReturnType<type
       summaryPath: s.summaryPath,
       commits: s.commits,
       // One unpriced session makes the run's own figure unpriced, never silently zero.
-      costUsd: [s.designCost, s.terseCost, s.buildCost, s.publishCost].reduce(
+      costUsd: [s.designCost, s.buildCost, s.publishCost].reduce(
         (a, b) => (a === null || b === null ? null : a + b)
       ),
-      sessions: [...s.designSessions, ...s.terseSessions, ...s.buildSessions, ...s.publishSessions],
+      sessions: [...s.designSessions, ...s.buildSessions, ...s.publishSessions],
       reviewPasses: s.reviewPasses,
       prUrl: s.prUrl
     })
