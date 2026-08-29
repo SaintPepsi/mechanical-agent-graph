@@ -14,7 +14,7 @@ export interface SubtractionParams {
 }
 
 /**
- * The gate's only variant. Four categories, as `reductions`; `limits` is what keeps this a
+ * The gate's only variant. Five categories, as `reductions`; `limits` is what keeps this a
  * subtraction pass rather than a rewrite.
  */
 export const SIMPLIFY_PARAMS: SubtractionParams = {
@@ -22,7 +22,8 @@ export const SIMPLIFY_PARAMS: SubtractionParams = {
     "Reuse over duplication: replace a copy with a call to the implementation that already exists.",
     "Dead branches removed: delete code no path can reach.",
     "Needless indirection collapsed: inline a wrapper that adds no behaviour of its own.",
-    "Comments that don't earn their place deleted: state why, never what, or go."
+    "Comments that don't earn their place deleted: state why, never what, or go.",
+    "Prompt text compressed to terse one-liners: one instruction, one line, scope stated exactly, never a fact dropped to shorten a line."
   ],
   limits: [
     "Behaviour-preserving only. A change that alters behaviour is a bug, not a simplification.",
