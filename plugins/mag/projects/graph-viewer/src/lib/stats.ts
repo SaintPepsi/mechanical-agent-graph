@@ -1,0 +1,411 @@
+// Every number on the stats page is computed here: journal text in, aggregates out. No I/O, so
+// the whole page is testable against a hand-written journal.
+
+export type RunOutcome = 'ok' | 'fail' | 'unfinished' | 'abandoned';
+
+// One `journal.jsonl`, with the path it was found at relative to the graph root
+// (`<projectKey>/<ticket>/<runId>/journal.jsonl`).
+export type JournalFile = {
+	readonly relativePath: string;
+	readonly text: string;
+};
+
+// A start or end row, reduced to the facts the page uses. Schemas @1, @2 and @3 all land here;
+// anything that does not carry an event, a node and a usable timestamp is dropped.
+export type JournalRow = {
+	readonly event: 'start' | 'end';
+	readonly runId: string;
+	readonly ticket: string;
+	readonly graph: string;
+	readonly node: string;
+	readonly attempt: number;
+	readonly at: number;
+	readonly replayed: boolean;
+	readonly outcome: 'ok' | 'fail' | null;
+	readonly costUsd: number | null;
+	readonly sessions: ReadonlyArray<string>;
+	readonly tag: string | null;
+};
+
+// A start row paired with the end row carrying the same runId, node and attempt.
+export type NodeExecution = {
+	readonly runId: string;
+	readonly node: string;
+	readonly attempt: number;
+	readonly startedAt: number;
+	readonly endedAt: number;
+	readonly durationMs: number;
+	readonly outcome: 'ok' | 'fail';
+	readonly tag: string | null;
+	readonly costUsd: number | null;
+	readonly replayed: boolean;
+	readonly sessions: ReadonlyArray<string>;
+	// A composite: it wraps a node that reports the same agent session, so its cost re-sums that
+	// node's cost and only the wrapped node may be summed.
+	readonly container: boolean;
+};
+
+export type RunSummary = {
+	readonly runId: string;
+	readonly ticket: string;
+	readonly graph: string;
+	readonly projectKey: string;
+	readonly startedAt: number;
+	readonly durationMs: number;
+	readonly costUsd: number;
+	readonly outcome: RunOutcome;
+	readonly tag: string | null;
+	readonly executions: number;
+};
+
+export type NodeAggregate = {
+	readonly node: string;
+	readonly executions: number;
+	readonly minMs: number;
+	readonly avgMs: number;
+	readonly maxMs: number;
+	readonly totalMs: number;
+	readonly avgCostUsd: number;
+	readonly totalCostUsd: number;
+	readonly fails: number;
+	// Executions that wrapped another node's session: their cost belongs to the node they wrapped.
+	readonly composites: number;
+};
+
+export type GraphAggregate = {
+	readonly graph: string;
+	readonly runs: number;
+	readonly minMs: number;
+	readonly avgMs: number;
+	readonly maxMs: number;
+	readonly avgCostUsd: number;
+	readonly totalCostUsd: number;
+	readonly outcomes: ReadonlyArray<OutcomeCount>;
+};
+
+export type OutcomeCount = { readonly outcome: RunOutcome; readonly runs: number };
+
+export type TagCount = { readonly tag: string; readonly count: number };
+
+export type Stats = {
+	readonly runs: number;
+	readonly graphs: number;
+	readonly tickets: number;
+	readonly projects: number;
+	readonly totalCostUsd: number;
+	readonly totalWallMs: number;
+	readonly totalExecutions: number;
+	// Journals holding no start/end row at all (the @1 schema wrote neither), so no run to report.
+	readonly skippedJournals: number;
+	readonly outcomes: ReadonlyArray<OutcomeCount>;
+	readonly nodes: ReadonlyArray<NodeAggregate>;
+	readonly graphList: ReadonlyArray<GraphAggregate>;
+	readonly runList: ReadonlyArray<RunSummary>;
+	readonly failureTags: ReadonlyArray<TagCount>;
+};
+
+// A run with no end row for its graph and nothing written for this long is not coming back.
+export const ABANDONED_AFTER_MS = 45 * 60 * 1000;
+
+const OUTCOME_ORDER: ReadonlyArray<RunOutcome> = ['ok', 'fail', 'unfinished', 'abandoned'];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === 'object' && value !== null;
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
+
+const cost = (success: unknown): number | null => {
+	if (!isRecord(success)) return null;
+	const value = success.costUsd;
+	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+// The agent sessions a node's payload reports. A composite reports its children's.
+const sessions = (success: unknown): ReadonlyArray<string> => {
+	if (!isRecord(success) || !Array.isArray(success.sessions)) return [];
+	return success.sessions.filter((id): id is string => typeof id === 'string');
+};
+
+/** Every parsable start/end row of one journal, in file order. Unparsable lines are skipped. */
+export const parseJournal = (body: string): ReadonlyArray<JournalRow> => {
+	const rows: JournalRow[] = [];
+	for (const line of body.split('\n')) {
+		if (line.trim() === '') continue;
+		let raw: unknown;
+		try {
+			raw = JSON.parse(line);
+		} catch {
+			continue;
+		}
+		if (!isRecord(raw)) continue;
+		const event = raw.event;
+		if (event !== 'start' && event !== 'end') continue;
+		const node = text(raw.node);
+		const runId = text(raw.runId);
+		const graph = text(raw.graph);
+		if (node === null || runId === null || graph === null) continue;
+		const at = Date.parse(String(raw.timestamp));
+		if (Number.isNaN(at)) continue;
+		const outcome = raw.outcome;
+		rows.push({
+			event,
+			runId,
+			ticket: text(raw.ticket) ?? 'unknown',
+			graph,
+			node,
+			attempt: typeof raw.attempt === 'number' ? raw.attempt : 1,
+			at,
+			replayed: raw.replayed === true,
+			// An end row that did not say `ok` failed, whatever else it said (`interrupt` is seen).
+			outcome: event === 'end' ? (outcome === 'ok' ? 'ok' : 'fail') : null,
+			costUsd: cost(raw.success),
+			sessions: sessions(raw.success),
+			tag: text(raw.tag)
+		});
+	}
+	return rows;
+};
+
+const key = (row: { runId: string; node: string; attempt: number }) =>
+	`${row.runId}\u0000${row.node}\u0000${row.attempt}`;
+
+/**
+ * Start rows paired with their end rows, each marked as a container or not.
+ *
+ * A composite re-sums the cost of the nodes it wraps, so summing every execution counts that cost
+ * twice. Timestamps alone cannot say which is which: this graph starts nodes in parallel, so a
+ * long sibling encloses a short one exactly as a composite encloses a child. The agent session id
+ * settles it. A composite reports the sessions of the nodes it wrapped, so an execution enclosing
+ * another that reports one of its own sessions is a container, and only the innermost claimant of
+ * a session is summed.
+ */
+export const executionsOf = (rows: ReadonlyArray<JournalRow>): ReadonlyArray<NodeExecution> => {
+	const open = new Map<string, JournalRow>();
+	const paired: Array<Omit<NodeExecution, 'container'>> = [];
+	for (const row of rows) {
+		if (row.event === 'start') {
+			open.set(key(row), row);
+			continue;
+		}
+		const start = open.get(key(row));
+		if (start === undefined) continue;
+		open.delete(key(row));
+		paired.push({
+			runId: row.runId,
+			node: row.node,
+			attempt: row.attempt,
+			startedAt: start.at,
+			endedAt: row.at,
+			durationMs: Math.max(0, row.at - start.at),
+			outcome: row.outcome ?? 'ok',
+			tag: row.tag,
+			costUsd: row.costUsd,
+			sessions: row.sessions,
+			replayed: row.replayed
+		});
+	}
+	return paired.map((execution) => ({
+		...execution,
+		container: paired.some(
+			(inner) =>
+				key(inner) !== key(execution) &&
+				inner.startedAt >= execution.startedAt &&
+				inner.endedAt <= execution.endedAt &&
+				inner.sessions.some((id) => execution.sessions.includes(id))
+		)
+	}));
+};
+
+/** Nodes that started and never ended: what a run killed mid-node leaves behind. */
+export const openStarts = (rows: ReadonlyArray<JournalRow>): number => {
+	const open = new Set<string>();
+	for (const row of rows) {
+		if (row.event === 'start') open.add(key(row));
+		else open.delete(key(row));
+	}
+	return open.size;
+};
+
+/** `<projectKey>/<ticket>/<runId>/journal.jsonl` split into its parts, leniently. */
+export const locate = (relativePath: string) => {
+	const parts = relativePath.split('/').filter((part) => part !== '');
+	return {
+		projectKey: parts[0] ?? 'unknown',
+		ticket: parts[1] ?? 'unknown',
+		runId: parts[2] ?? 'unknown'
+	};
+};
+
+/**
+ * How a run ended. The run row (the end row whose node is its own graph) is the answer whenever a
+ * journal carries one; no journal written so far does, so the shape of the journal answers
+ * instead: a failing last end row is the escalation that killed the run, a node left open is a run
+ * killed mid-node, and a journal that closed every node without failing ran to a clean stop.
+ */
+export const outcomeOf = (
+	runRow: JournalRow | undefined,
+	lastEnd: JournalRow | null,
+	open: number,
+	stale: boolean
+): { readonly outcome: RunOutcome; readonly tag: string | null } => {
+	if (runRow?.outcome != null) return { outcome: runRow.outcome, tag: runRow.tag };
+	if (lastEnd?.outcome === 'fail') return { outcome: 'fail', tag: lastEnd.tag };
+	if (lastEnd !== null && open === 0) return { outcome: 'ok', tag: null };
+	return { outcome: stale ? 'abandoned' : 'unfinished', tag: null };
+};
+
+/** One journal reduced to its run and the node executions that did work in it. */
+export const summarise = (
+	file: JournalFile,
+	now: number
+): { readonly run: RunSummary; readonly executions: ReadonlyArray<NodeExecution> } | null => {
+	const rows = parseJournal(file.text);
+	if (rows.length === 0) return null;
+	const place = locate(file.relativePath);
+	// A replay is a cached result, not work: it carries neither time nor cost.
+	const worked = executionsOf(rows).filter((execution) => !execution.replayed);
+	const starts = rows.filter((row) => row.event === 'start').map((row) => row.at);
+	const ends = rows.filter((row) => row.event === 'end').map((row) => row.at);
+	const lastAt = Math.max(...rows.map((row) => row.at));
+	const startedAt = starts.length === 0 ? lastAt : Math.min(...starts);
+	const runRow = rows.find((row) => row.event === 'end' && row.node === row.graph);
+	const graph = runRow?.graph ?? rows[0].graph;
+	const lastEnd = rows.filter((row) => row.event === 'end').at(-1) ?? null;
+	const verdict = outcomeOf(runRow, lastEnd, openStarts(rows), lastAt < now - ABANDONED_AFTER_MS);
+	// The graph's own row re-sums the whole run, so it is never part of the run's cost either.
+	const paid = worked.filter((execution) => !execution.container && execution.node !== graph);
+	const run: RunSummary = {
+		runId: rows[0].runId,
+		ticket: rows[0].ticket,
+		graph,
+		projectKey: place.projectKey,
+		startedAt,
+		durationMs: ends.length === 0 ? 0 : Math.max(0, Math.max(...ends) - startedAt),
+		costUsd: paid.reduce((total, execution) => total + (execution.costUsd ?? 0), 0),
+		outcome: verdict.outcome,
+		tag: verdict.tag,
+		executions: worked.length
+	};
+	// The graph's own row is the run, reported per graph and per run, never as a node.
+	return { run, executions: worked.filter((execution) => execution.node !== graph) };
+};
+
+const mean = (values: ReadonlyArray<number>) =>
+	values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
+
+const counted = (outcomes: ReadonlyArray<RunOutcome>): ReadonlyArray<OutcomeCount> =>
+	OUTCOME_ORDER.map((outcome) => ({
+		outcome,
+		runs: outcomes.filter((candidate) => candidate === outcome).length
+	})).filter((entry) => entry.runs > 0);
+
+const nodeAggregates = (executions: ReadonlyArray<NodeExecution>): ReadonlyArray<NodeAggregate> => {
+	const names = [...new Set(executions.map((execution) => execution.node))];
+	return names
+		.map((node) => {
+			const own = executions.filter((execution) => execution.node === node);
+			const durations = own.map((execution) => execution.durationMs);
+			const costs = own
+				.filter((execution) => !execution.container)
+				.map((execution) => execution.costUsd)
+				.filter((value): value is number => value !== null);
+			return {
+				node,
+				executions: own.length,
+				minMs: Math.min(...durations),
+				avgMs: mean(durations),
+				maxMs: Math.max(...durations),
+				avgCostUsd: mean(costs),
+				totalCostUsd: costs.reduce((a, b) => a + b, 0),
+				totalMs: durations.reduce((a, b) => a + b, 0),
+				fails: own.filter((execution) => execution.outcome === 'fail').length,
+				composites: own.filter((execution) => execution.container).length
+			};
+		})
+		.sort((a, b) => b.totalMs - a.totalMs || a.node.localeCompare(b.node));
+};
+
+const graphAggregates = (runs: ReadonlyArray<RunSummary>): ReadonlyArray<GraphAggregate> => {
+	const names = [...new Set(runs.map((run) => run.graph))];
+	return names
+		.map((graph) => {
+			const own = runs.filter((run) => run.graph === graph);
+			const durations = own.map((run) => run.durationMs);
+			const costs = own.map((run) => run.costUsd);
+			return {
+				graph,
+				runs: own.length,
+				minMs: Math.min(...durations),
+				avgMs: mean(durations),
+				maxMs: Math.max(...durations),
+				avgCostUsd: mean(costs),
+				totalCostUsd: costs.reduce((a, b) => a + b, 0),
+				outcomes: counted(own.map((run) => run.outcome))
+			};
+		})
+		.sort((a, b) => b.runs - a.runs || a.graph.localeCompare(b.graph));
+};
+
+/**
+ * Every journal on the machine reduced to the page's numbers. `now` decides which unfinished run
+ * counts as abandoned.
+ */
+export const buildStats = (files: ReadonlyArray<JournalFile>, now: number): Stats => {
+	const runs: RunSummary[] = [];
+	const executions: NodeExecution[] = [];
+	let skipped = 0;
+	for (const file of files) {
+		const summary = summarise(file, now);
+		if (summary === null) {
+			skipped += 1;
+			continue;
+		}
+		runs.push(summary.run);
+		executions.push(...summary.executions);
+	}
+	runs.sort((a, b) => b.startedAt - a.startedAt);
+	const fails = executions.filter((execution) => execution.tag !== null && execution.outcome === 'fail');
+	const tags = [...new Set(fails.map((execution) => execution.tag as string))]
+		.map((tag) => ({ tag, count: fails.filter((execution) => execution.tag === tag).length }))
+		.sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+	return {
+		runs: runs.length,
+		graphs: new Set(runs.map((run) => run.graph)).size,
+		tickets: new Set(runs.map((run) => run.ticket)).size,
+		projects: new Set(runs.map((run) => run.projectKey)).size,
+		totalCostUsd: runs.reduce((total, run) => total + run.costUsd, 0),
+		totalWallMs: runs.reduce((total, run) => total + run.durationMs, 0),
+		totalExecutions: executions.length,
+		skippedJournals: skipped,
+		outcomes: counted(runs.map((run) => run.outcome)),
+		nodes: nodeAggregates(executions),
+		graphList: graphAggregates(runs),
+		runList: runs,
+		failureTags: tags
+	};
+};
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/** `1h 02m`, `4m 12s`, `9s`, `120ms`. */
+export const formatDuration = (ms: number): string => {
+	if (!Number.isFinite(ms) || ms < 0) return '-';
+	if (ms < 1000) return `${Math.round(ms)}ms`;
+	const seconds = Math.round(ms / 1000);
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m ${pad(seconds % 60)}s`;
+	return `${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`;
+};
+
+/** `$12.34`. */
+export const formatUsd = (usd: number): string =>
+	`$${(Number.isFinite(usd) ? usd : 0).toFixed(2)}`;
+
+/** `2026-08-22 23:03` in UTC, so the same journal reads the same everywhere. */
+export const formatMoment = (ms: number): string =>
+	Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') : '-';
+
+/** A bar's width as a percentage of the largest value in its chart. */
+export const share = (value: number, max: number): number =>
+	max <= 0 || !Number.isFinite(value) ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
